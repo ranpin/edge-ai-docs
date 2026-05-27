@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>自动驾驶 — 面试指南 — Edge AI Docs</title>
+<style>
+:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-h:52px}
+[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+.top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;z-index:1000}
+.top-nav .logo{font-weight:700;font-size:15px;color:var(--accent);margin-right:24px;text-decoration:none}
+.top-nav .links{display:flex;gap:2px;flex-wrap:wrap}
+.top-nav .links a{padding:4px 10px;border-radius:5px;text-decoration:none;color:var(--text2);font-size:12px;font-weight:500}
+.top-nav .links a:hover{background:var(--accentL);color:var(--accent)}
+.top-nav .links a.active{background:var(--accent);color:#fff}
+.top-nav .right{margin-left:auto}
+.theme-btn{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--text)}
+.sidebar{position:fixed;top:var(--nav-h);left:0;bottom:0;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;z-index:900}
+.sidebar a{display:block;padding:4px 16px 4px 20px;text-decoration:none;color:var(--text2);font-size:12px;border-left:3px solid transparent}
+.sidebar a:hover{color:var(--accent);background:var(--accentL)}
+.sidebar a.active{color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.main{margin-left:var(--sidebar-w);margin-top:var(--nav-h);padding:28px 40px 60px;max-width:900px}
+h1{font-size:26px;font-weight:800;margin-bottom:6px}
+.subtitle{font-size:14px;color:var(--muted);margin-bottom:28px}
+h2{font-size:20px;font-weight:700;margin:36px 0 14px;padding-bottom:6px;border-bottom:2px solid var(--accentL)}
+h3{font-size:16px;font-weight:600;margin:20px 0 10px}
+p{margin-bottom:10px;color:var(--text2)}
+strong{color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
+th{background:var(--accentL);color:var(--accentD);font-weight:600}
+tr:nth-child(even){background:var(--bg2)}
+pre{background:var(--bg3);border-radius:7px;padding:14px;overflow-x:auto;font-size:13px;margin:10px 0}
+code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
+:not(pre)>code{background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--accent)}
+.q-card{margin:14px 0;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.q-header{padding:10px 14px;background:var(--bg2);cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:14px}
+.q-header:hover{background:var(--bg3)}
+.q-header .diff{font-size:11px;padding:2px 8px;border-radius:4px;font-weight:700}
+.diff-easy{background:#d4edda;color:#155724}.diff-mid{background:#fff3cd;color:#856404}.diff-hard{background:#f8d7da;color:#721c24}
+.q-body{padding:14px;display:none}
+.q-card.open .q-body{display:block}
+.q-card.open .q-header::after{content:'▲';font-size:11px}
+.q-card:not(.open) .q-header::after{content:'▼';font-size:11px}
+.key{display:inline-block;background:var(--accentL);color:var(--accent);padding:1px 6px;border-radius:3px;font-size:12px;font-weight:600;margin:0 2px}
+@media(max-width:900px){.sidebar{display:none}.main{margin-left:0;padding:20px 16px 60px}}
+@media print{.top-nav,.sidebar,.theme-btn{display:none!important}.main{margin:0;padding:16px;max-width:100%}}
+</style>
+</head>
+<body>
+
+<!-- ===== Top Navigation ===== -->
+<nav class="top-nav">
+  <a href="index.html" class="logo">Edge AI Docs</a>
+  <div class="links">
+    <a href="cockpit-hardware.html">A.硬件</a>
+    <a href="cockpit-training.html">B.训练</a>
+    <a href="cockpit-deploy.html">C.部署</a>
+    <a href="cockpit-agent.html">D.Agent</a>
+    <a href="cockpit-debug.html">E.调试</a>
+    <a href="robot-learning.html">机器人学习</a>
+    <a href="robot-interview.html">机器人面试</a>
+    <a href="ad-learning.html">AD学习</a>
+    <a href="ad-interview.html" class="active">AD面试</a>
+  </div>
+  <div class="right">
+    <button class="theme-btn" id="themeBtn">&#9790; / &#9788;</button>
+  </div>
+</nav>
+
+<!-- ===== Sidebar TOC ===== -->
+<aside class="sidebar">
+  <a href="#s1">1. BEV 感知算法</a>
+  <a href="#s2">2. 端到端 vs 模块化</a>
+  <a href="#s3">3. 数据与训练</a>
+  <a href="#s4">4. 模型部署与优化</a>
+  <a href="#s5">5. 驾驶 Agent 与安全</a>
+  <a href="#s6">6. 系统设计题</a>
+</aside>
+
+<!-- ===== Main Content ===== -->
+<main class="main">
+
+<h1>自动驾驶 — 面试指南</h1>
+<p class="subtitle">31 道精选面试题 — 覆盖 BEV 感知、端到端架构、数据闭环、部署优化、Agent 安全与系统设计</p>
+
+<!-- ==================== Section 1 ==================== -->
+<h2 id="s1">一、BEV 感知算法</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q1: BEV 特征构建的核心原理 (2D→3D 变换)</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">BEV</span>（Bird's Eye View）感知的核心是将多个相机的 2D 图像特征变换到统一的 3D 鸟瞰空间中，实现多视角融合和 3D 空间推理。2D→3D 变换的主流方法分为两大类。<span class="key">显式深度估计</span>（LSS 系列）：对每个图像像素预测深度分布（通常离散化为 D 个 depth bins），将 2D 特征沿射线方向 "提升"（lift）到 3D 空间，形成 frustum 特征体，再通过 "splat" 操作将所有相机的 frustum 投影到 BEV 网格上累加。代表方法包括 LSS、BEVDet、BEVDepth。其优势是几何可解释性强，但深度估计不准会导致特征错位。<span class="key">隐式查询投影</span>（Transformer 系列）：在 BEV 平面上定义一组可学习的查询（query），通过 cross-attention 机制到各相机图像特征上采样信息。具体地，每个 BEV query 根据相机内外参数计算其在各图像上的投影位置，从对应位置的图像特征中提取信息。代表方法包括 <span class="key">BEVFormer</span>（使用 deformable attention + spatial cross-attention）。其优势是不需要显式深度估计，端到端学习更灵活，但计算量较大。近期方法如 <span class="key">FB-BEV</span> 和 <span class="key">SOLOFusion</span> 开始融合两种范式的优势，同时使用深度估计和查询机制。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q2: BEVFormer 中时序融合的作用</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">BEVFormer</span> 通过 <span class="key">Temporal Self-Attention</span> 机制实现时序融合，将前一帧（或多帧）的 BEV 特征与当前帧对齐后融合。具体过程：首先根据自车运动（ego motion）将历史 BEV 特征通过仿射变换对齐到当前帧的坐标系，然后当前帧的 BEV query 通过 self-attention 同时关注当前帧的空间特征和历史帧的时序特征。时序融合的核心价值体现在三个方面：<span class="key">速度估计</span>——单帧无法获取物体运动速度，通过融合相邻帧的位置变化可以估计目标速度和运动方向，这对预测和规划至关重要；<span class="key">遮挡恢复</span>——当目标在当前帧被遮挡时，历史帧中的特征可以提供该目标的存在信息，提高检测的召回率；<span class="key">深度感知增强</span>——运动视差提供额外的深度线索，帮助纯视觉方案更准确地估计物体距离。BEVFormer v2 进一步改进了时序融合策略，支持更长时间跨度的历史信息聚合（如 8 帧），并引入了自适应时序权重，使模型能够根据场景动态调整对历史信息的依赖程度。在 nuScenes 排行榜上，时序融合通常能带来 <span class="key">3-5 NDS</span> 的性能提升，其中对速度预测指标 mAVE 的提升最为显著（降低 30-50%）。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q3: StreamPETR vs BEVFormer 架构差异</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">StreamPETR</span> 和 <span class="key">BEVFormer</span> 都是基于 Transformer 的 3D 感知方案，但在特征表示和时序建模上有本质差异。<span class="key">BEVFormer</span> 采用 dense BEV 表示：在 BEV 平面上均匀分布大量（如 200x200=40000）query，每个 query 对应 BEV 空间的一个网格位置，通过 spatial cross-attention 从多视角图像特征中提取信息，生成密集的 BEV 特征图，再接检测头输出 3D 框。时序融合通过对齐历史 BEV 特征并做 temporal self-attention。<span class="key">StreamPETR</span> 则采用 sparse object query 表示（继承自 PETR/DETR3D 系列）：直接使用少量（如 900 个）object query 代表潜在的 3D 目标，每个 query 编码一个 3D 参考点的位置信息，通过 cross-attention 从图像特征中聚合信息并预测 3D 框。其时序融合的创新在于 <span class="key">propagation mechanism</span>：将上一帧的 object query（含其预测的位置和运动信息）传递到当前帧作为额外的输入 query，自然实现了目标级别的时序关联和跟踪。核心差异总结：BEVFormer 先建图再检测（dense → sparse），StreamPETR 直接检测（sparse → sparse），后者计算量更小（省去了密集 BEV 特征构建），推理速度更快（约快 2-3 倍），且天然支持多目标跟踪。但 BEVFormer 的密集 BEV 特征可以服务下游多种任务（分割、规划），而 StreamPETR 的 sparse query 更适合纯检测任务。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q4: BEV 感知的数据标注策略</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>BEV 感知模型需要 3D 标注（3D bounding box、BEV 分割 map 等），标注成本远高于 2D。有效的<span class="key">标注策略</span>需要在质量和成本之间取得平衡。<span class="key">LiDAR 辅助标注</span>：虽然纯视觉 BEV 模型不需要 LiDAR 作为输入，但标注时可以利用 LiDAR 点云辅助——在 3D 点云中标注 bbox 比在 2D 图像中估计 3D 框更准确高效，标注效率可提升 3-5 倍。<span class="key">预标注 + 人工修正</span>：先用已有模型（或预训练模型）自动生成预标注，人工只需修正错误标注，效率提升 50-70%。<span class="key">自动标注流水线</span>：利用多帧点云累积、SLAM 建图、多传感器融合生成高精度自动标注——具体流程为：累积多帧 LiDAR 点云 → 3D 目标检测 + 多目标跟踪 → 轨迹平滑和插值 → 人工抽样质检。这种方式在大规模数据采集中已成为主流，如 Waymo 和 nuPlan 数据集采用类似流程。<span class="key">BEV 分割标注</span>：地面语义（车道线、可行驶区域）可以从高精地图投影获得，大幅降低标注成本；动态物体的 BEV 分割可以从 3D 检测框自动生成。<span class="key">标注质量控制</span>：关键是多轮审核（标注→审核→修正）、跨帧一致性检查（同一目标在连续帧中的标注应平滑连续）、以及主动学习选择高价值帧优先标注。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q5: 3D 检测评价指标 (mAP, NDS) 的计算</span><span class="diff diff-easy">初级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>nuScenes 数据集定义了自动驾驶 3D 检测的标准评价指标体系。<span class="key">mAP</span>（mean Average Precision）的计算方式与 2D 检测不同：不使用 IoU 阈值匹配，而是基于 <span class="key">BEV 中心距离</span>匹配——在 BEV 平面上计算预测框和真值框中心点距离，使用 {0.5m, 1m, 2m, 4m} 四个距离阈值，每个阈值下计算各类别的 AP（对 recall-precision 曲线积分），然后对所有类别和阈值取平均得到 mAP。<span class="key">NDS</span>（nuScenes Detection Score）是综合评价指标，计算公式为：NDS = (1/10) * [5 * mAP + sum(mTP)]，其中 mTP 是五个 True Positive 指标的归一化平均值，包括：<span class="key">mATE</span>（平均平移误差，衡量位置精度）、<span class="key">mASE</span>（平均尺寸误差，衡量大小精度）、<span class="key">mAOE</span>（平均朝向误差，衡量角度精度）、<span class="key">mAVE</span>（平均速度误差，衡量运动估计）、<span class="key">mAAE</span>（平均属性误差，衡量属性分类如是否在移动）。NDS 的设计使得模型不仅要检测到目标（mAP），还要准确估计其位置、大小、朝向和运动状态，更全面地反映 3D 感知质量。当前 SOTA 模型在 nuScenes test set 上 NDS 可达 75+，mAP 可达 70+。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q6: 多传感器 BEV 融合 (Camera+LiDAR) 的对齐方法</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>Camera 和 LiDAR 在 BEV 空间中融合面临空间对齐和特征对齐的双重挑战。<span class="key">空间对齐</span>：Camera 和 LiDAR 的安装位置不同，需要通过外参标定将两者的坐标系统一到自车坐标系。LiDAR 点云可以直接投影到 BEV 网格（按 x-y 位置分配到网格并编码 z 维度特征），Camera 特征则需要通过 LSS/BEVFormer 等方法变换到 BEV 空间。关键是确保两者投影到的 BEV 网格分辨率和范围一致（如均为 0.5m/pixel，覆盖 [-50m, 50m]）。<span class="key">特征级融合</span>方法主要有三种：<span class="key">逐点拼接</span>（Concatenation）——将 Camera BEV 特征和 LiDAR BEV 特征在 channel 维度拼接，再通过卷积融合，简单但可能被低质量模态拖累；<span class="key">注意力融合</span>（如 BEVFusion 的方法）——使用 cross-attention 或 gating 机制让两个模态互相增强，LiDAR 提供精确的几何信息，Camera 提供丰富的语义信息；<span class="key">统一 BEV 编码器</span>（如 UniFormer）——将两个模态的 BEV 特征统一送入一个 Transformer 编码器，通过自注意力自动学习跨模态交互。<span class="key">时间对齐</span>也很重要：Camera 和 LiDAR 的采集时刻可能不完全同步（如 Camera 30fps vs LiDAR 10fps），需要根据时间差和自车运动对 LiDAR 点云做 ego-motion compensation。BEVFusion（MIT 版本）的实验表明，Camera+LiDAR 融合相比纯 LiDAR 方案可提升 mAP 约 1-3 个点，在远距离和小目标检测上改善尤其明显。</p>
+  </div>
+</div>
+
+<!-- ==================== Section 2 ==================== -->
+<h2 id="s2">二、端到端 vs 模块化</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q7: 端到端自动驾驶 (UniAD/VAD) vs 模块化方案的优劣</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">模块化方案</span>将自动驾驶分为感知、预测、规划、控制四个独立模块，各模块有明确接口（如感知输出 3D bbox 列表、预测输出轨迹集合），可以独立开发、测试和迭代。优势是：可解释性强（每个模块输出可检查）、便于分工协作、单模块故障可定位、满足安全认证要求。劣势是：模块间信息损失（3D bbox 丢失了丰富的场景特征）、误差级联（感知错误传递到预测和规划）、接口设计限制了全局优化。<span class="key">端到端方案</span>（如 <span class="key">UniAD</span>、<span class="key">VAD</span>）将感知到规划统一为一个可微分的网络，直接从传感器输入到规划轨迹输出，通过多任务联合训练实现全局优化。UniAD 的设计是：BEV encoder → tracking query → motion prediction → occupancy prediction → planning，所有模块共享特征并端到端训练。其优势是：避免信息损失（全特征流动）、全局梯度优化（规划的损失可以反传到感知提升特征质量）、可以学到人类难以手工设计的中间表征。劣势是：可解释性差（黑盒决策）、调试困难（某个能力下降难以定位原因）、训练数据需求大、安全认证困难。当前业界趋势是<span class="key">结构化端到端</span>：保留模块化的思想但用端到端训练，即模型仍有感知/预测/规划的显式中间表征，但通过梯度联合优化。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q8: 端到端模型的可解释性问题</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>端到端自动驾驶模型的<span class="key">可解释性</span>是其落地的最大障碍之一，尤其在涉及安全的法规层面。可解释性问题体现在：事故发生时无法追溯决策原因（"模型为什么在此刻选择刹车？"）、无法向监管部门证明系统行为的合理性、以及工程师难以调试优化特定场景。提升可解释性的技术手段包括：<span class="key">注意力可视化</span>——展示模型在做规划决策时关注了图像的哪些区域（attention rollout、GradCAM），可以验证模型是否在关注正确的目标和路况信息。<span class="key">中间表征输出</span>——在端到端网络中显式设计可解释的中间层，如 UniAD 输出 3D 检测结果、目标轨迹预测、occupancy 预测等，这些中间结果可供人类审查。<span class="key">语言化解释</span>——训练模型同时输出自然语言解释（如 DriveGPT4），描述当前驾驶决策的理由（"因为前方车辆突然减速且右侧有行人，所以选择减速并向左微调"）。<span class="key">反事实推理</span>——通过修改输入（如移除某个目标）观察规划输出的变化，验证模型是否正确响应关键要素。<span class="key">规则兜底</span>——即使使用端到端模型做主策略，用可解释的规则系统作为安全检查层（safety checker），确保最终输出满足可验证的安全约束。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q9: 端到端模型的中间表征设计</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>端到端模型的<span class="key">中间表征</span>（intermediate representation）设计决定了信息如何从感知流向规划，是架构设计的核心问题。好的中间表征应该同时满足：信息充分性（保留规划所需的所有信息）、可学习性（梯度可以有效传播）、可解释性（人类可以审查）。主流设计方案有三类。<span class="key">Dense BEV Feature Map</span>：将场景编码为 dense 的多通道 BEV 特征图，包含语义信息（车道、目标类别）、几何信息（高度、形状）和运动信息（光流、速度），规划模块直接在此特征图上做决策。优点是信息丰富无损失，缺点是计算量大且解释性差。<span class="key">Occupancy Grid + Flow</span>：将 3D 空间离散化为体素，预测每个体素的占用概率和运动速度，形成 4D occupancy flow field，规划通过搜索无碰撞轨迹实现。UniAD 和 OccNet 采用此方案，优点是物理含义清晰、可解释性好。<span class="key">Object-centric Representation</span>：以目标为单位表征场景——每个目标用一个向量编码其类别、位置、速度、未来轨迹分布，规划模块处理目标列表。VAD 采用此方案（向量化场景表征），优点是紧凑高效且对齐传统模块化方案的接口。实际中最优的设计往往是混合方案：object-centric 表征捕捉动态交通参与者，dense map 表征捕捉静态道路结构，两者融合后送入规划模块。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q10: GenAD 等生成式驾驶模型的价值</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">GenAD</span>（Generative Autonomous Driving）等生成式模型将驾驶建模为条件生成问题：给定历史观测和高层指令，生成未来的驾驶轨迹和场景演变。其核心价值体现在以下方面。<span class="key">多模态预测</span>：交通场景天然是多模态的（路口可以左转、直行、右转），传统回归方案倾向于预测所有模态的平均值（导致不合理的轨迹），而生成式模型（如基于 Diffusion 或 VAE）可以自然地建模多模态分布，采样出多条合理但不同的候选轨迹。<span class="key">场景生成</span>：GenAD 系列模型可以生成逼真的驾驶场景（包括其他车辆行为、交通流变化），用于仿真测试和数据增强，解决真实数据中 corner case 稀缺的问题。<span class="key">World Model</span>：将生成式模型训练为驾驶世界模型——给定当前状态和动作，预测未来场景的演变，可用于规划阶段的 "假想推演"（imagination-based planning），在虚拟环境中评估多种行动方案后选择最优。<span class="key">GAIA-1</span>、<span class="key">DriveDreamer</span> 等工作展示了视频生成模型作为驾驶世界模型的潜力。然而生成式模型也面临挑战：推理延迟高（Diffusion 模型需要多步去噪）、生成结果的安全保证难以给出、以及训练数据需求量大。端侧部署时通常需要将 Diffusion 模型蒸馏为少步（1-4 步）版本以满足实时性要求。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q11: 模块化方案中各模块的接口设计原则</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>模块化自动驾驶系统的接口设计直接影响模块间协作效率和系统整体性能。核心<span class="key">设计原则</span>如下。<span class="key">信息完备性</span>：接口应传递下游模块所需的全部信息——感知到预测的接口不仅要包含 3D bbox（位置、尺寸、朝向），还要传递不确定性估计（位置协方差矩阵）、目标 ID（跨帧跟踪标识）、语义属性（类别、是否静止），以及可选的原始特征向量供下游精细处理。<span class="key">不确定性传递</span>：每个模块应量化自身输出的不确定性并传递给下游——感知的位置不确定性影响预测的轨迹分布，预测的不确定性影响规划的安全裕度。不传递不确定性会导致下游盲目信任上游输出。<span class="key">异步解耦</span>：模块间应支持不同频率运行——感知 10Hz、预测 10Hz、规划 20Hz、控制 100Hz，通过消息队列或共享内存解耦，避免慢模块拖慢快模块。<span class="key">版本兼容</span>：接口应使用 Protobuf/FlatBuffers 等可演化的序列化格式，支持新增字段不破坏旧版本（向前兼容），允许各模块独立升级。<span class="key">降级策略</span>：接口应定义默认值和降级行为——当感知模块异常时，预测模块应能使用上一帧结果继续运行（安全降级）。实际工程中还需定义清晰的坐标系约定（自车坐标系 vs 全局坐标系、时间戳基准），避免模块间的坐标转换错误。</p>
+  </div>
+</div>
+
+<!-- ==================== Section 3 ==================== -->
+<h2 id="s3">三、数据与训练</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q12: 数据飞轮 (data flywheel) 设计</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">数据飞轮</span>是自动驾驶系统持续改进的核心机制：车辆采集数据 → 发现问题 → 标注训练 → 更新模型 → 部署上车 → 继续采集，形成闭环。完整的数据飞轮包含以下关键环节。<span class="key">数据采集策略</span>：不是所有行驶数据都有价值，需要基于触发条件选择性上传——hard brake 事件、模型不确定性高的帧、低置信度检测、ODD（运行设计域）边界附近的数据。<span class="key">自动化标注流水线</span>：使用离线大模型（比车载模型更大更强）自动标注，配合人工审核和修正，将标注成本降低 10 倍以上。<span class="key">数据挖掘</span>：基于模型表现主动挖掘薄弱场景——分析线上 bad case 的特征（时间、天气、场景类型），在数据湖中检索相似数据，聚焦标注和训练。<span class="key">训练与评估</span>：使用挖掘的数据对模型进行增量训练或全量重训，在 offline benchmark + 仿真 + shadow mode 三个层面评估，确保新模型在目标场景提升的同时不出现回归。<span class="key">部署闭环</span>：通过 OTA 将新模型推送到车队，配合 A/B test 逐步扩大覆盖范围。数据飞轮的效率取决于两个核心指标：<span class="key">问题发现到修复的周期</span>（优秀团队可做到 1-2 周）和<span class="key">每次迭代的有效数据利用率</span>（用最少的标注投入获得最大的模型提升）。Tesla 的数据飞轮是业界标杆，其百万辆车队提供了无与伦比的数据多样性。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q13: 长尾 Corner Case 的自动发现方法</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">Corner Case</span>（长尾场景）是自动驾驶安全的最大挑战——系统在常见场景表现良好但在罕见场景可能失败。自动发现方法包括以下几类。<span class="key">基于模型不确定性</span>：对模型输出的 softmax 概率或检测置信度进行分析，低置信度或高熵的预测通常对应困难或新颖场景。可以使用 MC Dropout 或 Deep Ensemble 估计模型的认知不确定性（epistemic uncertainty），高不确定性的样本很可能是训练数据未覆盖的场景。<span class="key">基于异常检测</span>：将正常驾驶数据训练一个特征分布模型（如 VAE、Normalizing Flow），在推理时检测偏离正常分布的样本（OOD detection），如罕见的交通标志、异常行为的交通参与者、不常见的天气条件。<span class="key">基于驾驶行为异常</span>：监控自车规划/控制的异常模式——突然大幅修正方向盘、紧急制动、接管事件，这些通常意味着模型在对应场景的表现不佳。<span class="key">基于语义检索</span>：使用 CLIP 等视觉-语言模型对大量行驶视频进行语义索引，然后通过文字查询检索特定场景（如 "逆行的电动车"、"施工区域的临时车道线"），快速定位目标场景。<span class="key">基于对抗测试</span>：在仿真中使用对抗性方法自动生成导致系统失败的场景（如 KING、STRIVE 算法），这些场景往往揭示了模型的盲区。实践中通常组合使用多种方法，并建立 <span class="key">Corner Case 分类体系</span>（如按场景类型、失败模式分类），有针对性地收集和训练。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q14: 仿真数据在训练中的有效利用</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>仿真数据可以低成本大量生成，但直接混合训练效果往往不佳，关键在于<span class="key">缩小 Sim2Real gap</span> 和<span class="key">合理使用策略</span>。提升仿真数据质量的方法：<span class="key">高保真渲染</span>——使用 Unreal Engine 5、NVIDIA Omniverse 等引擎渲染接近照片级真实感的图像，配合物理准确的光照模型（光线追踪）和天气效果；<span class="key">Neural Rendering</span>——使用 NeRF/3DGS 从真实采集数据重建场景并生成新视角图像，仿真图像天然接近真实分布；<span class="key">Domain Adaptation</span>——用风格迁移网络（如 FDA、CycleGAN）将仿真图像的风格转换为真实图像风格。有效利用策略：<span class="key">预训练 + 真实数据微调</span>——先在大量仿真数据上预训练 backbone，再用真实数据微调任务头，这是最成熟可靠的方案；<span class="key">课程学习</span>——训练初期仿真数据比例高（如 80%），随训练进行逐步增加真实数据比例；<span class="key">对抗场景生成</span>——仿真数据的独特价值在于可以生成真实世界中罕见但重要的场景（如多车连环碰撞场景），用于补充真实数据的长尾不足；<span class="key">数据混合策略</span>——不是简单混合，而是按场景类型分层——常见场景以真实数据为主，罕见场景以仿真数据为主。关键指标是监控仿真数据加入后在真实验证集上的表现变化，避免仿真数据引入负迁移。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q15: 影子模式 (shadow mode) 的工作原理</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">影子模式</span>（Shadow Mode）是自动驾驶系统在实际道路上进行安全验证的关键机制：新模型在车辆上运行推理但不输出到控制系统，其决策结果与当前在线模型（或人类驾驶员操作）进行对比，从而在不影响行车安全的前提下评估新模型的真实表现。工作原理：车辆同时运行<span class="key">主模型</span>（控制车辆）和<span class="key">影子模型</span>（仅记录输出），两者共享传感器输入。评估系统比较两个模型的输出差异，重点关注：影子模型是否会在主模型安全通过的场景中做出危险决策（如漏检行人、错误规划进入对向车道）、以及影子模型在主模型表现不佳的场景中是否有改善。Shadow mode 的核心价值：<span class="key">大规模真实场景评估</span>——仿真和 benchmark 无法完全覆盖真实道路的复杂性，shadow mode 可以在整个车队规模上评估新模型；<span class="key">回归检测</span>——发现新模型相比旧模型退步的场景；<span class="key">数据挖掘</span>——两个模型输出差异大的场景通常是高价值的 corner case，可自动标记用于后续训练。实现注意事项：需要确保影子模型的计算不抢占主模型的算力资源（可降低影子模型帧率或降级运行）、影子模型的推理延迟也需要记录以评估部署可行性。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q16: 主动学习在自动驾驶数据标注中的应用</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">主动学习</span>（Active Learning）通过智能选择最有价值的数据进行标注，在相同标注预算下最大化模型性能提升。在自动驾驶中，原始数据量巨大但标注昂贵，主动学习可以节省 50-70% 的标注成本。核心流程：初始训练 → 模型在未标注数据池上推理 → 选择策略挑选高价值样本 → 人工标注 → 重新训练 → 迭代。<span class="key">选择策略</span>包括：<span class="key">不确定性采样</span>——选择模型最不确定的样本（最大熵、最小边界置信度、MC Dropout 方差），这些样本往往位于模型的决策边界附近；<span class="key">多样性采样</span>——使用特征聚类或核心集（core-set）方法，确保选中的样本覆盖特征空间的不同区域，避免冗余标注（如不要标注 100 张几乎一样的高速公路直道场景）；<span class="key">预期模型改进</span>——选择标注后对模型参数影响最大的样本（如 Expected Gradient Length 方法），直接优化数据效用。在自动驾驶实践中的特殊考虑：数据是<span class="key">时序连续的</span>——相邻帧高度相关，不应逐帧选择而应以 clip（如 2 秒片段）为单位选择；<span class="key">场景平衡</span>——需要在不确定性驱动和场景覆盖度之间平衡，确保各类场景（城市、高速、十字路口等）都有足够覆盖；<span class="key">标注效率</span>——优先选择可以用自动标注流水线处理的样本，人工标注留给自动标注失败的困难样本。</p>
+  </div>
+</div>
+
+<!-- ==================== Section 4 ==================== -->
+<h2 id="s4">四、模型部署与优化</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q17: BEV 模型端侧量化的特殊挑战</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>BEV 模型的量化比标准视觉模型更具挑战性，原因在于其独特的 <span class="key">2D→3D 变换</span>和<span class="key">时序融合</span>模块。具体挑战包括：<span class="key">视角变换层的数值敏感性</span>——LSS 类模型中的 depth distribution softmax 和 outer product 操作的数值范围跨度大，INT8 量化容易导致深度预测退化，进而引起 BEV 特征严重错位。BEVFormer 中的 deformable attention 需要精确的采样坐标计算（亚像素精度），量化会导致采样位置偏移和注意力权重失真。<span class="key">Transformer 结构量化</span>——multi-head attention 中的 QK 矩阵乘和 softmax 对量化敏感，尤其是 attention score 中可能存在极端值（attention sink），直接 INT8 量化会截断关键信息。<span class="key">时序累积误差</span>——BEV 时序融合中量化误差会随帧累积，前一帧的量化误差通过 temporal self-attention 传递到当前帧并被放大。解决策略：<span class="key">混合精度量化</span>——对敏感层（depth softmax、deformable attention 的坐标计算、temporal attention）保持 FP16，其余层使用 INT8，通过 sensitivity analysis（逐层量化精度影响分析）确定混合精度策略。<span class="key">QAT</span>（Quantization-Aware Training）优于 PTQ，特别是对 attention 层效果显著。<span class="key">校准数据选择</span>——BEV 模型的校准数据需要覆盖多种距离和角度的目标分布，单一场景的校准数据会导致远处目标量化后丢失。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q18: Temporal 特征缓存策略</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>BEV 时序模型需要缓存历史帧的特征以实现时序融合，<span class="key">缓存策略</span>直接影响部署时的延迟和显存使用。<span class="key">基本缓存</span>：存储前一帧（或多帧）的 BEV 特征图和自车位姿，推理时根据 ego motion 对历史特征做坐标变换后与当前帧融合。典型的 BEV 特征图大小为 200x200x256（约 25MB FP16），缓存 4 帧需要 100MB，在端侧显存预算中占比显著。优化策略包括：<span class="key">特征压缩</span>——在缓存前用 1x1 卷积将 channel 数从 256 压缩到 64（显存减少 4 倍），使用时再恢复，精度损失通常在 0.5 NDS 以内；<span class="key">关键帧缓存</span>——不缓存每一帧，而是根据自车运动幅度选择性缓存（如仅在位移 >0.5m 或转角 >2 度时更新缓存），减少冗余计算和存储；<span class="key">Queue + 环形缓冲区</span>——使用固定大小的环形缓冲区管理多帧缓存，FIFO 替换最旧的帧，避免动态内存分配。<span class="key">StreamPETR 的 query 缓存</span>方式更高效：只缓存上一帧的 object query（如 900x256，约 0.9MB），相比 dense BEV 特征缓存节省 20-100 倍显存。在首帧（系统启动）时没有历史缓存，需要特殊处理——可以用零向量初始化或运行多次 warm-up 帧。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q19: 多传感器数据同步在部署中的处理</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>自动驾驶车辆通常搭载 6-12 个相机、1-5 个 LiDAR、IMU、毫米波雷达等多种传感器，它们的采集频率、曝光时刻和数据到达时间各不相同，<span class="key">数据同步</span>在部署中至关重要。<span class="key">硬件同步方案</span>：使用中央时间源（如 GNSS PPS 秒脉冲）通过 <span class="key">PTP/gPTP</span> 协议同步所有传感器的时钟，然后通过硬件触发信号统一控制相机的曝光时刻和 LiDAR 的扫描起始时刻。例如将所有相机的触发信号连接到同一 GPIO 脉冲，确保所有相机在同一微秒内开始曝光。<span class="key">软件同步方案</span>：当硬件触发不可用时（如后装方案），使用时间戳匹配——收集各传感器数据的时间戳，使用最近邻匹配或插值将不同频率的传感器数据对齐到统一的时间点。BEV 模型对同步精度敏感：<span class="key">6 个相机间的同步误差</span>如果超过 5ms，在车速 60km/h 下约 8cm 的位移差异会导致 BEV 特征拼接出现明显错位和鬼影。<span class="key">Camera-LiDAR 同步</span>需要注意 LiDAR 是扫描式采集（一圈约 100ms），而 Camera 是瞬时曝光，需要将 LiDAR 点云根据自车运动做<span class="key">运动补偿</span>（motion compensation），将扫描期间的点统一到参考时刻。部署中还需处理<span class="key">异常情况</span>：传感器丢帧、时间戳跳变、时钟漂移，系统应能检测异常并触发降级（如某个相机丢帧则禁用对应视角的 BEV 特征）。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q20: TensorRT vs QNN 在 AD 场景的选择</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">TensorRT</span> 和 <span class="key">QNN</span>（Qualcomm Neural Network SDK）是自动驾驶两大主流芯片平台的推理框架。TensorRT 运行在 NVIDIA 平台（Drive Orin/Thor），QNN 运行在 Qualcomm 平台（Snapdragon Ride/SA8650P）。<span class="key">TensorRT 优势</span>：算子支持最全面（尤其是 Transformer 系列的 attention、deformable conv 等），plugin 机制允许自定义算子，dynamic shape 支持成熟，INT8/FP16 混合精度灵活控制，丰富的 profiling 工具（Nsight Systems），社区和文档资源最丰富。NVIDIA Drive Orin 提供 254 TOPS INT8 算力，是当前车载 AI 算力的标杆。<span class="key">QNN 优势</span>：Qualcomm 平台功耗更低（同算力下功耗约为 NVIDIA 的 1/2-1/3），成本更低，更适合对功耗和 BOM 成本敏感的量产车型；QNN 支持 DSP/HTA（Hexagon Tensor Accelerator）硬件加速，对传统 CNN 模型（如 ResNet、EfficientNet）优化效果好；Qualcomm 在通信连接方面有优势（集成 5G/C-V2X）。<span class="key">选型建议</span>：旗舰 AD 方案（L3+、多 BEV 模型并行、端到端方案）优先选 NVIDIA + TensorRT，因为需要大算力和灵活的算子支持；量产 ADAS 方案（L2/L2+、成本功耗敏感）可选 Qualcomm + QNN。需要注意 QNN 对新型算子（如 deformable attention、flash attention）的支持通常滞后 6-12 个月，模型设计时需考虑算子兼容性。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q21: 模型推理实时性保证策略</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>自动驾驶对模型推理的实时性要求极高——感知模型通常需要在 <span class="key">50-100ms</span>（10-20 FPS）内完成一帧推理，超时可能导致系统降级或安全风险。保证实时性的策略包括以下层面。<span class="key">模型层面</span>：选择推理友好的模型架构（如用 ResNet-50 替代 ViT-Large 作为 backbone）、使用 INT8 量化降低计算量（通常加速 2-3 倍）、剪枝移除冗余通道、知识蒸馏获得更小但高精度的学生模型。<span class="key">引擎层面</span>：充分利用 TensorRT 的 layer fusion、kernel auto-tuning，为目标 GPU 生成最优 kernel；使用 CUDA Graph 减少 kernel launch 开销（在多小 kernel 的 Transformer 模型中可降低 10-20% 延迟）。<span class="key">系统层面</span>：使用 CPU affinity 和 GPU exclusive mode 隔离推理进程，防止其他任务抢占资源；使用实时调度策略（SCHED_FIFO）保证推理线程优先执行；禁用 GPU 动态降频（固定 max clock）避免频率波动导致的延迟抖动。<span class="key">架构层面</span>：pipeline 并行——将前处理（CPU）、推理（GPU）、后处理（CPU）流水线化，实现三帧重叠执行；异步推理——感知模型以固定频率触发，如果一帧未在 deadline 前完成则丢弃该帧结果，使用上一帧输出（绝不阻塞等待）。<span class="key">监控层面</span>：实时监测每帧推理延迟和 GPU 利用率，超过 warning 阈值（如 80ms）时触发告警，超过 critical 阈值（如 100ms）时切换至降级模式（如降低分辨率或禁用部分检测头）。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q22: OTA 模型更新的安全机制</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">OTA</span>（Over-The-Air）模型更新允许远程升级车端 AI 模型，但必须确保更新过程和更新后的系统安全。安全机制包括以下方面。<span class="key">更新包安全</span>：模型文件使用代码签名（Code Signing）验证来源合法性和完整性，传输过程 TLS 加密防止中间人攻击，更新包包含版本号和兼容性信息（匹配目标硬件和软件版本）。<span class="key">A/B 分区</span>：采用双分区方案——新模型写入备用分区 B，验证通过后才切换到 B 分区运行，如果新模型出现问题可立即回滚到分区 A 的旧模型，确保任何时候都有可用版本。<span class="key">自检验证</span>：新模型首次运行时执行一系列自检——在预存的 benchmark 数据集上推理，验证输出与预期结果的偏差在阈值内（确保量化/编译没有引入错误）、验证推理延迟满足实时要求、验证显存使用在预算内。<span class="key">灰度发布</span>：新模型先推送给小比例（如 1%）的车队，shadow mode 运行 1-2 周收集表现数据，确认无回归后逐步扩大比例（5% → 20% → 100%）。<span class="key">功能降级</span>：如果更新失败或新模型表现异常，系统自动回退到上一个已验证的模型版本，同时上报异常日志。<span class="key">更新时机</span>：只在车辆停放且电量充足时执行更新，避免行驶中更新导致感知中断。整套机制需要符合 <span class="key">ISO 24089</span>（道路车辆软件更新工程）标准。</p>
+  </div>
+</div>
+
+<!-- ==================== Section 5 ==================== -->
+<h2 id="s5">五、驾驶 Agent 与安全</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q23: VLM 在驾驶场景中的应用方式</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">VLM</span>（Vision-Language Model）在自动驾驶中的应用正在快速发展，核心价值在于为驾驶系统引入<span class="key">常识推理</span>和<span class="key">开放世界理解</span>能力。主要应用方式包括：<span class="key">场景理解与描述</span>——VLM 可以对复杂交通场景生成自然语言描述（"前方有施工区域，左车道被围栏封闭，车辆需并入右车道"），辅助规划模块理解非结构化的场景信息。<span class="key">异常物体识别</span>——传统检测模型只能识别训练过的类别，VLM 可以识别和描述任意物体（"道路上有一个掉落的梯子"），大幅提升开放世界的安全感知能力。<span class="key">交通规则理解</span>——VLM 可以阅读和理解临时交通标志、施工指示牌、电子显示屏等文字信息，这些是传统感知模型难以处理的。<span class="key">驾驶决策辅助</span>——在复杂路口或模糊场景中，VLM 可以结合视觉信息和交通知识给出驾驶建议，如 DriveVLM 使用 VLM 进行 "think step by step" 的推理来处理长尾场景。<span class="key">事故分析</span>——利用 VLM 对行车记录仪视频进行自动分析，识别危险事件并生成文字报告，用于训练数据挖掘和保险理赔。部署挑战：VLM 推理延迟高（7B 模型在 Orin 上 >1 秒），不适合作为主感知通路，通常作为辅助通路以 1-2 Hz 低频运行，或仅在特定触发条件下（如检测到未知物体）才调用。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q24: 驾驶 Agent 安全约束设计</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>驾驶 Agent（基于 LLM/VLM 的驾驶决策系统）的安全约束设计是其落地的核心前提，需要多层防护机制。<span class="key">输出约束层</span>：Agent 输出的规划轨迹必须通过 <span class="key">Safety Guard</span> 检查——验证轨迹是否满足运动学约束（最大加速度、最大转向率）、是否保持安全距离（RSS 模型，即 Responsibility-Sensitive Safety）、是否在可行驶区域内、是否遵守交通规则（限速、红灯停车）。任何违反约束的输出直接被拒绝并触发安全降级动作。<span class="key">语义约束层</span>：限制 Agent 的决策空间——不允许输出导致逆行、不允许指示驶入人行道、不允许在无信号灯路口的"绿灯"判断中冒进。通过 <span class="key">guardrail prompt</span> 和硬编码规则双重约束。<span class="key">时间约束层</span>：Agent 推理必须在预设时间内（如 500ms）返回结果，超时则使用默认安全策略（如保持当前速度和车道、或减速停车）。<span class="key">一致性约束</span>：Agent 的连续两帧输出不应出现剧烈跳变（如上一帧决定直行下一帧突然左转），通过 temporal smoothing 或 consistency check 过滤异常决策。<span class="key">人类监督</span>：L2/L3 系统中始终保留人类接管通道，Agent 置信度低于阈值时主动提示驾驶员接管（TOR, Takeover Request），而非强行执行不确定的决策。整体原则：Agent 做决策，规则做兜底，安全系统做最后防线。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q25: 端云协同推理的分工策略</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">端云协同</span>推理利用车端和云端的各自优势，实现比纯端侧更强的感知和决策能力。分工策略的核心原则是：<span class="key">安全关键 + 实时性强的任务在端侧</span>，<span class="key">非实时 + 计算密集的任务在云端</span>。具体分工：<span class="key">端侧承担</span>——基础感知（目标检测、车道线检测，延迟要求 <100ms）、紧急避险决策（AEB，延迟要求 <50ms）、基本路径规划和控制。这些任务的安全关键性要求必须在车端完成，不依赖网络连接。<span class="key">云端承担</span>——高精度地图更新和下发、VLM 大模型推理（复杂场景理解）、长期轨迹规划优化、路径的全局优化（利用交通流信息）、模型的离线训练和更新包生成。<span class="key">协同场景</span>：遇到端侧模型不确定的场景时（如未知障碍物），端侧上传关键帧到云端，云端大模型分析后返回语义描述和建议动作，端侧据此调整策略——但在等待云端响应期间端侧采用保守策略（减速、保持车道）。<span class="key">网络断连处理</span>是核心设计要点——车端必须具备完全独立运行的能力，云端信息只是增强而非依赖；设计 <span class="key">预取策略</span>——在网络良好时预下载可能需要的信息（如前方路段的高精地图、已知施工区域数据），减少实时通信需求。V2X（车路协同）是端云协同的延伸——路侧设备提供超视距感知信息，帮助车端获得被遮挡区域的目标信息。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q26: ASIL 等级分解方法</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">ASIL</span>（Automotive Safety Integrity Level）是 ISO 26262 定义的汽车安全完整性等级，从低到高分为 QM、ASIL-A、ASIL-B、ASIL-C、ASIL-D。ASIL 等级由三个因素决定：<span class="key">严重度</span>（Severity, S1-S3）——事故对人员伤害程度；<span class="key">暴露度</span>（Exposure, E1-E4）——危险场景出现的概率；<span class="key">可控度</span>（Controllability, C1-C3）——驾驶员或系统避免伤害的能力。三者通过风险矩阵映射到 ASIL 等级。<span class="key">ASIL 分解</span>是将高 ASIL 等级的安全需求分解到多个组件，使每个组件承担更低的 ASIL 等级，降低开发成本和难度。分解规则基于 <span class="key">冗余独立原则</span>：ASIL-D 可分解为 ASIL-D(D) + QM、ASIL-C(D) + ASIL-A(D)、ASIL-B(D) + ASIL-B(D)（括号中的 D 表示分解来源）。例如：AEB（自动紧急制动）功能被评估为 ASIL-D，可以分解为：主感知通路（Camera BEV 检测）承担 ASIL-B(D) + 冗余感知通路（Radar 检测）承担 ASIL-B(D），两个独立通路任一检测到碰撞风险都触发制动。分解的前提是两个组件必须满足<span class="key">独立性</span>（independent）和<span class="key">无共因失效</span>（freedom from interference）——不共享硬件、不共享软件、不共享开发团队。这就是为什么自动驾驶系统通常使用 Camera + Radar 的冗余方案，而不是两个 Camera，因为两个 Camera 共享相似的失效模式（如逆光致盲）。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q27: 冗余系统设计原则</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>自动驾驶的<span class="key">冗余设计</span>是实现功能安全的核心手段，确保单点故障不导致系统失效。冗余设计遵循以下原则。<span class="key">异构冗余优于同构冗余</span>：使用不同类型的传感器（Camera + LiDAR + Radar）比使用多个相同传感器更可靠，因为不同传感器的失效模式不同——Camera 受光照影响、LiDAR 受雨雾影响、Radar 受电磁干扰影响，同时失效的概率极低。<span class="key">独立性要求</span>：冗余组件必须在硬件、软件和供电上完全独立——主控芯片 A 和备份芯片 B 使用不同型号（如 Orin + TDA4）、运行不同代码（不同算法实现）、由独立电源供电，避免共因失效。<span class="key">降级策略</span>（Graceful Degradation）：系统应定义多级降级方案——全功能模式（所有传感器和计算单元正常）→ 降级模式 1（某个传感器故障，限制最高速度和功能范围）→ 降级模式 2（主算力故障，切换到备份最小功能集）→ 最小风险状态（MRC, Minimal Risk Condition，安全停车）。<span class="key">故障检测与切换</span>：每个组件需要内置 watchdog 和自检机制，故障检测时间（FDTI）加故障切换时间应小于系统安全时间窗口（如 AEB 场景的 FDTI < 50ms）。<span class="key">通信冗余</span>：关键数据通路使用双总线（如两路 CAN-FD 或 CAN + Ethernet），制动和转向执行器使用双通道驱动。整体设计需满足 ISO 26262 对相应 ASIL 等级的定量目标（如 ASIL-D 要求单点故障度量 SPFM ≥ 99%）。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q28: SOTIF (预期功能安全) 分析方法</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">SOTIF</span>（Safety Of The Intended Functionality, ISO 21448）关注的是系统在无故障状态下因功能不足或人员误用导致的危害——这正是 AI 感知系统的核心安全挑战。与 ISO 26262（关注硬件/软件故障）不同，SOTIF 关注的是 "系统正确运行但仍可能不安全" 的情况，如：感知模型漏检行人（功能不足）、驾驶员对自动驾驶能力过度信任（误用）。SOTIF 分析方法包括以下步骤。<span class="key">场景分析</span>：识别所有可能触发功能不足的场景——将驾驶场景按 <span class="key">四象限模型</span>分类：Area 1（已知安全场景）、Area 2（已知不安全场景）、Area 3（未知不安全场景）、Area 4（未知安全场景）。SOTIF 的目标是缩小 Area 2 和 Area 3。<span class="key">触发条件分析</span>：系统性地识别导致感知/决策失败的触发条件（Triggering Conditions），如强逆光、大雨、异形车辆、非常规交通参与者行为等，每个触发条件评估其发生概率和导致的危害严重度。<span class="key">验证与确认</span>：通过大规模路测里程（如 10 亿公里仿真 + 1000 万公里实车）统计残余风险，验证 Area 2 和 Area 3 的面积足够小（残余风险可接受）。<span class="key">针对 AI 模型的特殊分析</span>：评估模型的 ODD（运行设计域）边界——在哪些条件下模型性能会退化到不可接受的水平；使用对抗样本测试模型的鲁棒性；建立模型性能监控（runtime monitoring），检测模型输出的置信度异常并触发降级。SOTIF 要求建立持续改进的闭环——每个已知的不安全场景都要制定消除或缓解措施，然后验证措施有效性。</p>
+  </div>
+</div>
+
+<!-- ==================== Section 6 ==================== -->
+<h2 id="s6">六、系统设计题</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q29: 设计 L2+ 高速场景的完整感知方案</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>L2+ 高速场景的感知方案需要支持 ACC（自适应巡航）、LCC（车道居中控制）和 ALC（自动变道辅助）等功能。<span class="key">传感器配置</span>：前向双目/三焦相机组合——窄角长焦相机（FOV 30度，用于 200m+ 远距检测）+ 标准相机（FOV 60度，用于 100m 中距感知）+ 广角相机（FOV 120度，用于近场和切入车辆检测）；侧向和后向各 1-2 个鱼眼/广角相机覆盖盲区；前向长距毫米波雷达（探测距离 250m+，用于 ACC）+ 角雷达 4 个（覆盖四角盲区）。可选前向 LiDAR 1 个（高配版本提供 3D 深度精确测量）。<span class="key">感知算法架构</span>：采用 BEV 融合方案——多相机图像 → 共享 backbone（ResNet-50 或 EfficientNet） → BEV 特征构建（LSS/BEVFormer） → 多任务头：3D 目标检测（车辆、行人、锥桶、施工标志）、车道线检测（车道线类型、曲率、消失点）、可行驶区域分割、动态目标速度估计。Radar 数据通过独立的 radar pillar encoder 生成 radar BEV 特征，与 camera BEV 特征融合。<span class="key">高速场景特殊需求</span>：远距离检测精度——高速场景车速快（120km/h），前方 200m 目标的检测和测距精度直接影响 ACC 安全性，需要长焦相机 + radar 融合保证 200m 处目标的检测率 >99%。<span class="key">Cut-in 检测</span>——邻道车辆快速切入是高速最危险场景之一，需要侧向相机和角雷达的低延迟检测（<100ms）。<span class="key">车道线连续性</span>——高速场景车道线可能磨损、被大车遮挡，需要时序融合和车道线跟踪算法保持车道模型的连续稳定。<span class="key">冗余设计</span>：camera BEV 感知 + radar 独立检测双通路，任一通路都能独立支持 AEB 功能。整体延迟预算：前处理 5ms + backbone 推理 20ms + BEV 构建 10ms + 多任务头 10ms + 后处理 5ms = 50ms（20 FPS）。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q30: 设计越野场景的可通行性判断系统</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>越野场景没有结构化道路和交通标志，可通行性判断是最核心的感知任务。<span class="key">传感器方案</span>：前向立体相机（双目基线 >20cm，获取密集深度图）+ 前向 LiDAR（32/64 线，获取精确 3D 地形）+ IMU（感知自车姿态和振动） + 可选 RGB 相机（提供纹理和语义信息）。多传感器融合提供互补信息：相机提供纹理/颜色语义（区分泥地/水/草地/沙地），LiDAR 提供精确的地形几何（坡度、高差、粗糙度）。<span class="key">可通行性分析框架</span>分为三个维度。<span class="key">几何通行性</span>：基于 LiDAR 点云构建 2.5D 高程图（elevation map），计算每个网格的坡度、高差（step height）、粗糙度（roughness），与车辆通行能力（最大爬坡角、最小离地间隙、通过角/离去角）对比，判断几何上是否可通过。<span class="key">语义通行性</span>：使用语义分割模型对地形分类——硬地面（高通行性）、草地（中等通行性）、松软沙地（低通行性，可能陷车）、水域（未知深度，默认不可通行）、岩石（取决于大小）、植被（取决于密度和高度）。训练数据需要包含大量越野场景标注，如 RUGD 和 RELLIS-3D 数据集。<span class="key">物理通行性</span>：估计地面的承载力和摩擦系数——松软地面车辆可能下陷，湿滑斜坡可能侧滑。可以通过视觉外观估计（深度学习预测地面属性）或行驶历史学习（记录在不同地面类型上的实际车辆动力学响应）。<span class="key">输出表示</span>：生成实时的 costmap（代价地图），每个网格赋予一个通行代价值（0=完全可通行，1=不可通行），规划模块基于 costmap 搜索最优路径。costmap 融合几何、语义和物理三个维度的信息。<span class="key">自适应能力</span>：系统需要根据当前天气条件（雨后地面更滑）和车辆状态（载重影响通过性）动态调整通行性阈值。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q31: 设计自动驾驶系统的功能安全架构</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>自动驾驶功能安全架构需要同时满足 <span class="key">ISO 26262</span>（功能安全）和 <span class="key">ISO 21448</span>（SOTIF）的要求。<span class="key">整体架构</span>采用三层安全防护。<span class="key">第一层：主系统</span>——运行完整的感知-预测-规划-控制流水线（BEV 感知 + 端到端/模块化规划），承担主要驾驶功能，ASIL-B 设计等级。主系统使用高性能 SoC（如 NVIDIA Orin）运行复杂的深度学习模型。<span class="key">第二层：安全监控系统</span>（Safety Monitor）——独立的安全 MCU（如 Infineon Aurix TC3xx，ASIL-D 认证）运行轻量级安全算法，持续监控主系统输出是否合理（轨迹是否满足运动学约束、是否保持 RSS 安全距离）、监控自车状态（定位是否漂移、传感器是否健康）、执行独立的最小安全感知（基于 radar 的碰撞预警）。当检测到主系统异常时触发 <span class="key">Safe Stop</span>（安全停车）或 <span class="key">MRC</span>（最小风险条件达成）。<span class="key">第三层：执行器安全层</span>——制动和转向系统的 ECU 内置独立的安全逻辑（ASIL-D），包括扭矩/力限制、故障检测和安全状态切换，即使上层全部失效也能保证执行器不做出危险动作。<span class="key">安全状态转换</span>：定义清晰的状态机——Normal → Degraded Level 1（某传感器故障，限速 80km/h）→ Degraded Level 2（主计算单元故障，仅维持车道保持和 AEB）→ MRC（安全停靠路边）→ Safe State（车辆停稳、驻车制动、双闪警示）。每个状态定义了允许的功能集合、速度限制和转换条件。<span class="key">安全分析方法</span>：使用 HARA（危害分析和风险评估）识别安全目标 → FMEA/FTA 分析失效模式 → 制定技术安全需求 → 分配到软硬件组件 → 验证与确认（单元测试、集成测试、HIL 测试、路测）。全流程文档可追溯，满足 ISO 26262 V-Model 开发流程。</p>
+  </div>
+</div>
+
+</main>
+
+<script>
+var b=document.getElementById('themeBtn');b.onclick=function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('theme',h.dataset.theme)}catch(e){}};
+try{var s=localStorage.getItem('theme');if(s)document.documentElement.dataset.theme=s}catch(e){}
+var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.remove('active')});var l=document.querySelector('.sidebar a[href="#'+e.target.id+'"]');if(l)l.classList.add('active')}})},{rootMargin:'-60px 0px -70% 0px'});
+document.querySelectorAll('h2[id]').forEach(function(h){obs.observe(h)});
+</script>
+</body>
+</html>

@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>通用机器人 — 学习文档 — Edge AI Docs</title>
+<style>
+:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-h:52px}
+[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+.top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;z-index:1000}
+.top-nav .logo{font-weight:700;font-size:15px;color:var(--accent);margin-right:24px;text-decoration:none}
+.top-nav .links{display:flex;gap:2px;flex-wrap:wrap}
+.top-nav .links a{padding:4px 10px;border-radius:5px;text-decoration:none;color:var(--text2);font-size:12px;font-weight:500}
+.top-nav .links a:hover{background:var(--accentL);color:var(--accent)}
+.top-nav .links a.active{background:var(--accent);color:#fff}
+.top-nav .right{margin-left:auto}
+.theme-btn{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--text)}
+.sidebar{position:fixed;top:var(--nav-h);left:0;bottom:0;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;z-index:900}
+.sidebar .part{padding:8px 16px 4px;font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px}
+.sidebar a{display:block;padding:4px 16px 4px 20px;text-decoration:none;color:var(--text2);font-size:12px;border-left:3px solid transparent}
+.sidebar a:hover{color:var(--accent);background:var(--accentL)}
+.sidebar a.active{color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.main{margin-left:var(--sidebar-w);margin-top:var(--nav-h);padding:28px 40px 60px;max-width:900px}
+h1{font-size:26px;font-weight:800;margin-bottom:6px}
+.subtitle{font-size:14px;color:var(--muted);margin-bottom:28px}
+.part-hdr{font-size:18px;font-weight:700;color:var(--accent);margin:40px 0 20px;padding:10px 14px;background:var(--accentL);border-radius:7px;border-left:4px solid var(--accent)}
+h2{font-size:20px;font-weight:700;margin:36px 0 14px;padding-bottom:6px;border-bottom:2px solid var(--accentL)}
+h3{font-size:16px;font-weight:600;margin:20px 0 10px}
+p{margin-bottom:10px;color:var(--text2)}
+strong{color:var(--text)}
+.info-box{padding:14px 16px;border-radius:7px;margin:14px 0;border-left:4px solid var(--info);background:var(--bg2);font-size:14px}
+.info-box.warn{border-left-color:var(--warning)}.info-box.ok{border-left-color:var(--success)}.info-box.err{border-left-color:var(--danger)}
+.info-box .title{font-weight:700;font-size:13px;margin-bottom:4px}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
+th{background:var(--accentL);color:var(--accentD);font-weight:600}
+tr:nth-child(even){background:var(--bg2)}
+.mermaid-wrap{margin:16px 0;padding:16px;background:var(--bg2);border-radius:7px;overflow-x:auto}
+.chart-wrap{margin:16px 0;background:var(--bg2);border-radius:7px;padding:12px}
+.chart-box{width:100%;height:360px}
+pre{background:var(--bg3);border-radius:7px;padding:14px;overflow-x:auto;font-size:13px;margin:10px 0}
+code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
+:not(pre)>code{background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--accent)}
+@media(max-width:900px){.sidebar{display:none}.main{margin-left:0;padding:20px 16px 60px}}
+@media print{.top-nav,.sidebar,.theme-btn{display:none!important}.main{margin:0;padding:16px;max-width:100%}}
+</style>
+</head>
+<body>
+
+<!-- ===== Top Navigation ===== -->
+<nav class="top-nav">
+  <a href="index.html" class="logo">Edge AI Docs</a>
+  <div class="links">
+    <a href="cockpit-hardware.html">座舱-硬件</a>
+    <a href="cockpit-training.html">座舱-训练</a>
+    <a href="cockpit-deploy.html">座舱-部署</a>
+    <a href="cockpit-agent.html">座舱-Agent</a>
+    <a href="cockpit-debug.html">座舱-调试</a>
+    <a href="robot-learning.html" class="active">机器人-学习</a>
+    <a href="robot-interview.html">机器人-面试</a>
+    <a href="ad-learning.html">自驾-学习</a>
+    <a href="ad-interview.html">自驾-面试</a>
+  </div>
+  <div class="right">
+    <button class="theme-btn" id="themeBtn">&#9790; / &#9788;</button>
+  </div>
+</nav>
+
+<!-- ===== Sidebar TOC ===== -->
+<aside class="sidebar">
+  <div class="part">Part A: 平台与基础设施</div>
+  <a href="#ch1">1. 机器人端侧算力平台全景</a>
+  <a href="#ch2">2. 端侧推理框架对比</a>
+  <a href="#ch3">3. ROS2 + 端侧 AI 集成</a>
+  <div class="part">Part B: 算法训练与微调</div>
+  <a href="#ch4">4. 机器人感知模型训练</a>
+  <a href="#ch5">5. VLA 模型训练与适配</a>
+  <a href="#ch6">6. 强化学习与 Sim2Real</a>
+  <a href="#ch7">7. 持续学习与在线适应</a>
+  <div class="part">Part C: 部署与实时控制</div>
+  <a href="#ch8">8. 端侧推理部署实战</a>
+  <a href="#ch9">9. 实时控制链路</a>
+  <a href="#ch10">10. 传感器融合 Pipeline</a>
+  <div class="part">Part D: 端侧 Agent 框架</div>
+  <a href="#ch11">11. 机器人端侧 Agent 架构</a>
+  <a href="#ch12">12. 端侧 LLM 推理引擎</a>
+  <a href="#ch13">13. 端侧 Tool Use &amp; Function Calling</a>
+  <a href="#ch14">14. 多模态理解与接地</a>
+  <a href="#ch15">15. Agent 记忆与规划</a>
+</aside>
+
+<!-- ===== Main Content ===== -->
+<main class="main">
+
+<h1>通用机器人 — 学习文档</h1>
+<p class="subtitle">15 Chapters / 4 Parts — 覆盖人形机器人、机械臂、服务机器人的端侧 AI 全栈技术</p>
+
+<!-- ================================================================ -->
+<!-- Part A -->
+<!-- ================================================================ -->
+<div class="part-hdr">Part A: 平台与基础设施</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 1 -->
+<!-- ============================================================ -->
+<h2 id="ch1">1. 机器人端侧算力平台全景</h2>
+
+<h3>1.1 主流端侧算力平台对比</h3>
+<p>机器人端侧计算与座舱不同，需要同时满足<strong>多传感器融合</strong>、<strong>实时控制</strong>和<strong>AI 推理</strong>三大需求。当前主流平台各有侧重，选型需根据机器人品类（人形、机械臂、服务机器人）和性能/成本/功耗预算综合判断。</p>
+
+<table>
+<thead>
+<tr><th>平台</th><th>厂商</th><th>AI 算力</th><th>典型功耗</th><th>CPU</th><th>GPU/NPU</th><th>价格区间</th><th>适用场景</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Jetson Orin NX</strong></td><td>NVIDIA</td><td>275 TOPS INT8</td><td>15-60W</td><td>8-core Arm Cortex-A78AE</td><td>1024-core Ampere GPU + 2x NVDLA</td><td>$399-$999</td><td>人形机器人、高精度机械臂、自主导航</td></tr>
+<tr><td><strong>RK3588</strong></td><td>Rockchip</td><td>6 TOPS INT8</td><td>5-8W</td><td>4x A76 + 4x A55</td><td>Mali-G610 + 6 TOPS NPU</td><td>$50-$100</td><td>服务机器人、低成本巡检机器人</td></tr>
+<tr><td><strong>QRB5165</strong></td><td>Qualcomm</td><td>15 TOPS INT8</td><td>10-15W</td><td>Kryo 585 (1+3+4)</td><td>Adreno 650 + Hexagon DSP</td><td>$150-$300</td><td>移动机器人、无人机、巡检</td></tr>
+<tr><td><strong>TDA4VM</strong></td><td>TI</td><td>8 TOPS INT8</td><td>5-15W</td><td>2x A72 + 6x R5F</td><td>C7x DSP + MMA</td><td>$80-$200</td><td>工业机械臂、AGV、安全关键场景</td></tr>
+</tbody>
+</table>
+
+<h3>1.2 多维性能雷达图</h3>
+<p>以下雷达图从六个维度比较四款平台的综合表现。每个维度满分 10 分，分值基于行业公开数据和工程实践经验。</p>
+
+<div class="chart-wrap"><div class="chart-box" id="chart-ch1-radar"></div></div>
+
+<h3>1.3 选型决策框架</h3>
+<div class="info-box ok">
+<div class="title">选型决策矩阵</div>
+<p><strong>人形机器人</strong>（多自由度控制 + 视觉推理 + LLM）：首选 <strong>Jetson Orin</strong>，算力充裕，CUDA 生态成熟，可同时跑感知+规划+控制。</p>
+<p><strong>工业机械臂</strong>（安全关键 + 确定性延迟）：首选 <strong>TDA4VM</strong>，具备功能安全认证（ASIL-D），R5F 核心提供硬实时保障。</p>
+<p><strong>服务机器人</strong>（成本敏感 + 中等算力）：首选 <strong>RK3588</strong>，价格仅 $50-100，6 TOPS 足够跑 YOLO + 简单导航。</p>
+<p><strong>移动巡检</strong>（功耗敏感 + 连接性）：首选 <strong>QRB5165</strong>，Hexagon DSP 能效比高，原生支持 5G/WiFi 6。</p>
+</div>
+
+<h3>1.4 算力需求参考</h3>
+<p>不同机器人任务对算力的需求差异巨大：</p>
+<table>
+<thead>
+<tr><th>任务类型</th><th>典型模型</th><th>所需算力 (TOPS)</th><th>延迟要求</th><th>备注</th></tr>
+</thead>
+<tbody>
+<tr><td>2D 物体检测</td><td>YOLOv8s</td><td>0.5-2</td><td>&lt;30ms</td><td>RK3588 即可满足</td></tr>
+<tr><td>6DoF 位姿估计</td><td>FoundationPose</td><td>5-15</td><td>&lt;50ms</td><td>需要较强 GPU</td></tr>
+<tr><td>语义场景理解</td><td>SAM + CLIP</td><td>20-50</td><td>&lt;100ms</td><td>Orin 级别算力</td></tr>
+<tr><td>VLA 实时推理</td><td>Octo / RT-2</td><td>50-200</td><td>&lt;200ms</td><td>需 Orin AGX 级别</td></tr>
+<tr><td>端侧 LLM (4B)</td><td>Qwen3-Omni-4B INT4</td><td>15-40</td><td>首 token &lt;500ms</td><td>prefill 阶段是瓶颈</td></tr>
+</tbody>
+</table>
+
+<!-- ============================================================ -->
+<!-- Chapter 2 -->
+<!-- ============================================================ -->
+<h2 id="ch2">2. 端侧推理框架对比</h2>
+
+<h3>2.1 框架全景</h3>
+<p>端侧推理框架是连接训练好的模型和目标硬件的桥梁。选择合适的框架直接影响推理性能、开发效率和后续维护成本。核心考量因素包括<strong>硬件绑定程度</strong>、<strong>量化支持</strong>、<strong>自定义算子扩展</strong>和<strong>社区活跃度</strong>。</p>
+
+<table>
+<thead>
+<tr><th>框架</th><th>绑定硬件</th><th>量化支持</th><th>自定义算子</th><th>易用性</th><th>性能 (相对)</th><th>社区</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>TensorRT</strong></td><td>NVIDIA GPU/DLA</td><td>FP16/INT8/INT4, PTQ+QAT</td><td>Plugin API, 复杂但灵活</td><td>中等</td><td>极高 (基准线)</td><td>极活跃</td></tr>
+<tr><td><strong>QNN</strong></td><td>Qualcomm DSP/HTP</td><td>INT8/INT16, QAT 为主</td><td>HTP Backend Op Package</td><td>中等偏低</td><td>高 (DSP 专用优化)</td><td>中等</td></tr>
+<tr><td><strong>RKNN</strong></td><td>Rockchip NPU</td><td>INT8/FP16, PTQ 为主</td><td>有限，RKNN-Toolkit2</td><td>较高</td><td>中 (6 TOPS 上限)</td><td>活跃 (国内)</td></tr>
+<tr><td><strong>TFLite</strong></td><td>跨平台 (CPU/GPU/NPU delegate)</td><td>INT8/FP16, PTQ+QAT</td><td>Custom Op, 较简单</td><td>高</td><td>中等</td><td>活跃</td></tr>
+<tr><td><strong>ONNX Runtime</strong></td><td>跨平台 (多 EP)</td><td>INT8/FP16, 通过 ONNX quantizer</td><td>Custom Op 注册</td><td>高</td><td>中-高 (取决于 EP)</td><td>极活跃</td></tr>
+</tbody>
+</table>
+
+<h3>2.2 框架与硬件映射关系</h3>
+<p>每种硬件通常有一条"最优路径"：使用对应的专用框架可以最大化利用硬件加速单元。跨平台框架作为补充，适合快速原型验证和多平台部署。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph LR
+    subgraph 专用框架
+        TRT["TensorRT"]
+        QNN_F["QNN"]
+        RKNN_F["RKNN-Toolkit2"]
+    end
+
+    subgraph 跨平台框架
+        TFL["TFLite"]
+        ORT["ONNX Runtime"]
+    end
+
+    subgraph 硬件平台
+        ORIN["Jetson Orin<br/>GPU + DLA"]
+        QRB["QRB5165<br/>Hexagon DSP"]
+        RK["RK3588<br/>NPU"]
+        TDA["TDA4VM<br/>C7x DSP"]
+        CPU["通用 ARM CPU"]
+    end
+
+    TRT -->|最优路径| ORIN
+    QNN_F -->|最优路径| QRB
+    RKNN_F -->|最优路径| RK
+    TFL -->|delegate| ORIN
+    TFL -->|delegate| QRB
+    TFL -->|delegate| RK
+    TFL -->|CPU fallback| CPU
+    ORT -->|CUDA EP| ORIN
+    ORT -->|QNN EP| QRB
+    ORT -->|CPU EP| CPU
+    ORT -->|TI delegate| TDA
+</div></div>
+
+<h3>2.3 量化精度与性能权衡</h3>
+<p>量化是端侧部署的核心技术。不同量化级别对模型精度和推理速度的影响：</p>
+<table>
+<thead>
+<tr><th>量化级别</th><th>模型大小 (相对 FP32)</th><th>推理加速</th><th>精度损失</th><th>校准复杂度</th><th>推荐场景</th></tr>
+</thead>
+<tbody>
+<tr><td>FP32</td><td>1x</td><td>1x</td><td>无</td><td>无</td><td>训练、调试基准</td></tr>
+<tr><td>FP16</td><td>0.5x</td><td>1.5-2x</td><td>极小</td><td>无</td><td>Orin GPU 默认精度</td></tr>
+<tr><td>INT8 PTQ</td><td>0.25x</td><td>2-4x</td><td>小 (通常 &lt;1%)</td><td>需校准数据集</td><td>生产部署首选</td></tr>
+<tr><td>INT8 QAT</td><td>0.25x</td><td>2-4x</td><td>极小</td><td>需重训练</td><td>精度敏感任务</td></tr>
+<tr><td>INT4</td><td>0.125x</td><td>3-6x</td><td>中等 (1-3%)</td><td>高</td><td>LLM 权重量化</td></tr>
+</tbody>
+</table>
+
+<div class="info-box warn">
+<div class="title">实践建议</div>
+<p>优先尝试 <strong>INT8 PTQ</strong>，90% 的情况下精度损失可接受。仅在 PTQ 精度不达标时才使用 QAT（训练成本增加约 30%）。对于 LLM 类模型，<strong>INT4 权重 + INT8 激活值（W4A8）</strong> 是当前最佳平衡点。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 3 -->
+<!-- ============================================================ -->
+<h2 id="ch3">3. ROS2 + 端侧 AI 集成</h2>
+
+<h3>3.1 ROS2 节点架构设计</h3>
+<p>在机器人系统中，AI 推理通常作为一个独立的 ROS2 节点存在，通过 DDS 话题和服务与其他节点通信。关键设计决策包括：推理节点是同步还是异步、消息传输是否使用零拷贝、QoS 如何配置。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph TB
+    subgraph 传感器节点
+        CAM["Camera Node<br/>/camera/image_raw"]
+        LIDAR["LiDAR Node<br/>/lidar/points"]
+        IMU["IMU Node<br/>/imu/data"]
+        FORCE["Force Sensor<br/>/force/wrench"]
+    end
+
+    subgraph AI 推理节点
+        PERCEPT["感知推理节点<br/>Object Detection<br/>Pose Estimation"]
+        VLM["VLM 推理节点<br/>Scene Understanding"]
+    end
+
+    subgraph 规划节点
+        PLAN["Task Planner<br/>/plan/goal"]
+        MOTION["Motion Planner<br/>/motion/trajectory"]
+    end
+
+    subgraph 控制节点
+        CTRL["Control Node<br/>/joint_commands"]
+        SAFE["Safety Monitor<br/>/safety/status"]
+    end
+
+    CAM -->|image_transport<br/>零拷贝| PERCEPT
+    LIDAR -->|PointCloud2| PERCEPT
+    IMU -->|Imu msg| MOTION
+    FORCE -->|WrenchStamped| CTRL
+    CAM -->|compressed| VLM
+    PERCEPT -->|DetectionArray| PLAN
+    VLM -->|SceneDescription| PLAN
+    PLAN -->|TaskGoal| MOTION
+    MOTION -->|JointTrajectory| CTRL
+    SAFE -->|EmergencyStop| CTRL
+</div></div>
+
+<h3>3.2 零拷贝与共享内存传输</h3>
+<p>图像和点云数据量大（640x480 RGB 图约 900KB，VGA 深度图约 600KB），传统消息序列化会引入 1-3ms 的延迟。ROS2 Humble 以上支持基于共享内存的零拷贝传输：</p>
+
+<pre><code>// 使用 Loaned Messages 实现零拷贝发布
+auto loaned_msg = publisher-&gt;borrow_loaned_message();
+auto &amp; image = loaned_msg.get();
+// 直接写入共享内存，无需拷贝
+fill_image_data(image);
+publisher-&gt;publish(std::move(loaned_msg));
+
+// 配置 DDS 使用共享内存传输
+// fastdds_profile.xml:
+// &lt;transport_descriptors&gt;
+//   &lt;transport_descriptor&gt;
+//     &lt;transport_id&gt;shm_transport&lt;/transport_id&gt;
+//     &lt;type&gt;SHM&lt;/type&gt;
+//     &lt;segment_size&gt;10485760&lt;/segment_size&gt;
+//   &lt;/transport_descriptor&gt;
+// &lt;/transport_descriptors&gt;</code></pre>
+
+<h3>3.3 DDS QoS 配置策略</h3>
+<p>不同数据流对可靠性和时效性的要求不同，需要差异化的 QoS 策略：</p>
+
+<table>
+<thead>
+<tr><th>数据流</th><th>Reliability</th><th>History Depth</th><th>Deadline</th><th>Liveliness</th><th>理由</th></tr>
+</thead>
+<tbody>
+<tr><td>相机图像</td><td>BEST_EFFORT</td><td>1</td><td>33ms (30Hz)</td><td>AUTOMATIC</td><td>丢帧可接受，保证时效性</td></tr>
+<tr><td>LiDAR 点云</td><td>BEST_EFFORT</td><td>1</td><td>100ms (10Hz)</td><td>AUTOMATIC</td><td>数据量大，优先最新帧</td></tr>
+<tr><td>检测结果</td><td>RELIABLE</td><td>5</td><td>50ms</td><td>AUTOMATIC</td><td>规划依赖，不可丢失</td></tr>
+<tr><td>关节指令</td><td>RELIABLE</td><td>1</td><td>2ms (500Hz)</td><td>MANUAL_BY_TOPIC</td><td>安全关键，严格实时</td></tr>
+<tr><td>安全状态</td><td>RELIABLE</td><td>10</td><td>10ms</td><td>MANUAL_BY_TOPIC</td><td>急停信号，绝对可靠</td></tr>
+</tbody>
+</table>
+
+<h3>3.4 AI 推理节点设计模式</h3>
+<p>推理节点的回调模式直接影响系统吞吐和延迟：</p>
+
+<table>
+<thead>
+<tr><th>模式</th><th>实现方式</th><th>优点</th><th>缺点</th><th>适用场景</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>同步回调</strong></td><td>在 subscription callback 中直接推理</td><td>实现简单，延迟确定</td><td>阻塞回调线程，可能丢帧</td><td>推理 &lt;10ms 的轻量模型</td></tr>
+<tr><td><strong>异步 Executor</strong></td><td>MultiThreadedExecutor + 推理线程池</td><td>不阻塞回调，高吞吐</td><td>实现复杂，需处理竞态</td><td>重模型 (VLM, VLA)</td></tr>
+<tr><td><strong>Action Server</strong></td><td>ROS2 Action 接口，长时任务</td><td>支持反馈和取消</td><td>开销较大</td><td>LLM 生成式推理</td></tr>
+</tbody>
+</table>
+
+<div class="info-box">
+<div class="title">ROS2 vs ROS1 核心差异（AI 集成视角）</div>
+<p><strong>DDS 中间件</strong>：ROS2 原生支持实时通信，不依赖 roscore 单点。<strong>生命周期节点</strong>：支持 Configuring → Inactive → Active 状态机，便于 AI 模型热加载。<strong>Component 组合</strong>：多个推理节点可以合并为同进程 Component，避免进程间通信开销。<strong>Action 接口</strong>：原生支持长时异步任务（如 LLM 推理），提供进度反馈和取消能力。</p>
+</div>
+
+<!-- ================================================================ -->
+<!-- Part B -->
+<!-- ================================================================ -->
+<div class="part-hdr">Part B: 算法训练与微调</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 4 -->
+<!-- ============================================================ -->
+<h2 id="ch4">4. 机器人感知模型训练</h2>
+
+<h3>4.1 数据飞轮</h3>
+<p>机器人感知系统的核心竞争力不在单次模型训练的精度，而在于<strong>数据飞轮的转速</strong>。一个高效运转的数据飞轮能够持续提升模型性能，自动发现和修复 corner case。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph LR
+    A["数据采集<br/>Collect"] --> B["数据标注<br/>Label"]
+    B --> C["模型训练<br/>Train"]
+    C --> D["端侧部署<br/>Deploy"]
+    D --> E["线上监控<br/>Monitor"]
+    E --> F["反馈回流<br/>Feedback"]
+    F --> A
+    E -->|"Hard Cases<br/>自动挖掘"| B
+    F -->|"主动学习<br/>Active Learning"| B
+</div></div>
+
+<h3>4.2 Few-shot 学习与快速适配</h3>
+<p>机器人在新环境部署时，经常遇到训练集中不存在的物体。Few-shot 学习允许用少量样本（5-20 张图）快速适配新类别：</p>
+
+<table>
+<thead>
+<tr><th>方法</th><th>样本需求</th><th>适配时间</th><th>精度</th><th>是否需端侧训练</th><th>适用场景</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Metric Learning</strong></td><td>5-10 shot</td><td>即时推理</td><td>中等</td><td>否（特征比对）</td><td>物体识别</td></tr>
+<tr><td><strong>Prompt Tuning</strong></td><td>1-5 shot</td><td>即时推理</td><td>中-高</td><td>否（文本引导）</td><td>开放词汇检测</td></tr>
+<tr><td><strong>LoRA 微调</strong></td><td>10-50</td><td>5-30 min</td><td>高</td><td>可选 (边缘训练)</td><td>精度敏感任务</td></tr>
+<tr><td><strong>域适应 (Domain Adaptation)</strong></td><td>无标注 (目标域)</td><td>1-4 hours</td><td>中-高</td><td>通常云端</td><td>光照/场景迁移</td></tr>
+</tbody>
+</table>
+
+<h3>4.3 Sim2Real 迁移策略</h3>
+<p>仿真数据几乎无限且标注免费，但"仿真-现实差距"（Sim2Real Gap）是落地的最大障碍。核心策略：</p>
+
+<table>
+<thead>
+<tr><th>策略</th><th>原理</th><th>效果</th><th>代价</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>域随机化 (DR)</strong></td><td>在仿真中随机化纹理、光照、物理参数</td><td>提高泛化性</td><td>仿真时间增加 2-5x</td></tr>
+<tr><td><strong>域适应 (DA)</strong></td><td>对抗训练对齐仿真/真实特征分布</td><td>减少分布偏移</td><td>需少量真实数据</td></tr>
+<tr><td><strong>渐进式迁移</strong></td><td>仿真预训练 → 小规模真实微调</td><td>最优精度</td><td>需要真实标注数据</td></tr>
+<tr><td><strong>Photo-realistic Sim</strong></td><td>使用高保真渲染器 (Isaac Sim, Habitat)</td><td>缩小视觉差距</td><td>GPU 资源消耗大</td></tr>
+</tbody>
+</table>
+
+<div class="info-box ok">
+<div class="title">数据质量 &gt; 数据数量</div>
+<p>在机器人感知领域，<strong>500 张高质量标注 &gt; 50000 张噪声标注</strong>。高质量意味着：标注边界精确、覆盖多样场景、包含典型 hard case。建议投入 60% 的数据预算在质量控制上，而非单纯扩大数量。自动标注工具（如 SAM + CLIP 自动标注流水线）可以在保持质量的同时降低成本。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 5 -->
+<!-- ============================================================ -->
+<h2 id="ch5">5. VLA 模型训练与适配</h2>
+
+<h3>5.1 VLA 架构解析</h3>
+<p>Vision-Language-Action (VLA) 模型将视觉理解、语言理解和机器人动作生成统一到一个端到端框架中。核心思想是将机器人动作"token 化"，使语言模型能够直接输出机器人控制指令。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph LR
+    subgraph 输入
+        IMG["RGB 图像"]
+        LANG["语言指令<br/>'拿起红色杯子'"]
+    end
+
+    subgraph Vision Encoder
+        VE["ViT / SigLIP<br/>图像特征提取"]
+    end
+
+    subgraph Projection
+        PROJ["线性投影层<br/>视觉 Token 对齐"]
+    end
+
+    subgraph Language Model
+        LM["LLM Backbone<br/>(Llama / PaLM)"]
+    end
+
+    subgraph Action Head
+        AT["Action Tokenizer<br/>连续动作离散化"]
+        AD["Action De-tokenizer<br/>离散 Token → 连续动作"]
+    end
+
+    subgraph 输出
+        ACT["7-DoF 动作<br/>(dx,dy,dz,rx,ry,rz,gripper)"]
+    end
+
+    IMG --> VE --> PROJ --> LM
+    LANG --> LM
+    LM --> AT --> AD --> ACT
+</div></div>
+
+<h3>5.2 主流 VLA 模型参数规模</h3>
+<p>端侧部署的关键挑战是将 VLA 模型压缩到可接受的规模，同时保持操作精度。</p>
+
+<div class="chart-wrap"><div class="chart-box" id="chart-ch5-params"></div></div>
+
+<h3>5.3 边缘压缩 Pipeline</h3>
+<p>将云端 VLA 模型压缩到端侧可运行的规模，需要多阶段联合优化：</p>
+
+<table>
+<thead>
+<tr><th>阶段</th><th>技术</th><th>压缩率</th><th>精度损失</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td>1. 结构化剪枝</td><td>移除注意力头、FFN 通道</td><td>2-4x 参数减少</td><td>3-8%</td><td>需要微调恢复精度</td></tr>
+<tr><td>2. 知识蒸馏</td><td>大模型 Teacher → 小模型 Student</td><td>5-10x 参数减少</td><td>2-5%</td><td>学习中间表征效果更好</td></tr>
+<tr><td>3. 量化</td><td>INT8/INT4 权重量化</td><td>2-4x 内存减少</td><td>0.5-2%</td><td>PTQ 通常即可</td></tr>
+<tr><td>4. 算子融合</td><td>Attention + LayerNorm 融合</td><td>1.3-2x 速度提升</td><td>0%</td><td>框架级优化</td></tr>
+</tbody>
+</table>
+
+<div class="info-box warn">
+<div class="title">VLA 端侧部署的现实挑战</div>
+<p>当前最小可用的 VLA 模型（如 Octo 93M）在 Jetson Orin 上推理延迟约 80-120ms，勉强满足 5-10Hz 的控制频率要求。若要达到 30Hz 实时控制（如灵巧操作），仍需进一步压缩到 &lt;50M 参数。<strong>Action Chunking</strong>（一次预测多步动作）是当前最有效的缓解策略 —— 模型以 5Hz 运行但每次输出未来 10 步动作，等效控制频率达到 50Hz。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 6 -->
+<!-- ============================================================ -->
+<h2 id="ch6">6. 强化学习与 Sim2Real</h2>
+
+<h3>6.1 RL 训练流程总览</h3>
+<p>机器人强化学习的核心难点在于样本效率和安全性 —— 真实机器人不可能像游戏 AI 那样试错百万次。因此，"仿真训练 + Sim2Real 迁移" 成为标准范式。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph TB
+    subgraph 仿真环境
+        SIM["高保真模拟器<br/>Isaac Sim / MuJoCo / PyBullet"]
+        DR["域随机化<br/>Domain Randomization"]
+        REWARD["奖励工程<br/>Reward Shaping"]
+    end
+
+    subgraph 策略训练
+        PPO["PPO / SAC<br/>策略优化"]
+        EVAL["策略评估<br/>成功率 / 鲁棒性"]
+    end
+
+    subgraph Sim2Real 迁移
+        DISTILL["策略蒸馏<br/>RL Teacher → SL Student"]
+        ADAPT["在线适应<br/>少量真实交互微调"]
+    end
+
+    subgraph 真实部署
+        ROBOT["真实机器人<br/>端侧推理"]
+        SAFE["安全监控<br/>力/位置边界"]
+    end
+
+    SIM --> DR --> PPO
+    REWARD --> PPO
+    PPO --> EVAL
+    EVAL -->|"成功率>90%"| DISTILL
+    EVAL -->|"不达标"| REWARD
+    DISTILL --> ADAPT --> ROBOT
+    ROBOT --> SAFE
+</div></div>
+
+<h3>6.2 策略蒸馏：RL Teacher → SL Student</h3>
+<p>RL 策略通常是大型神经网络，且依赖仿真中的特权信息（如精确物体位姿）。策略蒸馏将其压缩为可在端侧运行的轻量模型，同时去除对特权信息的依赖：</p>
+
+<pre><code># 策略蒸馏伪代码
+# 1. 收集 Teacher 轨迹
+teacher_policy = load_rl_policy("ppo_grasp_v3.pt")  # 大模型, 使用特权信息
+trajectories = []
+for episode in range(10000):
+    obs_privileged = env.get_privileged_obs()  # 包含精确位姿
+    obs_student = env.get_visual_obs()          # 仅 RGB 图像
+    action = teacher_policy(obs_privileged)
+    trajectories.append((obs_student, action))
+
+# 2. 训练 Student (行为克隆)
+student_policy = LightweightCNN(input="RGB", output="7DoF_action")
+for obs, action in DataLoader(trajectories):
+    pred_action = student_policy(obs)
+    loss = F.mse_loss(pred_action, action)  # + 正则项
+    loss.backward()</code></pre>
+
+<h3>6.3 域随机化技术</h3>
+<p>域随机化通过在仿真中引入大范围的环境变化，迫使策略学习不依赖特定视觉/物理特征的鲁棒行为：</p>
+
+<table>
+<thead>
+<tr><th>随机化类型</th><th>随机化参数</th><th>典型范围</th><th>对 Sim2Real 的影响</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>视觉随机化</strong></td><td>纹理、光照方向/强度、相机位姿、背景</td><td>纹理:随机图案, 光照:0.2-5x, 相机:&plusmn;10cm/&plusmn;5&deg;</td><td>消除视觉域偏差，最关键</td></tr>
+<tr><td><strong>动力学随机化</strong></td><td>摩擦系数、物体质量、关节阻尼</td><td>摩擦:0.1-2.0, 质量:0.5-2x, 阻尼:0.8-1.2x</td><td>适应真实物理参数不确定性</td></tr>
+<tr><td><strong>物理随机化</strong></td><td>重力方向微扰、仿真步长、接触刚度</td><td>重力:&plusmn;5%, 步长:1-4ms</td><td>提高对仿真器误差的鲁棒性</td></tr>
+<tr><td><strong>任务随机化</strong></td><td>目标位置、初始构型、障碍物布局</td><td>全工作空间采样</td><td>提高泛化能力</td></tr>
+</tbody>
+</table>
+
+<div class="info-box err">
+<div class="title">Sim2Real Gap 是第一大挑战</div>
+<p>即使使用了全面的域随机化，仿真中 95% 的成功率在真实世界通常只能达到 60-80%。差距主要来自：<strong>接触物理建模不准确</strong>（软物体、柔性物体）、<strong>传感器噪声模型不完善</strong>（深度相机在反光表面失效）、<strong>执行器延迟和响应差异</strong>。最有效的弥补方法是在真实环境中进行少量（50-200 episodes）的微调适应。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 7 -->
+<!-- ============================================================ -->
+<h2 id="ch7">7. 持续学习与在线适应</h2>
+
+<h3>7.1 端侧增量学习</h3>
+<p>服务机器人在用户家中部署后，会不断遇到新物体和新场景。端侧增量学习允许机器人在不回传数据的情况下持续提升能力：</p>
+
+<table>
+<thead>
+<tr><th>能力</th><th>技术方案</th><th>计算开销</th><th>内存开销</th><th>适用性</th></tr>
+</thead>
+<tbody>
+<tr><td>新物体识别</td><td>特征库扩展 + Nearest Neighbor</td><td>极低（前向推理）</td><td>每物体约 2KB</td><td>所有平台</td></tr>
+<tr><td>新场景适应</td><td>Batch Norm 统计量更新</td><td>低（仅统计量）</td><td>可忽略</td><td>所有平台</td></tr>
+<tr><td>新技能学习</td><td>LoRA 微调 + Replay Buffer</td><td>中（需 GPU）</td><td>LoRA 约 1-5MB</td><td>Orin 级别</td></tr>
+<tr><td>偏好学习</td><td>人类反馈 (RLHF-lite)</td><td>中（在线更新）</td><td>反馈缓冲区约 10MB</td><td>Orin 级别</td></tr>
+</tbody>
+</table>
+
+<h3>7.2 灾难性遗忘缓解</h3>
+<p>增量学习的核心问题是<strong>灾难性遗忘</strong> —— 学习新任务时遗忘旧任务。三种主流缓解策略：</p>
+
+<table>
+<thead>
+<tr><th>方法</th><th>原理</th><th>额外存储</th><th>计算开销</th><th>效果</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>EWC (Elastic Weight Consolidation)</strong></td><td>用 Fisher 信息矩阵约束重要权重</td><td>与模型参数等大</td><td>中等</td><td>对简单任务序列有效</td></tr>
+<tr><td><strong>Experience Replay</strong></td><td>保存旧任务小样本，混合训练</td><td>Replay Buffer (50-500 样本)</td><td>低</td><td>最实用、效果稳定</td></tr>
+<tr><td><strong>Progressive Networks</strong></td><td>为新任务添加新列，通过横向连接复用旧知识</td><td>线性增长</td><td>推理时增加</td><td>无遗忘，但不可扩展</td></tr>
+</tbody>
+</table>
+
+<h3>7.3 边缘联邦学习</h3>
+<p>多台机器人在不共享原始数据的前提下协同提升模型性能。这对家庭服务机器人尤其重要 —— 用户隐私数据（家庭布局、个人物品）绝不能上传。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph TB
+    subgraph 机器人终端
+        R1["机器人 A<br/>家庭场景"]
+        R2["机器人 B<br/>办公场景"]
+        R3["机器人 C<br/>商场场景"]
+    end
+
+    subgraph 本地训练
+        L1["本地微调<br/>LoRA ΔW_A"]
+        L2["本地微调<br/>LoRA ΔW_B"]
+        L3["本地微调<br/>LoRA ΔW_C"]
+    end
+
+    subgraph 聚合服务器
+        AGG["FedAvg 聚合<br/>ΔW = avg(ΔW_A, ΔW_B, ΔW_C)"]
+    end
+
+    subgraph 全局模型
+        GM["更新后全局模型<br/>W' = W + ΔW"]
+    end
+
+    R1 --> L1 -->|"上传梯度/LoRA"| AGG
+    R2 --> L2 -->|"上传梯度/LoRA"| AGG
+    R3 --> L3 -->|"上传梯度/LoRA"| AGG
+    AGG --> GM
+    GM -->|"下发更新"| R1
+    GM -->|"下发更新"| R2
+    GM -->|"下发更新"| R3
+</div></div>
+
+<div class="info-box">
+<div class="title">隐私保护学习对服务机器人至关重要</div>
+<p>家庭服务机器人处理的数据包含<strong>家庭成员面孔、居住布局、生活习惯</strong>等高度隐私信息。联邦学习 + 差分隐私是当前最实用的技术组合：仅上传模型梯度更新（而非原始数据），并在梯度上添加可控噪声。LoRA 微调天然适合联邦学习 —— 上传的参数量仅为全量模型的 0.1-1%，通信带宽可控。</p>
+</div>
+
+<!-- ================================================================ -->
+<!-- Part C -->
+<!-- ================================================================ -->
+<div class="part-hdr">Part C: 部署与实时控制</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 8 -->
+<!-- ============================================================ -->
+<h2 id="ch8">8. 端侧推理部署实战</h2>
+
+<h3>8.1 TensorRT 优化 Pipeline</h3>
+<p>以 Jetson Orin 平台为例，从 PyTorch 训练好的模型到端侧高性能推理的完整流程：</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph LR
+    A["PyTorch 模型<br/>.pt / .pth"] --> B["ONNX 导出<br/>torch.onnx.export"]
+    B --> C["ONNX 优化<br/>onnx-simplifier"]
+    C --> D["TensorRT Builder<br/>trtexec"]
+    D --> E["INT8 校准<br/>Calibration Dataset"]
+    E --> F["TRT Engine<br/>.engine / .plan"]
+    F --> G["推理部署<br/>C++ / Python Runtime"]
+    D --> H["动态形状配置<br/>Optimization Profiles"]
+    H --> F
+</div></div>
+
+<h3>8.2 关键优化技术</h3>
+
+<pre><code># TensorRT INT8 校准示例
+import tensorrt as trt
+
+# 1. 创建 Builder
+builder = trt.Builder(TRT_LOGGER)
+network = builder.create_network(1 &lt;&lt; int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
+parser = trt.OnnxParser(network, TRT_LOGGER)
+parser.parse_from_file("model.onnx")
+
+# 2. 配置 INT8 量化
+config = builder.create_builder_config()
+config.set_flag(trt.BuilderFlag.INT8)
+config.int8_calibrator = MyCalibrator(
+    data_dir="calibration_data/",  # 500-1000 张代表性图像
+    batch_size=32,
+    cache_file="calibration.cache"
+)
+
+# 3. 动态形状（支持不同输入尺寸）
+profile = builder.create_optimization_profile()
+profile.set_shape("input",
+    min=(1, 3, 224, 224),     # 最小 batch
+    opt=(4, 3, 640, 640),     # 最优 batch（TRT 针对此优化）
+    max=(8, 3, 1280, 1280))   # 最大 batch
+config.add_optimization_profile(profile)
+
+# 4. 构建引擎
+engine = builder.build_serialized_network(network, config)</code></pre>
+
+<h3>8.3 多模型内存规划</h3>
+<p>机器人系统通常需要同时运行多个 AI 模型（检测、分割、位姿估计、VLM 等），GPU 内存是最稀缺的资源：</p>
+
+<table>
+<thead>
+<tr><th>策略</th><th>描述</th><th>内存节省</th><th>延迟影响</th><th>适用场景</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>静态分配</strong></td><td>所有模型常驻内存</td><td>无</td><td>无额外延迟</td><td>内存充裕 (Orin 32GB)</td></tr>
+<tr><td><strong>动态加载</strong></td><td>按需加载/卸载模型</td><td>50-70%</td><td>首次加载 200-500ms</td><td>内存受限，任务互斥</td></tr>
+<tr><td><strong>权重共享</strong></td><td>Backbone 共享，多 Head</td><td>30-50%</td><td>无额外延迟</td><td>同系列模型</td></tr>
+<tr><td><strong>CUDA Stream 并行</strong></td><td>多模型在不同 Stream 并行执行</td><td>无（但提高利用率）</td><td>降低总延迟</td><td>独立任务并行</td></tr>
+</tbody>
+</table>
+
+<div class="info-box ok">
+<div class="title">部署检查清单</div>
+<p>1. 模型转换后与 PyTorch 原始输出逐层对比，确保误差 &lt; 1e-3 (FP16) 或 &lt; 0.01 (INT8)。2. 使用 <code>trtexec --best</code> 基准测试，确认达到目标 FPS。3. 用 <code>nsys profile</code> 分析 GPU 利用率，消除 CPU-GPU 同步等待。4. 监控推理过程中的内存峰值，预留 20% 安全余量。5. 长时间压力测试（24h+），检查内存泄漏和热降频。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 9 -->
+<!-- ============================================================ -->
+<h2 id="ch9">9. 实时控制链路</h2>
+
+<h3>9.1 延迟预算分配</h3>
+<p>机器人控制链路的端到端延迟直接决定操作精度和安全性。不同机器人类型对延迟的容忍度差异很大：</p>
+
+<div class="chart-wrap"><div class="chart-box" id="chart-ch9-latency"></div></div>
+
+<h3>9.2 实时操作系统选型</h3>
+<p>标准 Linux 内核的调度延迟在 1-10ms 波动，无法满足高频控制的确定性要求。三种主流方案对比：</p>
+
+<table>
+<thead>
+<tr><th>方案</th><th>原理</th><th>最坏延迟</th><th>开发难度</th><th>生态兼容性</th><th>适用场景</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>标准 Linux</strong></td><td>CFS 调度器, SCHED_FIFO 可选</td><td>1-10ms</td><td>低</td><td>完全兼容</td><td>服务机器人、导航</td></tr>
+<tr><td><strong>RT-PREEMPT</strong></td><td>将 Linux 内核大部分中断线程化</td><td>50-100us</td><td>中</td><td>高（主线 Linux 合并中）</td><td>机械臂 1kHz 控制</td></tr>
+<tr><td><strong>Xenomai</strong></td><td>双内核：实时内核 + Linux 内核</td><td>10-30us</td><td>高</td><td>中（需专用 API）</td><td>高速运动控制、CNC</td></tr>
+</tbody>
+</table>
+
+<h3>9.3 控制环路架构</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph TB
+    subgraph 感知层 - 15ms
+        S1["Camera<br/>30 Hz"]
+        S2["LiDAR<br/>10 Hz"]
+        S3["Force/Torque<br/>1 kHz"]
+        AI["AI 推理<br/>目标检测/位姿估计"]
+    end
+
+    subgraph 决策层 - 5ms
+        PLAN["Motion Planner<br/>轨迹规划"]
+        SAFE["Safety Check<br/>碰撞检测"]
+    end
+
+    subgraph 控制层 - 2ms
+        PID["PID / 阻抗控制<br/>1 kHz 伺服环"]
+        INTERP["轨迹插值器<br/>1 kHz → 关节指令"]
+    end
+
+    subgraph 执行层
+        MOTOR["电机驱动器<br/>EtherCAT / CAN"]
+    end
+
+    S1 --> AI
+    S2 --> AI
+    AI --> PLAN
+    S3 --> PID
+    PLAN --> SAFE --> INTERP --> PID --> MOTOR
+</div></div>
+
+<h3>9.4 不同机器人类型的实时要求</h3>
+<table>
+<thead>
+<tr><th>机器人类型</th><th>控制频率</th><th>允许最大延迟</th><th>实时等级</th><th>推荐方案</th></tr>
+</thead>
+<tbody>
+<tr><td>移动服务机器人</td><td>20-50 Hz</td><td>50-100ms</td><td>软实时</td><td>标准 Linux + SCHED_FIFO</td></tr>
+<tr><td>协作机械臂 (6-DoF)</td><td>500-1000 Hz</td><td>1-2ms</td><td>硬实时</td><td>RT-PREEMPT</td></tr>
+<tr><td>人形机器人行走</td><td>200-500 Hz</td><td>2-5ms</td><td>硬实时</td><td>RT-PREEMPT / Xenomai</td></tr>
+<tr><td>灵巧手操作</td><td>1000-5000 Hz</td><td>0.2-1ms</td><td>硬实时</td><td>Xenomai / FPGA</td></tr>
+<tr><td>视觉伺服</td><td>30-60 Hz</td><td>15-33ms</td><td>软实时</td><td>标准 Linux</td></tr>
+</tbody>
+</table>
+
+<div class="info-box warn">
+<div class="title">AI 推理与实时控制的矛盾</div>
+<p>AI 模型推理（10-200ms）与控制环路（1-5ms）的频率差距是根本矛盾。解决方案：<strong>分频架构</strong> —— AI 推理以低频（5-30Hz）提供目标和约束，控制器以高频（500-1000Hz）在目标引导下进行轨迹跟踪。两者通过共享内存解耦，控制器在 AI 结果更新前使用上一帧的预测做外推。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 10 -->
+<!-- ============================================================ -->
+<h2 id="ch10">10. 传感器融合 Pipeline</h2>
+
+<h3>10.1 多传感器时间同步</h3>
+<p>传感器融合的第一步也是最难的一步 —— 确保不同传感器的数据在时间轴上精确对齐。典型延迟源：</p>
+
+<table>
+<thead>
+<tr><th>传感器</th><th>典型延迟</th><th>频率</th><th>同步难点</th></tr>
+</thead>
+<tbody>
+<tr><td>RGB 相机</td><td>30-50ms（含曝光+传输）</td><td>30 Hz</td><td>Rolling shutter 导致帧内时间不一致</td></tr>
+<tr><td>深度相机</td><td>50-80ms</td><td>30 Hz</td><td>与 RGB 帧对齐需要硬件触发</td></tr>
+<tr><td>2D LiDAR</td><td>5-20ms</td><td>10-40 Hz</td><td>扫描时间 25-100ms，不同角度对应不同时刻</td></tr>
+<tr><td>3D LiDAR</td><td>50-100ms</td><td>10-20 Hz</td><td>旋转一周的数据跨越 50-100ms 时间窗</td></tr>
+<tr><td>IMU</td><td>&lt;1ms</td><td>200-1000 Hz</td><td>几乎无延迟，作为时间参考基准</td></tr>
+<tr><td>力/力矩传感器</td><td>&lt;1ms</td><td>1-8 kHz</td><td>与控制环路同步更关键</td></tr>
+</tbody>
+</table>
+
+<h3>10.2 融合架构对比</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph TB
+    subgraph 早期融合 Early Fusion
+        E1["Camera"] --> EF["原始数据<br/>拼接/投影"]
+        E2["LiDAR"] --> EF
+        EF --> EM["统一模型<br/>端到端推理"]
+        EM --> ER["检测结果"]
+    end
+
+    subgraph 晚期融合 Late Fusion
+        L1["Camera"] --> LM1["视觉检测"]
+        L2["LiDAR"] --> LM2["点云检测"]
+        LM1 --> LF["结果融合<br/>NMS / 匈牙利匹配"]
+        LM2 --> LF
+        LF --> LR["融合结果"]
+    end
+
+    subgraph 中期融合 Mid Fusion
+        M1["Camera"] --> MF1["视觉 Backbone"]
+        M2["LiDAR"] --> MF2["点云 Backbone"]
+        MF1 --> MID["特征融合<br/>Attention / Concat"]
+        MF2 --> MID
+        MID --> MH["Detection Head"]
+        MH --> MR["检测结果"]
+    end
+</div></div>
+
+<h3>10.3 传感器模态对比</h3>
+
+<table>
+<thead>
+<tr><th>传感器</th><th>有效距离</th><th>精度</th><th>成本</th><th>天气/光照鲁棒性</th><th>信息维度</th><th>典型用途</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>RGB 相机</strong></td><td>0.5-100m</td><td>像素级</td><td>$10-100</td><td>低（暗光/强光差）</td><td>纹理、颜色、语义</td><td>物体识别、语义分割</td></tr>
+<tr><td><strong>深度相机</strong></td><td>0.2-10m</td><td>mm 级</td><td>$100-500</td><td>中（室内佳，强光差）</td><td>3D 几何</td><td>抓取位姿、避障</td></tr>
+<tr><td><strong>2D LiDAR</strong></td><td>0.1-30m</td><td>cm 级</td><td>$100-500</td><td>高</td><td>2D 距离</td><td>导航、避障</td></tr>
+<tr><td><strong>3D LiDAR</strong></td><td>0.5-200m</td><td>cm 级</td><td>$500-10000</td><td>高</td><td>3D 点云</td><td>建图、3D 检测</td></tr>
+<tr><td><strong>IMU</strong></td><td>N/A</td><td>高 (短期)</td><td>$5-50</td><td>极高</td><td>加速度、角速度</td><td>姿态估计、里程计</td></tr>
+<tr><td><strong>力/力矩传感器</strong></td><td>接触</td><td>mN 级</td><td>$200-2000</td><td>极高</td><td>6D 力/力矩</td><td>力控操作、碰撞检测</td></tr>
+</tbody>
+</table>
+
+<div class="info-box err">
+<div class="title">时间同步比算法设计更难</div>
+<p>工程实践中，80% 的传感器融合 Bug 来自时间同步问题，而非算法本身。关键经验：1. 使用 <strong>PTP (IEEE 1588)</strong> 或 <strong>硬件触发</strong>实现微秒级同步，不要依赖软件时间戳。2. 在 ROS2 中使用 <code>message_filters::ApproximateTimeSynchronizer</code> 而非手动缓冲。3. 所有传感器数据必须带<strong>硬件时间戳</strong>（sensor timestamp），而非接收时间戳（arrival timestamp）。4. 建立时间同步监控告警，偏差超过阈值立即降级。</p>
+</div>
+
+<!-- ================================================================ -->
+<!-- Part D -->
+<!-- ================================================================ -->
+<div class="part-hdr">Part D: 端侧 Agent 框架</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 11 -->
+<!-- ============================================================ -->
+<h2 id="ch11">11. 机器人端侧 Agent 架构</h2>
+
+<h3>11.1 Embodied Agent 循环</h3>
+<p>与纯软件 Agent 不同，机器人 Embodied Agent 必须与物理世界交互。每一步"行动"都有不可逆性 —— 打碎的杯子无法 undo。这使得安全性和鲁棒性成为架构设计的首要考量。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph LR
+    P["感知 Perceive<br/>多传感器融合"] --> T["思考 Think<br/>LLM 推理"]
+    T --> PL["规划 Plan<br/>任务分解"]
+    PL --> A["行动 Act<br/>技能执行"]
+    A --> O["观察 Observe<br/>结果验证"]
+    O -->|"成功"| DONE["任务完成"]
+    O -->|"失败/异常"| T
+    O -->|"危险"| STOP["安全停止"]
+</div></div>
+
+<h3>11.2 端侧 LLM vs 传统状态机</h3>
+<p>传统机器人使用有限状态机（FSM）或行为树（BT）进行决策，而端侧 LLM Agent 使用自然语言推理。两种范式各有优劣：</p>
+
+<table>
+<thead>
+<tr><th>维度</th><th>传统状态机/行为树</th><th>端侧 LLM Agent</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>灵活性</strong></td><td>固定逻辑，新场景需重新编程</td><td>自然语言指令，零样本适配新任务</td></tr>
+<tr><td><strong>可预测性</strong></td><td>高 —— 行为可枚举、可验证</td><td>低 —— 输出不确定，需要 guardrail</td></tr>
+<tr><td><strong>开发效率</strong></td><td>低 —— 大量 if-else / 状态转移</td><td>高 —— 自然语言描述技能和约束</td></tr>
+<tr><td><strong>计算开销</strong></td><td>极低 (&lt;1ms)</td><td>高 (100-1000ms per token)</td></tr>
+<tr><td><strong>安全性</strong></td><td>可形式化验证</td><td>需要额外安全层 (sandbox)</td></tr>
+<tr><td><strong>可解释性</strong></td><td>状态图直观</td><td>思维链 (CoT) 部分可解释</td></tr>
+<tr><td><strong>适用阶段</strong></td><td>成熟产品，安全关键</td><td>研发原型，开放场景</td></tr>
+</tbody>
+</table>
+
+<div class="info-box">
+<div class="title">混合架构是当前最佳实践</div>
+<p>推荐<strong>"LLM 高层决策 + 状态机底层执行"</strong>的混合架构：LLM 负责理解用户意图和高层任务规划（5-10Hz），状态机/行为树负责底层技能执行和安全监控（100-1000Hz）。底层安全逻辑（力限制、碰撞检测、工作空间边界）绝不经过 LLM，而是硬编码在实时控制层。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 12 -->
+<!-- ============================================================ -->
+<h2 id="ch12">12. 端侧 LLM 推理引擎</h2>
+
+<h3>12.1 主流引擎对比</h3>
+<p>端侧 LLM 推理引擎需要在有限算力下最大化 token 生成速度，同时控制内存占用。</p>
+
+<table>
+<thead>
+<tr><th>引擎</th><th>核心优化</th><th>硬件支持</th><th>支持模型</th><th>量化支持</th><th>内存管理</th><th>特点</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>llama.cpp</strong></td><td>CPU SIMD, Metal, CUDA</td><td>CPU / GPU / Apple Silicon</td><td>Llama, Qwen, Phi, Gemma 等</td><td>Q2-Q8, GGUF 格式</td><td>mmap 按需加载</td><td>最广泛的模型支持，社区最活跃</td></tr>
+<tr><td><strong>MLC-LLM</strong></td><td>TVM 编译优化, GPU/NPU kernel</td><td>CUDA / Vulkan / OpenCL / Metal</td><td>Llama, Qwen, Phi 等</td><td>INT4/INT8 (编译时)</td><td>静态内存规划</td><td>编译优化，GPU 利用率高</td></tr>
+<tr><td><strong>ExecuTorch</strong></td><td>XNNPACK, CoreML, QNN delegate</td><td>CPU / GPU / NPU (delegate)</td><td>Llama 系列为主</td><td>INT8/INT4 (PTQ)</td><td>Memory Planning</td><td>Meta 主推，与 PyTorch 生态融合</td></tr>
+<tr><td><strong>QNN LLM</strong></td><td>Hexagon HTP 专用优化</td><td>Qualcomm HTP/DSP</td><td>Llama, Qwen (需转换)</td><td>INT8/INT4 (W4A16)</td><td>DSP 内存池</td><td>高通平台最优性能</td></tr>
+</tbody>
+</table>
+
+<h3>12.2 3B 模型 INT4 推理速度对比</h3>
+<p>以 Qwen3-Omni-4B INT4 模型在 Jetson Orin NX (16GB) 上的推理速度为基准：</p>
+
+<div class="chart-wrap"><div class="chart-box" id="chart-ch12-speed"></div></div>
+
+<h3>12.3 内存优化关键技术</h3>
+<p>端侧 LLM 推理的内存瓶颈在于 KV Cache。以 3B 模型为例：</p>
+
+<pre><code># KV Cache 内存计算
+# Qwen3-Omni-4B: ~40 layers, 32 heads, 128 head_dim
+# 序列长度 2048, FP16 存储
+
+kv_cache_size = 2 * 36 * 32 * 128 * 2048 * 2  # bytes (2 for K and V, 2 for FP16)
+# = 2 * 36 * 32 * 128 * 2048 * 2
+# = 1,207,959,552 bytes ≈ 1.13 GB
+
+# 优化手段:
+# 1. GQA (Grouped Query Attention): KV heads 4 instead of 32 → 8x 节省
+# 2. KV Cache 量化 (INT8): 再减 2x
+# 3. Sliding Window: 限制上下文长度
+# 优化后: 1.13 GB / 8 / 2 ≈ 72 MB (可接受)</code></pre>
+
+<div class="info-box ok">
+<div class="title">引擎选型建议</div>
+<p><strong>Jetson Orin 平台</strong>：优先 <strong>MLC-LLM</strong>（CUDA kernel 优化最好），备选 llama.cpp（CUDA backend）。<strong>Qualcomm 平台</strong>：使用 <strong>QNN LLM</strong>（Hexagon HTP 独占优化）。<strong>跨平台原型</strong>：使用 <strong>llama.cpp</strong>（一份代码跑遍所有平台）。<strong>与 PyTorch 深度集成</strong>：使用 <strong>ExecuTorch</strong>（训练-部署一体化）。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 13 -->
+<!-- ============================================================ -->
+<h2 id="ch13">13. 端侧 Tool Use &amp; Function Calling</h2>
+
+<h3>13.1 机器人技能库抽象</h3>
+<p>将机器人的底层控制能力抽象为 LLM 可调用的"工具函数"（技能），是 Embodied Agent 的核心设计模式。每个技能封装了完整的感知-规划-执行逻辑：</p>
+
+<table>
+<thead>
+<tr><th>技能名称</th><th>参数</th><th>前置条件</th><th>执行时间</th><th>安全等级</th></tr>
+</thead>
+<tbody>
+<tr><td><code>grasp(object_id)</code></td><td>目标物体 ID</td><td>物体已检测、可达</td><td>3-8s</td><td>中 (力控保护)</td></tr>
+<tr><td><code>place(position)</code></td><td>目标位置 (x,y,z)</td><td>手中有物体</td><td>3-6s</td><td>中</td></tr>
+<tr><td><code>navigate(goal)</code></td><td>目标位置/区域名</td><td>地图已建立</td><td>10-60s</td><td>低 (避障保护)</td></tr>
+<tr><td><code>inspect(object_id)</code></td><td>目标物体 ID</td><td>物体已检测</td><td>2-5s</td><td>低</td></tr>
+<tr><td><code>handover(target)</code></td><td>交接对象 (人/机器人)</td><td>手中有物体</td><td>5-15s</td><td>高 (人机安全)</td></tr>
+<tr><td><code>scan_area(region)</code></td><td>扫描区域</td><td>无</td><td>10-30s</td><td>低</td></tr>
+</tbody>
+</table>
+
+<h3>13.2 Tool Use 调用流程</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+sequenceDiagram
+    participant U as 用户
+    participant LLM as 端侧 LLM
+    participant SK as 技能管理器
+    participant R as 机器人执行器
+    participant S as 安全沙箱
+
+    U->>LLM: "把桌上的红色杯子拿给我"
+    LLM->>LLM: 意图解析 + 任务分解
+    LLM->>SK: inspect("桌面区域")
+    SK->>R: 执行视觉扫描
+    R-->>SK: 检测结果: red_cup_01 at (0.5, 0.3, 0.8)
+    SK-->>LLM: 观察: 发现红色杯子 red_cup_01
+
+    LLM->>SK: grasp("red_cup_01")
+    SK->>S: 安全检查: 力限制、可达性
+    S-->>SK: 通过
+    SK->>R: 执行抓取
+    R-->>SK: 抓取成功
+
+    LLM->>SK: handover("user")
+    SK->>S: 安全检查: 人机距离、速度限制
+    S-->>SK: 通过, 降速至安全模式
+    SK->>R: 执行递交
+    R-->>SK: 递交完成
+
+    LLM-->>U: "已将红色杯子递给您"
+</div></div>
+
+<h3>13.3 动态工具注册</h3>
+<p>机器人在运行时可能获得新能力（如安装了新末端执行器），Agent 框架需要支持动态注册新技能：</p>
+
+<pre><code># 动态技能注册示例
+class SkillRegistry:
+    def __init__(self):
+        self.skills = {}
+
+    def register(self, name, func, schema, safety_level="low"):
+        """运行时注册新技能"""
+        self.skills[name] = {
+            "function": func,
+            "schema": {          # OpenAI Function Calling 格式
+                "name": name,
+                "description": schema["description"],
+                "parameters": schema["parameters"]
+            },
+            "safety_level": safety_level
+        }
+        # 更新 LLM 的 system prompt 中的可用工具列表
+        self.update_llm_tools()
+
+    def get_tool_descriptions(self):
+        """生成 LLM 可理解的工具描述"""
+        return [s["schema"] for s in self.skills.values()]
+
+# 运行时发现新末端执行器 → 注册新技能
+registry.register(
+    name="vacuum_pick",
+    func=vacuum_gripper.pick,
+    schema={
+        "description": "使用真空吸盘吸取平面物体",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "object_id": {"type": "string", "description": "目标物体ID"},
+                "suction_force": {"type": "number", "description": "吸力(N)", "default": 10}
+            },
+            "required": ["object_id"]
+        }
+    },
+    safety_level="medium"
+)</code></pre>
+
+<h3>13.4 安全沙箱机制</h3>
+
+<table>
+<thead>
+<tr><th>安全等级</th><th>描述</th><th>检查内容</th><th>确认方式</th><th>示例操作</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Level 0: 安全</strong></td><td>不涉及物理运动</td><td>无</td><td>自动执行</td><td>inspect, scan, query</td></tr>
+<tr><td><strong>Level 1: 低风险</strong></td><td>低速运动，远离人</td><td>工作空间边界、碰撞检测</td><td>自动执行</td><td>navigate, pick (空旷区域)</td></tr>
+<tr><td><strong>Level 2: 中风险</strong></td><td>力控操作、精密操作</td><td>力限制、速度限制、物体脆弱性</td><td>LLM 自检 + 日志</td><td>grasp (易碎品), pour</td></tr>
+<tr><td><strong>Level 3: 高风险</strong></td><td>人机交互、不可逆操作</td><td>人机距离、速度降档、力矩饱和</td><td>人工确认</td><td>handover, cut, heat</td></tr>
+<tr><td><strong>Level 4: 禁止</strong></td><td>超出安全边界</td><td>—</td><td>拒绝执行</td><td>离开工作区域、高速接近人</td></tr>
+</tbody>
+</table>
+
+<div class="info-box err">
+<div class="title">安全优先原则</div>
+<p>机器人 Agent 与软件 Agent 的根本区别：<strong>物理动作不可撤销</strong>。设计原则：1. 安全检查在 LLM 之外，用确定性代码实现，不依赖 LLM 判断。2. 力矩/速度限制硬编码在控制器层，即使 LLM 发出危险指令也无法突破。3. 新技能默认 Level 3（人工确认），经验证后才降级。4. 所有操作记录审计日志，支持事后追溯。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 14 -->
+<!-- ============================================================ -->
+<h2 id="ch14">14. 多模态理解与接地</h2>
+
+<h3>14.1 视觉-语言接地 (Visual-Language Grounding)</h3>
+<p>"接地"(Grounding) 是将自然语言中的指代（如"红色杯子"、"左边那个"）映射到物理世界中具体物体或位置的过程。这是 Embodied Agent 能否正确执行指令的关键环节。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph LR
+    subgraph 输入
+        LANG["语言输入<br/>'拿起桌上左边的红色杯子'"]
+        IMG2["视觉输入<br/>RGB-D 图像"]
+    end
+
+    subgraph VLM 理解
+        VLM2["视觉语言模型<br/>场景描述 + 指代理解"]
+    end
+
+    subgraph 物体检测
+        DET["开放词汇检测<br/>Grounding DINO / OWLv2"]
+        SEG["实例分割<br/>SAM"]
+    end
+
+    subgraph 空间推理
+        SPATIAL["空间关系推理<br/>'左边' → x 坐标最小"]
+        POSE["6DoF 位姿估计<br/>抓取点计算"]
+    end
+
+    subgraph 动作生成
+        GRASP["抓取规划<br/>GraspNet / 解析法"]
+        MOTION2["运动规划<br/>MoveIt2"]
+    end
+
+    LANG --> VLM2
+    IMG2 --> VLM2
+    VLM2 --> DET --> SEG
+    SEG --> SPATIAL --> POSE
+    POSE --> GRASP --> MOTION2
+</div></div>
+
+<h3>14.2 开放词汇操作</h3>
+<p>传统机器人只能操作训练集中见过的物体类别。结合视觉-语言模型，机器人可以理解和操作从未见过的物体：</p>
+
+<table>
+<thead>
+<tr><th>技术</th><th>原理</th><th>优点</th><th>局限</th><th>端侧可行性</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>CLIP + Detection</strong></td><td>CLIP 特征匹配 + 检测框</td><td>零样本，无需训练</td><td>空间分辨率低</td><td>高 (CLIP ViT-B 约 150M)</td></tr>
+<tr><td><strong>Grounding DINO</strong></td><td>文本引导的检测器</td><td>精确定位，开放词汇</td><td>模型较大 (172M)</td><td>中 (需 INT8 量化)</td></tr>
+<tr><td><strong>OWLv2</strong></td><td>开放世界检测器</td><td>one-shot 支持</td><td>速度中等</td><td>中</td></tr>
+<tr><td><strong>SAM + CLIP</strong></td><td>SAM 分割所有 + CLIP 分类</td><td>最强泛化</td><td>两阶段，延迟高</td><td>低 (需 Orin 级别)</td></tr>
+</tbody>
+</table>
+
+<h3>14.3 空间推理与指代消解</h3>
+<p>用户指令中的空间关系（"左边"、"上面"、"靠近"）需要在 3D 空间中解析。关键处理步骤：</p>
+
+<pre><code># 空间指代消解示例
+class SpatialReasoner:
+    def resolve_reference(self, text, detections, camera_params):
+        """将语言中的空间指代解析为具体物体"""
+        # 1. 提取空间关系词
+        relations = self.parse_spatial_relations(text)
+        # e.g., {"attribute": "红色", "relation": "左边", "anchor": "桌子"}
+
+        # 2. 属性过滤
+        candidates = [d for d in detections
+                       if self.match_attribute(d, relations["attribute"])]
+
+        # 3. 空间关系过滤
+        if relations["relation"] == "左边":
+            # 在相机坐标系中，左边 = x 坐标较小
+            anchor = self.find_object(detections, relations["anchor"])
+            candidates = [c for c in candidates
+                          if c.position_3d.x &lt; anchor.position_3d.x]
+
+        # 4. 歧义消解：如果仍有多个候选，选最近的
+        if len(candidates) &gt; 1:
+            candidates.sort(key=lambda c: c.distance_to_robot)
+
+        return candidates[0] if candidates else None</code></pre>
+
+<div class="info-box ok">
+<div class="title">接地精度直接决定操作成功率</div>
+<p>实验数据显示：接地正确率 90% 时，端到端操作成功率约 70%（每步 90% 累积多步衰减）；接地正确率 99% 时，操作成功率提升至 90%+。<strong>提升接地精度 10% 比提升运动规划精度 10% 对最终成功率的贡献大得多</strong>。建议投入更多工程资源在感知和接地环节，而非纯粹的控制算法优化。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 15 -->
+<!-- ============================================================ -->
+<h2 id="ch15">15. Agent 记忆与规划</h2>
+
+<h3>15.1 三层记忆架构</h3>
+<p>长时间运行的机器人 Agent 需要结构化的记忆系统，而非仅依赖 LLM 的上下文窗口。三层记忆架构是当前最实用的设计：</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph TB
+    subgraph 工作记忆 Working Memory
+        WM["KV Cache<br/>当前对话上下文<br/>容量: 2K-8K tokens<br/>存储: GPU 显存"]
+    end
+
+    subgraph 情景记忆 Episodic Memory
+        EM2["历史交互记录<br/>过去的任务经验<br/>成功/失败案例<br/>存储: SQLite"]
+    end
+
+    subgraph 语义记忆 Semantic Memory
+        SM["世界知识<br/>物体属性、空间地图<br/>用户偏好<br/>存储: 向量数据库"]
+    end
+
+    WM -->|"任务完成后<br/>关键经验存档"| EM2
+    EM2 -->|"相似任务检索<br/>经验复用"| WM
+    SM -->|"知识查询<br/>物体属性/位置"| WM
+    WM -->|"新知识沉淀<br/>更新世界模型"| SM
+    EM2 -->|"经验总结<br/>提炼通用知识"| SM
+</div></div>
+
+<h3>15.2 各层记忆实现细节</h3>
+
+<table>
+<thead>
+<tr><th>记忆层</th><th>存储介质</th><th>数据格式</th><th>容量</th><th>检索方式</th><th>更新频率</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>工作记忆</strong></td><td>GPU 显存</td><td>KV Cache (FP16/INT8)</td><td>2K-8K tokens</td><td>Attention 自动</td><td>每个 token</td></tr>
+<tr><td><strong>情景记忆</strong></td><td>eMMC/SSD (SQLite)</td><td>结构化记录 (JSON)</td><td>10K-100K 条</td><td>SQL 查询 + 向量相似度</td><td>每个任务</td></tr>
+<tr><td><strong>语义记忆</strong></td><td>eMMC/SSD (向量库)</td><td>嵌入向量 + 元数据</td><td>10K-1M 向量</td><td>ANN 近似最近邻</td><td>按需</td></tr>
+</tbody>
+</table>
+
+<h3>15.3 层次化任务规划</h3>
+<p>复杂任务（如"整理桌面"）需要多层次分解：LLM 进行高层语义规划，中层选择技能序列，底层执行运动控制。</p>
+
+<pre><code># 层次化任务规划示例
+# 用户指令: "把桌上的东西整理到柜子里"
+
+# Level 1: LLM 高层规划 (自然语言)
+"""
+计划:
+1. 扫描桌面，识别所有物体
+2. 对每个物体:
+   a. 判断其类别和归属位置
+   b. 抓取物体
+   c. 放置到对应柜子隔层
+3. 确认桌面已清空
+"""
+
+# Level 2: 技能序列 (函数调用)
+plan = [
+    {"skill": "scan_area", "params": {"region": "table_top"}},
+    # 返回: [cup_01, book_02, pen_03, phone_04]
+    {"skill": "grasp", "params": {"object_id": "cup_01"}},
+    {"skill": "place", "params": {"position": "cabinet_shelf_1"}},
+    {"skill": "grasp", "params": {"object_id": "book_02"}},
+    {"skill": "place", "params": {"position": "cabinet_shelf_2"}},
+    # ... 对每个物体重复
+    {"skill": "scan_area", "params": {"region": "table_top"}},
+    # 确认: 桌面无物体 → 完成
+]
+
+# Level 3: 运动控制 (轨迹点)
+# 由 MoveIt2 / 运动规划器生成
+# grasp("cup_01") → 50 个关节角度指令 @100Hz</code></pre>
+
+<h3>15.4 端侧向量数据库</h3>
+<p>语义记忆需要高效的向量检索能力。端侧可用的轻量级方案：</p>
+
+<table>
+<thead>
+<tr><th>方案</th><th>索引类型</th><th>内存占用</th><th>检索速度 (10K 向量)</th><th>持久化</th><th>适用场景</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>FAISS (flat)</strong></td><td>暴力搜索</td><td>低</td><td>&lt;1ms</td><td>手动序列化</td><td>小规模 (&lt;10K)</td></tr>
+<tr><td><strong>Hnswlib</strong></td><td>HNSW 图索引</td><td>中</td><td>&lt;0.1ms</td><td>支持</td><td>中规模 (10K-1M)</td></tr>
+<tr><td><strong>SQLite + VSS</strong></td><td>SQLite 向量扩展</td><td>低</td><td>&lt;5ms</td><td>原生</td><td>与结构化数据融合</td></tr>
+<tr><td><strong>LanceDB</strong></td><td>Lance 列存 + IVF</td><td>低 (磁盘存储)</td><td>&lt;2ms</td><td>原生</td><td>多模态数据</td></tr>
+</tbody>
+</table>
+
+<div class="info-box">
+<div class="title">记忆管理是长时任务的关键差异化能力</div>
+<p>短任务（&lt;1 分钟）LLM 的上下文窗口足够支撑。但长时任务（清洁整个房间、持续数小时的巡检）需要跨对话的记忆能力。关键设计原则：1. <strong>选择性记忆</strong>：不是所有信息都值得存储，按"对未来任务有用"的标准过滤。2. <strong>记忆衰减</strong>：旧的、不再准确的信息逐渐降权（物体可能已被移动）。3. <strong>主动回忆</strong>：在任务开始前，主动检索相关历史经验，注入工作记忆。4. <strong>失败记忆优先</strong>：失败经验比成功经验更有学习价值。</p>
+</div>
+
+</main>
+
+<!-- ===== Scripts ===== -->
+<script defer src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
+<script defer src="https://unpkg.com/echarts@5/dist/echarts.min.js"></script>
+<script>
+var b=document.getElementById('themeBtn');b.onclick=function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('theme',h.dataset.theme)}catch(e){}};
+try{var s=localStorage.getItem('theme');if(s)document.documentElement.dataset.theme=s}catch(e){}
+var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.remove('active')});var l=document.querySelector('.sidebar a[href="#'+e.target.id+'"]');if(l)l.classList.add('active')}})},{rootMargin:'-60px 0px -70% 0px'});
+document.querySelectorAll('h2[id]').forEach(function(h){obs.observe(h)});
+window.addEventListener('load',function(){
+  try{if(typeof mermaid!=='undefined'){mermaid.initialize({startOnLoad:true,theme:document.documentElement.dataset.theme==='dark'?'dark':'default',securityLevel:'loose'})}}catch(e){}
+  try{initCharts()}catch(e){}
+});
+function initCharts(){
+  if(typeof echarts==='undefined')return;
+  var isDark=document.documentElement.dataset.theme==='dark';
+  var t={bg:isDark?'#1a1a2e':'#f8f9fa',text:isDark?'#e0e0e0':'#1a1a2e',sub:isDark?'#adb5bd':'#495057',line:isDark?'#2a2a3e':'#dee2e6'};
+
+  // Chart 1: Ch1 Radar - 算力平台多维对比
+  var ch1=echarts.init(document.getElementById('chart-ch1-radar'));
+  ch1.setOption({
+    backgroundColor:t.bg,
+    title:{text:'端侧算力平台多维对比',left:'center',textStyle:{color:t.text,fontSize:14}},
+    tooltip:{trigger:'item'},
+    legend:{data:['Jetson Orin','RK3588','QRB5165','TDA4VM'],bottom:0,textStyle:{color:t.sub}},
+    radar:{
+      indicator:[
+        {name:'AI 算力 (TOPS)',max:10},
+        {name:'能效比 (TOPS/W)',max:10},
+        {name:'价格优势',max:10},
+        {name:'生态丰富度',max:10},
+        {name:'实时能力',max:10},
+        {name:'社区支持',max:10}
+      ],
+      radius:'60%',
+      axisName:{color:t.sub,fontSize:11},
+      splitArea:{areaStyle:{color:isDark?['rgba(42,42,62,0.3)','rgba(42,42,62,0.5)']:['rgba(238,242,255,0.3)','rgba(238,242,255,0.5)']}},
+      axisLine:{lineStyle:{color:t.line}},
+      splitLine:{lineStyle:{color:t.line}}
+    },
+    series:[{
+      type:'radar',
+      data:[
+        {value:[10,7,3,10,7,10],name:'Jetson Orin',areaStyle:{opacity:0.15},lineStyle:{width:2},itemStyle:{color:'#4361ee'}},
+        {value:[2,5,10,6,4,7],name:'RK3588',areaStyle:{opacity:0.15},lineStyle:{width:2},itemStyle:{color:'#2ecc71'}},
+        {value:[5,7,6,5,5,5],name:'QRB5165',areaStyle:{opacity:0.15},lineStyle:{width:2},itemStyle:{color:'#f39c12'}},
+        {value:[3,4,7,4,9,4],name:'TDA4VM',areaStyle:{opacity:0.15},lineStyle:{width:2},itemStyle:{color:'#e74c3c'}}
+      ]
+    }]
+  });
+
+  // Chart 2: Ch5 Bar - VLA 模型参数量对比
+  var ch5=echarts.init(document.getElementById('chart-ch5-params'));
+  ch5.setOption({
+    backgroundColor:t.bg,
+    title:{text:'VLA 模型参数量对比 (对数刻度)',left:'center',textStyle:{color:t.text,fontSize:14}},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'},formatter:function(p){return p[0].name+': '+p[0].value+'M 参数';}},
+    grid:{left:'15%',right:'10%',bottom:'15%',top:'18%'},
+    xAxis:{type:'category',data:['RT-2\n(PaLM-E)','RT-2-X','Octo','RT-1','Edge VLA\n(目标)'],axisLabel:{color:t.sub,fontSize:11,interval:0},axisLine:{lineStyle:{color:t.line}}},
+    yAxis:{type:'log',name:'参数量 (M)',nameTextStyle:{color:t.sub},axisLabel:{color:t.sub,formatter:function(v){return v>=1000?(v/1000)+'B':v+'M';}},axisLine:{lineStyle:{color:t.line}},splitLine:{lineStyle:{color:t.line,type:'dashed'}}},
+    series:[{
+      type:'bar',
+      data:[
+        {value:55000,itemStyle:{color:'#e74c3c'}},
+        {value:5000,itemStyle:{color:'#f39c12'}},
+        {value:93,itemStyle:{color:'#2ecc71'}},
+        {value:35,itemStyle:{color:'#3498db'}},
+        {value:50,itemStyle:{color:'#4361ee',borderColor:'#4361ee',borderWidth:2,borderType:'dashed',color0:'transparent'}}
+      ],
+      barWidth:'50%',
+      label:{show:true,position:'top',formatter:function(p){return p.value>=1000?(p.value/1000)+'B':p.value+'M';},color:t.text,fontSize:12}
+    }]
+  });
+
+  // Chart 3: Ch9 Waterfall - 延迟预算分配
+  var ch9=echarts.init(document.getElementById('chart-ch9-latency'));
+  ch9.setOption({
+    backgroundColor:t.bg,
+    title:{text:'机器人控制链路延迟预算分配 (ms)',left:'center',textStyle:{color:t.text,fontSize:14}},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'},formatter:function(params){var result=params[0].name+'<br/>';for(var i=0;i<params.length;i++){if(params[i].seriesName!=='辅助'){result+=params[i].marker+params[i].seriesName+': '+params[i].value+' ms<br/>';}}return result;}},
+    legend:{data:['感知推理','决策规划','控制执行','安全余量','预算上限'],bottom:0,textStyle:{color:t.sub,fontSize:11}},
+    grid:{left:'12%',right:'8%',bottom:'18%',top:'18%'},
+    xAxis:{type:'category',data:['机械臂\n@30Hz','人形行走\n@200Hz','移动机器人\n@20Hz'],axisLabel:{color:t.sub,fontSize:12},axisLine:{lineStyle:{color:t.line}}},
+    yAxis:{type:'value',name:'延迟 (ms)',nameTextStyle:{color:t.sub},axisLabel:{color:t.sub},axisLine:{lineStyle:{color:t.line}},splitLine:{lineStyle:{color:t.line,type:'dashed'}}},
+    series:[
+      {name:'感知推理',type:'bar',stack:'total',data:[15,3,30],itemStyle:{color:'#4361ee'},barWidth:'40%'},
+      {name:'决策规划',type:'bar',stack:'total',data:[5,1,10],itemStyle:{color:'#3498db'}},
+      {name:'控制执行',type:'bar',stack:'total',data:[2,0.5,5],itemStyle:{color:'#2ecc71'}},
+      {name:'安全余量',type:'bar',stack:'total',data:[11,0.5,5],itemStyle:{color:'#95a5a6'}},
+      {name:'预算上限',type:'line',data:[33,5,50],itemStyle:{color:'#e74c3c'},lineStyle:{type:'dashed',width:2},symbol:'diamond',symbolSize:8,label:{show:true,position:'top',formatter:'{c} ms',color:'#e74c3c',fontSize:12}}
+    ]
+  });
+
+  // Chart 4: Ch12 Bar - 端侧 LLM 推理速度对比
+  var ch12=echarts.init(document.getElementById('chart-ch12-speed'));
+  ch12.setOption({
+    backgroundColor:t.bg,
+    title:{text:'Qwen3-Omni-4B INT4 推理速度对比 (Jetson Orin NX)',left:'center',textStyle:{color:t.text,fontSize:14}},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'}},
+    grid:{left:'15%',right:'10%',bottom:'18%',top:'18%'},
+    xAxis:{type:'value',name:'生成速度 (tokens/s)',nameTextStyle:{color:t.sub},axisLabel:{color:t.sub},axisLine:{lineStyle:{color:t.line}},splitLine:{lineStyle:{color:t.line,type:'dashed'}}},
+    yAxis:{type:'category',data:['QNN LLM\n(CPU fallback)','ExecuTorch\n(XNNPACK)','llama.cpp\n(CUDA)','MLC-LLM\n(TVM+CUDA)'],axisLabel:{color:t.sub,fontSize:11},axisLine:{lineStyle:{color:t.line}}},
+    series:[
+      {
+        name:'Prefill (tok/s)',type:'bar',
+        data:[
+          {value:120,itemStyle:{color:'#4361ee'}},
+          {value:180,itemStyle:{color:'#4361ee'}},
+          {value:350,itemStyle:{color:'#4361ee'}},
+          {value:420,itemStyle:{color:'#4361ee'}}
+        ],
+        barWidth:'30%',
+        label:{show:true,position:'right',formatter:'{c}',color:t.text,fontSize:11}
+      },
+      {
+        name:'Decode (tok/s)',type:'bar',
+        data:[
+          {value:8,itemStyle:{color:'#2ecc71'}},
+          {value:12,itemStyle:{color:'#2ecc71'}},
+          {value:22,itemStyle:{color:'#2ecc71'}},
+          {value:28,itemStyle:{color:'#2ecc71'}}
+        ],
+        barWidth:'30%',
+        label:{show:true,position:'right',formatter:'{c}',color:t.text,fontSize:11}
+      }
+    ],
+    legend:{data:['Prefill (tok/s)','Decode (tok/s)'],bottom:0,textStyle:{color:t.sub}}
+  });
+
+  window.addEventListener('resize',function(){ch1.resize();ch5.resize();ch9.resize();ch12.resize();});
+}
+</script>
+</body>
+</html>

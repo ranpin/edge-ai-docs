@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Part E2: 场景 Agent 应用 — Edge AI Docs</title>
+<style>
+:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-h:52px}
+[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+.top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;z-index:1000}
+.top-nav .logo{font-weight:700;font-size:15px;color:var(--accent);margin-right:24px;text-decoration:none}
+.top-nav .links{display:flex;gap:2px;flex-wrap:wrap}
+.top-nav .links a{padding:4px 10px;border-radius:5px;text-decoration:none;color:var(--text2);font-size:12px;font-weight:500}
+.top-nav .links a:hover{background:var(--accentL);color:var(--accent)}
+.top-nav .links a.active{background:var(--accent);color:#fff}
+.top-nav .right{margin-left:auto}
+.theme-btn{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--text)}
+.sidebar{position:fixed;top:var(--nav-h);left:0;bottom:0;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;z-index:900}
+.sidebar a{display:block;padding:4px 16px 4px 20px;text-decoration:none;color:var(--text2);font-size:12px;border-left:3px solid transparent}
+.sidebar a:hover{color:var(--accent);background:var(--accentL)}
+.sidebar a.active{color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.sidebar .toc-part{padding:8px 20px 4px;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px}
+.main{margin-left:var(--sidebar-w);margin-top:var(--nav-h);padding:28px 40px 60px;max-width:900px}
+h1{font-size:26px;font-weight:800;margin-bottom:6px}
+.subtitle{font-size:14px;color:var(--muted);margin-bottom:28px}
+h2{font-size:20px;font-weight:700;margin:36px 0 14px;padding-bottom:6px;border-bottom:2px solid var(--accentL)}
+h3{font-size:16px;font-weight:600;margin:20px 0 10px}
+p{margin-bottom:10px;color:var(--text2)}
+strong{color:var(--text)}
+.info-box{padding:14px 16px;border-radius:7px;margin:14px 0;border-left:4px solid var(--info);background:var(--bg2);font-size:14px}
+.info-box.warn{border-left-color:var(--warning)}
+.info-box.ok{border-left-color:var(--success)}
+.info-box.err{border-left-color:var(--danger)}
+.info-box .title{font-weight:700;font-size:13px;margin-bottom:4px}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
+th{background:var(--accentL);color:var(--accentD);font-weight:600}
+tr:nth-child(even){background:var(--bg2)}
+.mermaid-wrap{margin:16px 0;padding:16px;background:var(--bg2);border-radius:7px;overflow-x:auto}
+.chart-wrap{margin:16px 0;background:var(--bg2);border-radius:7px;padding:12px}
+.chart-box{width:100%;height:360px}
+pre{background:var(--bg3);border-radius:7px;padding:14px;overflow-x:auto;font-size:13px;margin:10px 0}
+code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
+:not(pre)>code{background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--accent)}
+ol.steps{margin:10px 0 10px 20px;color:var(--text2)}
+ol.steps li{margin-bottom:6px}
+ol.steps code{font-size:12px}
+@media(max-width:900px){.sidebar{display:none}.main{margin-left:0;padding:20px 16px 60px}}
+@media print{.top-nav,.sidebar,.theme-btn{display:none!important}.main{margin:0;padding:16px;max-width:100%}}
+</style>
+</head>
+<body>
+
+<!-- ===== Top Navigation ===== -->
+<nav class="top-nav">
+  <a href="index.html" class="logo">Edge AI Docs</a>
+  <div class="links">
+    <a href="cockpit-hardware.html">A.硬件</a>
+    <a href="cockpit-training.html">B.训练</a>
+    <a href="cockpit-infer.html">C.推理优化</a>
+    <a href="cockpit-deploy.html">D.部署</a>
+    <a href="cockpit-agent-core.html">E1.核心框架</a>
+    <a href="cockpit-agent-group.html" class="active">E2.场景Agent</a>
+    <a href="cockpit-debug.html">F.调试</a>
+    <a href="cockpit-interview.html">面试</a>
+  </div>
+  <div class="right">
+    <button class="theme-btn" id="themeBtn">&#9790; / &#9788;</button>
+  </div>
+</nav>
+
+<!-- ===== Sidebar TOC ===== -->
+<aside class="sidebar">
+  <div class="toc-part">Part E2: 场景 Agent 应用</div>
+  <a href="#ch1">1. 架构总览</a>
+  <a href="#sec-arch">1.1 插件集合定位</a>
+  <a href="#sec-scenario-ids">1.2 Scenario ID 分配</a>
+  <a href="#sec-conditional">1.3 条件编译体系</a>
+  <a href="#sec-runtime-cfg">1.4 runtime_config</a>
+  <a href="#ch2">2. 车辆控制 Agent</a>
+  <a href="#sec-cc-flow">2.1 核心流程</a>
+  <a href="#sec-cc-intent">2.2 意图分类</a>
+  <a href="#sec-cc-skills">2.3 车控技能表</a>
+  <a href="#sec-cc-prompt">2.4 Prompt 模板</a>
+  <a href="#sec-cc-passenger">2.5 乘客感知</a>
+  <a href="#ch3">3. 主动视觉 Agent</a>
+  <a href="#sec-av-modes">3.1 场景模式</a>
+  <a href="#sec-av-vlm">3.2 VLM 推理</a>
+  <a href="#sec-av-lora">3.3 多 LoRA</a>
+  <a href="#sec-av-safety">3.4 安全控制</a>
+  <a href="#ch4">4. 闲聊 Agent</a>
+  <a href="#ch5">5. GUI Agent</a>
+  <a href="#ch6">6. 其他场景 Agent</a>
+  <a href="#ch7">7. Prompt 模板工程</a>
+  <a href="#sec-pt-struct">7.1 YAML 结构</a>
+  <a href="#sec-pt-placeholder">7.2 占位符机制</a>
+  <a href="#sec-pt-compare">7.3 多场景对比</a>
+  <a href="#ch8">8. 数据通路</a>
+  <a href="#sec-dt-arch">8.1 DataTransport</a>
+  <a href="#sec-dt-flow">8.2 数据流图</a>
+  <a href="#sec-dt-dump">8.3 消息录制回放</a>
+</aside>
+
+<!-- ===== Main Content ===== -->
+<main class="main">
+
+<h1>Part E2: 场景 Agent 应用</h1>
+<p class="subtitle">Chapters 1-8 — 架构总览、车辆控制 Agent、主动视觉 Agent、闲聊 Agent、GUI Agent、其他场景 Agent、Prompt 模板工程、数据通路</p>
+
+<!-- ============================================================ -->
+<!-- Chapter 1: 架构总览 -->
+<!-- ============================================================ -->
+<h2 id="ch1">1. agent_group 架构总览</h2>
+
+<h3 id="sec-arch">1.1 插件集合定位</h3>
+
+<p><code>agent_group</code> 是基于 aadkcore <code>AgentPlugin</code> 接口实现的场景 Agent 插件库，编译产物为 <code>libagent_group.so</code>。它通过 <code>extern "C"</code> 导出工厂函数 <code>get_supported_agents</code> 和 <code>create_dispatcher</code>，供 AgentRuntime 在运行时动态加载和实例化各场景 Agent。每个 Agent 对应一个唯一的 <code>scenario_id</code>，由 MsgDispacher 根据消息中的 scenario_id 路由到对应的 Dispatcher 实例。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph LR
+    A["agent_factory<br/>(extern C)"] --> B["get_supported_agents<br/>返回 PluginInfo 列表"]
+    A --> C["create_dispatcher<br/>按 scenario_id 创建"]
+    C --> D["MsgDispacher<br/>消息路由"]
+    D --> E["CarControlDispatcher<br/>id=1002"]
+    D --> F["ActiveVisionDispatcher<br/>id=300"]
+    D --> G["ChitchatDispatcher<br/>id=1003"]
+    D --> H["GuiAgentDispatcher<br/>id=400"]
+    D --> I["CarSentinelDispatcher<br/>id=500"]
+    D --> J["OaiInferenceDispatcher<br/>id=600"]
+    D --> K["其他 Dispatcher..."]
+    style A fill:#4361ee,color:#fff
+    style D fill:#f39c12,color:#fff
+</div></div>
+
+<h3 id="sec-scenario-ids">1.2 Scenario ID 分配表</h3>
+<p>所有 scenario_id 统一定义在 <code>aadkcore/include/runtime/constant_ids.h</code> 中，保证跨模块一致性：</p>
+
+<table>
+<thead>
+<tr><th>常量名</th><th>scenario_id</th><th>Agent 名称</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>VIDEOCHAT_SCENARIO_ID</code></td><td>100</td><td>VideoChat</td><td>视频聊天</td></tr>
+<tr><td><code>PROACTIVE_SPEECH_SCENARIO_ID</code></td><td>200</td><td>ProactiveSpeech</td><td>主动语音</td></tr>
+<tr><td><code>ACTIVE_VISION_SCENARIO_ID</code></td><td>300</td><td>ActiveVision</td><td>主动视觉</td></tr>
+<tr><td><code>RAIN_DECTION_SCENARIO_ID</code></td><td>400</td><td>RainDection (Porsche)</td><td>雨天检测 / GUI Agent</td></tr>
+<tr><td><code>SPORT_MODE_SCENARIO_ID</code></td><td>500</td><td>SportMode (Porsche)</td><td>运动模式 / 车辆哨兵</td></tr>
+<tr><td><code>OAI_INFERENCE_SCENARIO_ID</code></td><td>600</td><td>OaiInference</td><td>OpenAI 兼容推理接口</td></tr>
+<tr><td><code>WELCOME_MODE_SCENARIO_ID</code></td><td>700</td><td>WelcomeMode</td><td>迎宾模式</td></tr>
+<tr><td><code>SYSTEM_AGENT_SCENARIO_ID</code></td><td>1001</td><td>SystemAgent</td><td>系统 Agent</td></tr>
+<tr><td><code>CAR_CONTROL_SCENARIO_ID</code></td><td>1002</td><td>CarControl</td><td>车辆控制</td></tr>
+<tr><td><code>CHITCHAT_SCENARIO_ID</code></td><td>1003</td><td>Chitchat</td><td>闲聊对话</td></tr>
+<tr><td><code>INCAR_ITEM_DETECT_SCENARIO_ID</code></td><td>1100</td><td>InCarItemDetect</td><td>车内物品检测</td></tr>
+<tr><td><code>DRESS_DETECT_SCENARIO_ID</code></td><td>1200</td><td>DressDetect</td><td>着装检测</td></tr>
+<tr><td><code>OUTCAR_QA_SCENARIO_ID</code></td><td>1300</td><td>OutCarQA</td><td>车外问答</td></tr>
+<tr><td><code>BROADCAST_SCENARIO_ID</code></td><td>65535</td><td>Broadcast</td><td>广播消息（特殊）</td></tr>
+</tbody>
+</table>
+
+<div class="info-box">
+<div class="title">ID 复用说明</div>
+<p>scenario_id 400 和 500 存在条件编译复用：在 <code>ENABLE_PORSCHE</code> 模式下分别用于 RainDection 和 SportMode；在 <code>ENABLE_DEVICEAI_BASE</code> 模式下通过 <code>#define GUI_AGENT_SCENARIO_ID 400</code> 和 <code>#define CAR_SENTINEL_AGENT_SCENARIO_ID 500</code> 重新映射给 GuiAgent 和 CarSentinel。</p>
+</div>
+
+<h3 id="sec-conditional">1.3 条件编译体系</h3>
+<p>agent_factory.cpp 通过多级条件编译宏控制 Agent 的编译包含，实现不同车型和功能的灵活裁剪：</p>
+
+<table>
+<thead>
+<tr><th>宏定义</th><th>控制范围</th><th>包含的 Agent</th></tr>
+</thead>
+<tbody>
+<tr><td><code>ENABLE_DEVICEAI_BASE</code></td><td>基础 Agent 集合</td><td>CarControl, ActiveVision, GuiAgent, VideoChat, CarSentinel</td></tr>
+<tr><td><code>ENABLE_PORSCHE</code></td><td>保时捷定制</td><td>RainDection, SportMode, WelcomeMode</td></tr>
+<tr><td><code>ENABLE_LANTU_SDK</code></td><td>岚图定制</td><td>DressDetect, InCarItemDetect, OutCarQA</td></tr>
+<tr><td><code>FEATURE_CAR_CONTROL</code></td><td>车辆控制独立开关</td><td>CarControlDispatcher</td></tr>
+<tr><td><code>FEATURE_ACTIVE_VISION</code></td><td>主动视觉独立开关</td><td>ActiveVisionDispatcher</td></tr>
+<tr><td><code>FEATURE_CHIT_CHAT</code></td><td>闲聊独立开关</td><td>ChitchatDispatcher</td></tr>
+<tr><td><code>FEATURE_GUI</code></td><td>GUI Agent 独立开关</td><td>GuiAgentDispatcher</td></tr>
+<tr><td><code>FEATURE_OAI_INFERENCE</code></td><td>OAI 推理独立开关</td><td>OaiInferenceDispatcher</td></tr>
+<tr><td><code>FEATURE_CAR_SENTINEL</code></td><td>车辆哨兵独立开关</td><td>CarSentinelDispatcher</td></tr>
+<tr><td><code>FEATURE_RAIN_DECTION</code></td><td>雨天检测独立开关</td><td>RainDectionDispatcher</td></tr>
+<tr><td><code>FEATURE_SOPRT_MODE</code></td><td>运动模式独立开关</td><td>SportModeDispatcher</td></tr>
+<tr><td><code>FEATURE_WELCOME_MODE</code></td><td>迎宾模式独立开关</td><td>WelcomeModeDispatcher</td></tr>
+<tr><td><code>FEATURE_VIDEO_CHAT</code></td><td>视频聊天独立开关</td><td>VideoChatDispatcher</td></tr>
+</tbody>
+</table>
+
+<h3 id="sec-runtime-cfg">1.4 runtime_config.json 配置</h3>
+<p>运行时通过 <code>runtime_config.json</code> 选择当前平台和模型配置，支持 Orin 和 8397 两套硬件：</p>
+
+<table>
+<thead>
+<tr><th>平台</th><th>model_name</th><th>推理后端</th><th>基础模型</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>orin</strong>（默认）</td><td><code>lape/Qwen2.5-Omni-7B</code></td><td>Lape (llama.cpp)</td><td>Qwen2.5-Omni-7B</td></tr>
+<tr><td><strong>8397</strong></td><td><code>qnn/qwen2.5-vl</code></td><td>QNN (Qualcomm)</td><td>Qwen2.5-VL-3B</td></tr>
+</tbody>
+</table>
+
+<p>每个平台分别配置 <code>model_config</code>（基础推理）和 <code>active_model_config</code>（主动视觉推理）两套模型参数文件。<code>current_runtime</code> 字段决定当前激活的平台。</p>
+
+
+<!-- ============================================================ -->
+<!-- Chapter 2: 车辆控制 Agent -->
+<!-- ============================================================ -->
+<h2 id="ch2">2. 车辆控制 Agent -- CarControlDispatcher</h2>
+
+<p><code>CarControlDispatcher</code>（scenario_id=1002）是座舱中使用频率最高的 Agent，负责将用户的自然语言指令转化为结构化的车辆控制命令，并通过 MCP 协议下发执行。</p>
+
+<h3 id="sec-cc-flow">2.1 核心流程</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+sequenceDiagram
+    participant ASR as ASR 语音识别
+    participant CC as CarControlDispatcher
+    participant RAG as RAG 知识库
+    participant PM as PromptManager
+    participant LLM as ModelRunner (LLM)
+    participant MCP as MCP 车控接口
+    participant TTS as TTS 语音合成
+
+    ASR->>CC: deliver_msg(DataMessage)
+    CC->>CC: parse_query_from_message()
+    CC->>RAG: do_rag(query)
+    RAG-->>CC: rag_skills 列表
+    CC->>PM: 加载 system_prompt + user_prompt
+    CC->>CC: replaceLocationPlaceholder()<br/>replaceSystemPlaceholder()
+    CC->>CC: 注入车辆状态 [CAR_STATE]<br/>+ 乘客信息 PERSONGROUP
+    CC->>LLM: do_model_inference(system_prompt, user_prompt)
+    LLM-->>CC: JSON 结构化输出<br/>{speak, cmd[{name,args}]}
+    CC->>CC: 意图分类 TypeClass
+    alt CAR_CONTROL
+        CC->>MCP: call_car_control_mcp(result)
+        MCP-->>CC: 执行结果
+    end
+    CC->>TTS: generate_model_result() -> TTS 回复
+</div></div>
+
+<h3 id="sec-cc-intent">2.2 意图分类枚举</h3>
+<p>CarControlDispatcher 定义了 <code>TypeClass</code> 枚举，LLM 输出解析后根据结果分类路由：</p>
+
+<table>
+<thead>
+<tr><th>枚举值</th><th>数值</th><th>说明</th><th>处理方式</th></tr>
+</thead>
+<tbody>
+<tr><td><code>REJECTED</code></td><td>0</td><td>拒绝执行</td><td>安全或不合理请求，返回拒绝话术</td></tr>
+<tr><td><code>CAR_CONTROL</code></td><td>1</td><td>车辆控制指令</td><td>解析 cmd 字段，通过 MCP 下发车控</td></tr>
+<tr><td><code>ONLINE_SEARCH</code></td><td>2</td><td>联网搜索</td><td>标记需要联网，转发到搜索服务</td></tr>
+<tr><td><code>SUMMARY</code></td><td>3</td><td>总结摘要</td><td>生成文本摘要</td></tr>
+<tr><td><code>CHAT</code></td><td>4</td><td>普通闲聊</td><td>路由到 ChitchatDispatcher 处理</td></tr>
+</tbody>
+</table>
+
+<h3 id="sec-cc-skills">2.3 车控技能精华表</h3>
+<p>技能定义在 <code>car_control.yaml</code> 的 <code>car_skills</code> 部分，共 30+ 项技能。以下为核心技能摘要：</p>
+
+<table>
+<thead>
+<tr><th>技能名</th><th>功能</th><th>关键参数</th><th>规则要点</th></tr>
+</thead>
+<tbody>
+<tr><td><code>ac_toggle</code></td><td>空调开关</td><td>position[前排/后排], state[开/关]</td><td>后排无乘客时保持关闭</td></tr>
+<tr><td><code>ac_temperature</code></td><td>空调温度</td><td>position[主驾/副驾], temperature[17-33]</td><td>步长 0.5，儿童老人不低于 22度</td></tr>
+<tr><td><code>ac_wind_level</code></td><td>空调风速</td><td>ac_wind_level[0-11]</td><td>儿童老人 + 低温时不超 5 档</td></tr>
+<tr><td><code>ac_wind_dir_control</code></td><td>空调风向</td><td>front/foot/face[开启/关闭]</td><td>儿童老人低温禁止吹脚</td></tr>
+<tr><td><code>car_window</code></td><td>车窗控制</td><td>position[4窗], open_progress[0-100%]</td><td>结合音区和指向信息定位</td></tr>
+<tr><td><code>ambient_light_control</code></td><td>氛围灯</td><td>color(50+色), brightness, breath, follow</td><td>关闭状态自动先开灯</td></tr>
+<tr><td><code>ambient_light_shade</code></td><td>灯色调深浅</td><td>operation[调浅/调深]</td><td>不改变颜色种类，只调浓淡</td></tr>
+<tr><td><code>car_reading_light</code></td><td>阅读灯</td><td>light_position[4区], state</td><td>结合指向信息控制</td></tr>
+<tr><td><code>seat_heating</code></td><td>座椅加热</td><td>seat_position[4座], level[0-3]</td><td>乘客感知联动，有人座位同步</td></tr>
+<tr><td><code>seat_ventilation</code></td><td>座椅通风</td><td>seat_position[4座], level[0-3]</td><td>成年女性强制 1 档</td></tr>
+<tr><td><code>seat_massage</code></td><td>座椅按摩</td><td>seat_position, massage_mode, level[0-3]</td><td>主驾默认全身，副驾默认全背</td></tr>
+<tr><td><code>steering_wheel_heating</code></td><td>方向盘加热</td><td>state[关闭/自动/一档/二档/三档]</td><td>--</td></tr>
+<tr><td><code>sunroof_control</code></td><td>天窗遮阳帘</td><td>degree[0-100], action[运动/暂停]</td><td>用户说太晒时完全关闭</td></tr>
+<tr><td><code>icebox_power</code></td><td>冰箱电源</td><td>state[开/关]</td><td>--</td></tr>
+<tr><td><code>icebox_mode</code></td><td>冰箱模式</td><td>mode[制冷/制热/关]</td><td>保温模式 = 制热模式</td></tr>
+<tr><td><code>icebox_temperature</code></td><td>冰箱温度</td><td>temperature[-6~15, 35~50]</td><td>制冷/制热双区间</td></tr>
+<tr><td><code>driving_mode</code></td><td>驾驶模式</td><td>state[舒适/节能/运动/雪地/个性化]</td><td>联动动力/转向/悬架</td></tr>
+<tr><td><code>media_volume_control</code></td><td>媒体音量</td><td>volume[0-27], operation[调低/调高]</td><td>超 27 时警告</td></tr>
+<tr><td><code>rearview_mirror_control</code></td><td>后视镜折叠</td><td>state[展开/折叠]</td><td>--</td></tr>
+<tr><td><code>trunk_control</code></td><td>后备箱</td><td>state[开/关]</td><td>需确认 P 档</td></tr>
+<tr><td><code>door_child_lock_control</code></td><td>儿童锁</td><td>door_position[后排左/右], state</td><td>默认双侧锁定</td></tr>
+<tr><td><code>cant_control</code></td><td>不可控</td><td>args 为空</td><td>需求不在技能表内时触发</td></tr>
+</tbody>
+</table>
+
+<h3 id="sec-cc-prompt">2.4 Prompt 模板设计</h3>
+<p>CarControlDispatcher 的 Prompt 由 <code>car_control.yaml</code> 中的多段模板拼接而成：</p>
+
+<table>
+<thead>
+<tr><th>模板段</th><th>内容</th><th>关键要素</th></tr>
+</thead>
+<tbody>
+<tr><td><code>system_prompt_prefix</code></td><td>角色定义 + 回复格式 + 输入说明</td><td>角色: 智能语音助手；输出格式: {speak, cmd[{name,args}]}；特殊规则（指向信息、乘客感知）</td></tr>
+<tr><td><code>system_prompt_prefix_1</code></td><td>车辆座位关系</td><td>两排座位排布：主驾/副驾/左后/右后</td></tr>
+<tr><td><code>system_prompt_passenger</code></td><td>乘客信息注入</td><td>占位符 <code>{{PERSONGROUP}}</code></td></tr>
+<tr><td><code>car_skills</code> 段</td><td>完整技能表</td><td>30+ 项技能的参数定义和控制规则</td></tr>
+<tr><td><code>system_prompt_suffix</code></td><td>cant_control 兜底</td><td>不在技能表内的需求返回 cant_control</td></tr>
+<tr><td><code>user_prompt</code></td><td>用户输入模板</td><td><code>&lt;说话人位置:{{LOCATION}}&gt; &lt;指向:{{DIRECTION}}&gt;{{VIPUSER}}</code></td></tr>
+</tbody>
+</table>
+
+<div class="info-box ok">
+<div class="title">JSON Schema 输出约束</div>
+<p>system_prompt 严格要求输出格式为 <code>{"speak":"回复内容","cmd":[{"name":"技能名","args":{...}}]}</code>。这种约束使得 LLM 输出可以直接进行 JSON 解析，无需额外的后处理提取逻辑。配合端侧推理引擎的 EBNF 语法约束解码，可进一步保证输出格式的合规性。</p>
+</div>
+
+<h3 id="sec-cc-passenger">2.5 乘客感知规则</h3>
+<p>CarControlDispatcher 通过 <code>PassengerInfo</code> 结构体（含 pos/occupancy/gender/age 字段）实现精细化乘客感知。<code>parse_passenger_info()</code> 解析车辆上报的乘客信息，<code>get_passenger_infos()</code> 将其格式化注入 Prompt：</p>
+
+<table>
+<thead>
+<tr><th>场景</th><th>规则</th><th>实现方式</th></tr>
+</thead>
+<tbody>
+<tr><td>儿童/老人在车</td><td>空调温度不低于 22度</td><td>system_prompt 特殊规则注入</td></tr>
+<tr><td>儿童/老人 + 低温</td><td>风速不超 5 档，禁止吹脚</td><td>system_prompt 特殊规则注入</td></tr>
+<tr><td>后排无人</td><td>后排空调保持关闭</td><td>ac_toggle 技能规则</td></tr>
+<tr><td>座椅加热联动</td><td>有人座位同步加热档位</td><td>seat_heating 技能规则</td></tr>
+<tr><td>座椅通风 + 成年女性</td><td>女性座位通风强制 1 档</td><td>seat_ventilation 技能规则</td></tr>
+</tbody>
+</table>
+
+<p>此外，<code>voice_zone_map_</code> 将音区编码映射到位置名称（1=主驾, 2=副驾, 4=左后, 8=右后, 16=中左, 32=中右），<code>direction_map_</code> 将指向信息（right/left/up）映射到目标位置，实现基于语音源和手势指向的精准控制。</p>
+
+
+<!-- ============================================================ -->
+<!-- Chapter 3: 主动视觉 Agent -->
+<!-- ============================================================ -->
+<h2 id="ch3">3. 主动视觉 Agent -- ActiveVisionDispatcher</h2>
+
+<p><code>ActiveVisionDispatcher</code>（scenario_id=300）基于 VLM（Vision-Language Model）实现车内场景的主动感知与智能交互，覆盖上车到下车的全生命周期。</p>
+
+<h3 id="sec-av-modes">3.1 六大场景模式</h3>
+
+<table>
+<thead>
+<tr><th>模式</th><th>mode 值</th><th>触发条件</th><th>核心功能</th><th>关键方法</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>迎宾 (welcome)</strong></td><td>0</td><td>车门打开 / 上车</td><td>个性化问候（纪念日/天气/温度/穿着）</td><td><code>handle_welcome_request()</code></td></tr>
+<tr><td><strong>送宾 (farewell)</strong></td><td>1</td><td>熄火 / 下车</td><td>送宾祝福 + 遗留物检测提醒</td><td><code>handle_farewell_request()</code></td></tr>
+<tr><td><strong>行中监测 (monitoring)</strong></td><td>2</td><td>行驶中</td><td>危险行为识别（手伸窗外等）</td><td><code>handle_monitoring_request()</code></td></tr>
+<tr><td><strong>乘客特征提取</strong></td><td>--</td><td>上车</td><td>性别、年龄、穿着提取</td><td><code>handle_passenger_feature_request()</code></td></tr>
+<tr><td><strong>危险动作识别</strong></td><td>--</td><td>实时</td><td>吸烟、儿童站立、手伸窗外</td><td><code>handle_dangerous_action_request()</code></td></tr>
+<tr><td><strong>遗留物检测</strong></td><td>--</td><td>下车</td><td>座椅上独立物品检测</td><td><code>handle_left_object_request()</code></td></tr>
+</tbody>
+</table>
+
+<p>此外，<code>handle_intelligent_cockpit_request()</code> 实现自动座舱场景，包括吃东西、睡觉、阅读、玩电子产品等行为检测，并联动阅读灯和空调等车控设备。对应的 task_id 列表为：<code>xz_front_behavior</code>, <code>xz_rear_behavior</code>, <code>xz_front_temp</code>, <code>xz_rear_dangerous_behavior</code>。</p>
+
+<h3 id="sec-av-vlm">3.2 VLM 多模态推理流程</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph LR
+    A["Camera Frames"] --> B["FixedQueue<br/>(4帧缓冲)"]
+    B --> C["Prompt 组装<br/>get_prompt(mode, task_id)"]
+    C --> D["ModelRunner<br/>VLM 推理"]
+    D --> E["VlmPostProcessor<br/>结果后处理"]
+    E --> F{"结果类型"}
+    F -->|安全告警| G["安全通知<br/>(频率控制)"]
+    F -->|乘客特征| H["PassengerInfo<br/>更新"]
+    F -->|车控联动| I["AdaptiveReadingLights<br/>AdaptiveAirCondition"]
+    F -->|遗留物| J["TTS 提醒"]
+    style A fill:#3498db,color:#fff
+    style D fill:#4361ee,color:#fff
+    style E fill:#f39c12,color:#fff
+</div></div>
+
+<h3 id="sec-av-lora">3.3 多 LoRA 架构</h3>
+<p>ActiveVisionDispatcher 通过 <code>use_multi_lora_</code> 标志支持同一基础 VLM 模型搭配不同场景 LoRA 适配器。同一个 Qwen2.5-VL 基座模型通过 <code>addLora</code> / <code>switchLora</code> 接口切换不同场景的微调权重，避免为每个场景单独加载完整模型。</p>
+
+<div class="info-box">
+<div class="title">连续帧推理</div>
+<p><code>front_behavior_images_</code> 和 <code>rear_behavior_images_</code> 各维护一个容量为 4 的 <code>FixedQueue</code>，缓存连续帧图像。VLM 推理时将多帧输入一起送入模型，利用时序信息提升行为识别的准确性（如区分短暂动作和持续行为）。</p>
+</div>
+
+<h3 id="sec-av-safety">3.4 安全通知频率控制与自适应车控联动</h3>
+<p>为避免重复打扰用户，ActiveVisionDispatcher 通过 <code>safety_notify_duration_ = 8000</code>（8 秒）控制同类安全告警的最小通知间隔。<code>last_safety_notify_timestamp_</code> 记录上次通知时间戳。</p>
+
+<p>自适应车控联动通过两个控制器实现：</p>
+<table>
+<thead>
+<tr><th>控制器</th><th>功能</th><th>触发场景</th></tr>
+</thead>
+<tbody>
+<tr><td><code>AdaptiveReadingLights</code></td><td>根据视觉识别结果自动调节阅读灯亮度和开关</td><td>检测到阅读行为时开灯，离开时关灯</td></tr>
+<tr><td><code>AdaptiveAirCondition</code></td><td>根据乘客状态自动调节空调</td><td>检测到乘客体表温度偏差时调整空调</td></tr>
+</tbody>
+</table>
+
+<p><code>is_exit_reminder_enabled_</code> 标志控制下车提醒功能的开关，当启用时在送宾场景中触发遗留物检测。</p>
+
+
+<!-- ============================================================ -->
+<!-- Chapter 4: 闲聊 Agent -->
+<!-- ============================================================ -->
+<h2 id="ch4">4. 闲聊 Agent 与对话管理</h2>
+
+<p><code>ChitchatDispatcher</code>（scenario_id=1003）负责处理非车控类的自然语言对话，提供陪伴式聊天体验。</p>
+
+<h3>4.1 核心架构</h3>
+<p>ChitchatDispatcher 同样继承自 <code>AgentPlugin</code>，核心组件包括：</p>
+<table>
+<thead>
+<tr><th>组件</th><th>类型</th><th>功能</th></tr>
+</thead>
+<tbody>
+<tr><td><code>model_runner_</code></td><td><code>shared_ptr&lt;ModelRunner&gt;</code></td><td>共享的 LLM 推理引擎</td></tr>
+<tr><td><code>chat_history_</code></td><td><code>unique_ptr&lt;ChatHistory&gt;</code></td><td>多轮对话历史管理</td></tr>
+<tr><td><code>prompt_manager_</code></td><td><code>shared_ptr&lt;PromptManager&gt;</code></td><td>Prompt 模板加载与管理</td></tr>
+<tr><td><code>data_dumper_</code></td><td><code>unique_ptr&lt;DataDump&gt;</code></td><td>推理数据录制</td></tr>
+</tbody>
+</table>
+
+<h3>4.2 多轮对话上下文管理</h3>
+<p><code>ChatHistory</code> 维护对话历史，<code>process_history()</code> 将历史记录转换为模型输入的 <code>MessageList</code> 格式。<code>history_to_string()</code> 用于调试日志和数据录制。<code>clear_memory()</code> 接口支持清空对话历史重新开始。</p>
+
+<h3>4.3 Prompt 特性</h3>
+<p>闲聊 Prompt（<code>chitchat.yaml</code>）的 system_prompt 包含丰富的角色设定：</p>
+<ul style="margin:8px 0 8px 20px;color:var(--text2);font-size:14px">
+<li>角色定义：车载智能助手，活泼开朗，善于倾听</li>
+<li>环境信息注入：日期、时间、天气、地点（<code>{{date_info}}</code>, <code>{{time_info}}</code> 等占位符）</li>
+<li>视觉能力：可看到中控台摄像头拍摄的车内场景，注意镜像关系（图片左=副驾，右=主驾）</li>
+<li>功能边界：明确声明无法控制车辆、设定闹钟、联网搜索等</li>
+<li>VIP 用户识别：<code>system_prompt_vipuser</code> 段注入已注册乘客名称</li>
+<li>说话人位置感知：<code>system_prompt_seat</code> 段注入当前说话人座位</li>
+</ul>
+
+<h3>4.4 与车控 Agent 的意图路由关系</h3>
+<p>ChitchatDispatcher 自身也定义了与 CarControlDispatcher 相同的 <code>TypeClass</code> 枚举（REJECTED/CAR_CONTROL/ONLINE_SEARCH/SUMMARY/CHAT）。当车控 Agent 将用户请求分类为 <code>CHAT</code> 类型时，消息会被路由到闲聊 Agent 进行处理，形成意图路由闭环。</p>
+
+
+<!-- ============================================================ -->
+<!-- Chapter 5: GUI Agent -->
+<!-- ============================================================ -->
+<h2 id="ch5">5. GUI Agent</h2>
+
+<p><code>GuiAgentDispatcher</code>（scenario_id=400，仅 <code>ENABLE_DEVICEAI_BASE</code> 模式）负责车机 UI 操作理解与自动化，将用户的语音指令映射到具体的 UI 控件操作。</p>
+
+<h3>5.1 核心数据结构</h3>
+<p><code>GuiInfo</code> 结构体封装了 GUI 操作的完整上下文：</p>
+<table>
+<thead>
+<tr><th>字段</th><th>类型</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>query_id</code></td><td>string</td><td>查询唯一标识</td></tr>
+<tr><td><code>query</code></td><td>string</td><td>用户语音指令</td></tr>
+<tr><td><code>voice_zone</code></td><td>int</td><td>音区</td></tr>
+<tr><td><code>viewtrees</code></td><td>json</td><td>当前界面 View Tree 结构化描述</td></tr>
+<tr><td><code>screenshots</code></td><td>string</td><td>当前界面截图（Base64）</td></tr>
+</tbody>
+</table>
+
+<h3>5.2 id_table.yaml 映射</h3>
+<p><code>id_table.yaml</code> 定义了数字 ID 到页面 URL 的映射表（共 200+ 条），用于将 VLM 识别的 UI 控件 ID 映射到实际的应用页面地址。映射格式为 <code>ID: page://domain/element_id</code>，覆盖 SystemUI、SmartCar、AirCondition 等多个应用域。</p>
+
+<p>同时 <code>gui_agent.yaml</code> 中的 <code>rag</code> 段定义了每个页面 URL 对应的知识描述，例如：</p>
+<pre><code>page://systemui.alios.cn/systemui_TT34:
+  电子驻车制动系统故障指示灯
+  黄色常亮表示EPB系统故障
+  ...</code></pre>
+
+<h3>5.3 端到端流程</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+sequenceDiagram
+    participant User as 用户语音
+    participant GUI as GuiAgentDispatcher
+    participant Cap as UI 捕获
+    participant VLM as ModelRunner (VLM)
+    participant RAG as id_table + RAG
+
+    User->>GUI: deliver_msg(语音指令)
+    GUI->>GUI: parse_query_from_message()
+    GUI->>Cap: genGuiCaptureEvent(queryId, query)
+    Cap-->>GUI: viewtrees + screenshots
+    GUI->>VLM: handle_default_request()<br/>截图+ViewTree+指令
+    VLM-->>GUI: 控件 ID + 操作意图
+    GUI->>RAG: 查询 id_table + rag 知识
+    RAG-->>GUI: 控件描述 + 操作指导
+    GUI->>GUI: generate_model_result()
+    GUI-->>User: 操作结果 / 回答
+</div></div>
+
+<p><code>QueryState</code> 枚举（kInit/kFinished）和 <code>query_state_map_</code> 用于追踪每个查询的生命周期，<code>QUERY_TIMEOUT = 10000</code>（10秒）为查询超时阈值。</p>
+
+
+<!-- ============================================================ -->
+<!-- Chapter 6: 其他场景 Agent -->
+<!-- ============================================================ -->
+<h2 id="ch6">6. 其他场景 Agent</h2>
+
+<table>
+<thead>
+<tr><th>Agent 名称</th><th>类名</th><th>scenario_id</th><th>编译条件</th><th>核心功能</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>车辆哨兵</strong></td>
+  <td><code>CarSentinelDispatcher</code></td>
+  <td>500</td>
+  <td><code>FEATURE_CAR_SENTINEL</code></td>
+  <td>停车后环境监控，通过 sentry 库进行视频分段摘要与风险评级。支持动态加载 sentry .so 库，注入视频进行推理分析。</td>
+</tr>
+<tr>
+  <td><strong>雨天检测</strong></td>
+  <td><code>RainDectionDispatcher</code></td>
+  <td>400</td>
+  <td><code>ENABLE_PORSCHE</code> + <code>FEATURE_RAIN_DECTION</code></td>
+  <td>保时捷定制，雨天场景检测与自动雨刮控制。基于视觉模型检测雨量强度。</td>
+</tr>
+<tr>
+  <td><strong>运动模式</strong></td>
+  <td><code>SportModeDispatcher</code></td>
+  <td>500</td>
+  <td><code>ENABLE_PORSCHE</code> + <code>FEATURE_SOPRT_MODE</code></td>
+  <td>保时捷定制，运动驾驶场景感知，提供运动模式下的驾驶数据分析和车辆状态反馈。</td>
+</tr>
+<tr>
+  <td><strong>迎宾模式</strong></td>
+  <td><code>WelcomeModeDispatcher</code></td>
+  <td>700</td>
+  <td><code>ENABLE_PORSCHE</code> + <code>FEATURE_WELCOME_MODE</code></td>
+  <td>保时捷定制的上车迎宾交互，独立于 ActiveVision 的迎宾场景。</td>
+</tr>
+<tr>
+  <td><strong>着装检测</strong></td>
+  <td><code>DressDetectDispatcher</code></td>
+  <td>1200</td>
+  <td><code>ENABLE_LANTU_SDK</code></td>
+  <td>岚图定制，基于车内摄像头识别乘客着装特征，用于个性化服务。</td>
+</tr>
+<tr>
+  <td><strong>车内物品检测</strong></td>
+  <td><code>InCarItemDetectDispatcher</code></td>
+  <td>1100</td>
+  <td><code>ENABLE_LANTU_SDK</code></td>
+  <td>岚图定制，识别车内物品并提供相关服务建议。</td>
+</tr>
+<tr>
+  <td><strong>车外问答</strong></td>
+  <td><code>OutCarQADispatcher</code></td>
+  <td>1300</td>
+  <td><code>ENABLE_LANTU_SDK</code></td>
+  <td>岚图定制，基于车外摄像头进行场景视觉问答。</td>
+</tr>
+<tr>
+  <td><strong>OAI 推理</strong></td>
+  <td><code>OaiInferenceDispatcher</code></td>
+  <td>600</td>
+  <td><code>FEATURE_OAI_INFERENCE</code></td>
+  <td>OpenAI API 兼容推理接口，支持标准 chat/completions 格式的消息解析（system/user/history），支持 Base64 图片输入和流式输出。</td>
+</tr>
+</tbody>
+</table>
+
+<div class="info-box warn">
+<div class="title">注意事项</div>
+<p>CarSentinelDispatcher 在岚图项目中标注为 "lantu not use"。部分 Agent（如 ProactiveSpeech、VideoChat）的 include 已被注释掉，处于暂停开发或未启用状态。</p>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- Chapter 7: Prompt 模板工程 -->
+<!-- ============================================================ -->
+<h2 id="ch7">7. Prompt 模板工程</h2>
+
+<h3 id="sec-pt-struct">7.1 YAML 模板结构</h3>
+<p>所有 Agent 的 Prompt 模板存放在 <code>agent_group/data/template/</code> 目录下，采用 YAML 格式。典型的模板文件结构如下：</p>
+
+<pre><code># car_control.yaml 结构示例
+car_control:
+  system_prompt_prefix: |       # 角色定义 + 回复格式 + 输入说明
+    ...
+  system_prompt_passenger: |    # 乘客信息段
+    [车内乘客信息] {{PERSONGROUP}}
+  system_prompt_prefix_1: |     # 座位关系 + 技能表引导
+    ...
+  system_prompt_suffix: |       # cant_control 兜底
+    ...
+  user_prompt: "..."            # 用户输入模板
+
+car_skills:                     # 技能定义段
+  ac_toggle: |
+    ...
+  ac_temperature: |
+    ...</code></pre>
+
+<p>模板通过 <code>PromptManager</code> 加载，运行时通过字符串替换注入动态内容。</p>
+
+<h3 id="sec-pt-placeholder">7.2 占位符替换机制</h3>
+
+<table>
+<thead>
+<tr><th>占位符</th><th>说明</th><th>替换来源</th><th>示例</th></tr>
+</thead>
+<tbody>
+<tr><td><code>{{LOCATION}}</code></td><td>说话人音区位置</td><td><code>voice_zone_map_</code> 映射</td><td>"主驾"</td></tr>
+<tr><td><code>{{DIRECTION}}</code></td><td>说话人指向方向</td><td><code>direction_map_</code> 映射</td><td>"副驾方向"</td></tr>
+<tr><td><code>{{VIPUSER}}</code></td><td>VIP 用户身份信息</td><td><code>get_vip_user_prompt()</code></td><td>"张先生"</td></tr>
+<tr><td><code>{{PERSONGROUP}}</code></td><td>车内乘客群体描述</td><td><code>get_passenger_infos()</code></td><td>"主驾: 成年男性, 副驾: 儿童"</td></tr>
+<tr><td><code>[CAR_STATE]</code></td><td>车辆当前状态</td><td><code>CarSignalManager</code></td><td>"空调24度, 车窗关闭, 风速3档"</td></tr>
+<tr><td><code>{{date_info}}</code></td><td>当前日期</td><td>系统时间</td><td>"2025-05-27"</td></tr>
+<tr><td><code>{{time_info}}</code></td><td>当前时间</td><td>系统时间</td><td>"14:30"</td></tr>
+<tr><td><code>{{weather_info}}</code></td><td>当前天气</td><td>外部接口</td><td>"晴, 28度"</td></tr>
+<tr><td><code>{{location_info}}</code></td><td>当前地点</td><td>GPS</td><td>"上海市浦东新区"</td></tr>
+<tr><td><code>{{alias_info}}</code></td><td>已注册乘客信息</td><td>用户系统</td><td>"主驾: 陈总, 副驾: 未注册"</td></tr>
+<tr><td><code>{{KNOWLEDGE}}</code></td><td>RAG 知识库内容</td><td>GUI Agent RAG 查询</td><td>控件描述文本</td></tr>
+</tbody>
+</table>
+
+<p>替换由 <code>replaceLocationPlaceholder()</code>、<code>replacePlaceholder()</code> 和 <code>replaceSystemPlaceholder()</code> 三个方法协作完成，按顺序替换不同类别的占位符。</p>
+
+<h3 id="sec-pt-compare">7.3 多场景 Prompt 模板对比</h3>
+
+<table>
+<thead>
+<tr><th>维度</th><th>车辆控制 (car_control.yaml)</th><th>闲聊 (chitchat.yaml)</th><th>主动视觉 (active_vision.yaml)</th><th>GUI Agent (gui_agent.yaml)</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>角色定位</strong></td><td>智能语音助手，执行车控</td><td>车载陪伴AI，朋友式交流</td><td>车载迎宾/安全助手</td><td>屏幕控件提槽专家</td></tr>
+<tr><td><strong>输出格式</strong></td><td>JSON: {speak, cmd}</td><td>自由文本 (&le;100字)</td><td>JSON: {speak, car_control}</td><td>结构化控件操作</td></tr>
+<tr><td><strong>视觉输入</strong></td><td>无</td><td>车内摄像头（镜像）</td><td>前/后排连续帧</td><td>截图 + ViewTree</td></tr>
+<tr><td><strong>车辆状态</strong></td><td>[CAR_STATE] 完整注入</td><td>不注入</td><td>温度/天气等部分注入</td><td>不注入</td></tr>
+<tr><td><strong>乘客感知</strong></td><td>PERSONGROUP 完整</td><td>座位信息</td><td>PassengerInfo 结构化</td><td>无</td></tr>
+<tr><td><strong>模板文件数</strong></td><td>1 (多段拼接)</td><td>1 (多段拼接)</td><td>1 (多 mode 多 task)</td><td>1 (system + rag)</td></tr>
+</tbody>
+</table>
+
+<div class="info-box ok">
+<div class="title">Prompt 工程 Best Practice</div>
+<p><strong>约束解码友好设计</strong>：车控 Agent 的 Prompt 严格定义 JSON 输出 Schema，配合端侧推理引擎的 EBNF 语法约束，可在解码阶段强制保证输出格式合规。关键要素包括：(1) 明确声明输出格式和字段类型；(2) 列举所有合法参数值范围；(3) 提供 cant_control 兜底路径。这比自由文本 + 正则提取的方案可靠性高出一个量级。</p>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- Chapter 8: 数据通路与 Fusion 通信 -->
+<!-- ============================================================ -->
+<h2 id="ch8">8. 数据通路与 Fusion 通信</h2>
+
+<h3 id="sec-dt-arch">8.1 DataTransport 机制</h3>
+<p><code>agent_runtime_main.cpp</code> 是 agent_group 进程的入口，它创建 <code>DataTransportServer</code> 和 <code>DataTransportClient</code> 实例，封装到 <code>AgentRuntime</code> 中运行：</p>
+
+<pre><code>// agent_runtime_main.cpp 核心逻辑
+auto server = make_unique&lt;DataTransportServer&gt;(agent_server_id);  // 0xFFFA
+auto regist_client = make_unique&lt;DataTransportClient&gt;("agent_regist");
+auto agent_runtime = make_unique&lt;AgentRuntime&gt;(move(server), move(regist_client));
+
+auto msg_deliver = make_shared&lt;MsgDispacher&gt;(data_path);
+agent_runtime-&gt;set_dispatcher(msg_deliver);
+agent_runtime-&gt;start_server();
+ProcessWait();  // 信号等待 (SIGINT/SIGTERM/SIGSEGV/SIGABRT)</code></pre>
+
+<table>
+<thead>
+<tr><th>组件</th><th>类</th><th>继承自</th><th>职责</th></tr>
+</thead>
+<tbody>
+<tr><td>Transport Server</td><td><code>DataTransportServer</code></td><td><code>BaseServer</code></td><td>接收外部消息（图像/音频/文本），通过 Fusion DataTransportService 实现 IPC</td></tr>
+<tr><td>Transport Client</td><td><code>DataTransportClient</code></td><td><code>BaseClient</code></td><td>向外部系统发送消息和注册信息，通过 DataTransportProxy 实现</td></tr>
+<tr><td>消息路由</td><td><code>MsgDispacher</code></td><td><code>BaseMsgDeliver</code></td><td>根据 scenario_id 将消息分发到对应的 Dispatcher</td></tr>
+<tr><td>运行时</td><td><code>AgentRuntime</code></td><td>aadkcore</td><td>管理 Server/Client 生命周期，连接 Server 回调和 Dispatcher</td></tr>
+</tbody>
+</table>
+
+<h3 id="sec-dt-flow">8.2 数据流全景</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph TB
+    EXT["外部系统<br/>(语音/视觉/车信号)"] -->|Fusion IPC| DTS["DataTransportServer<br/>(instance_id=0xFFFA)"]
+    DTS -->|image_callback| AR["AgentRuntime"]
+    AR -->|deliver_msg| MD["MsgDispacher<br/>(BaseMsgDeliver)"]
+    MD -->|scenario_id 路由| AP["AgentPlugin<br/>(各 Dispatcher)"]
+    AP -->|推理请求| MR["ModelRunner<br/>(LLM/VLM)"]
+    MR -->|推理结果| AP
+    AP -->|SendResultNotification| DTS
+    DTS -->|Fusion IPC| EXT
+    AP -->|注册/注销| DTC["DataTransportClient<br/>(agent_regist)"]
+    DTC -->|Fusion IPC| REG["注册中心"]
+
+    style EXT fill:#868e96,color:#fff
+    style DTS fill:#4361ee,color:#fff
+    style MD fill:#f39c12,color:#fff
+    style MR fill:#2ecc71,color:#fff
+    style DTC fill:#3498db,color:#fff
+</div></div>
+
+<p>消息入站流程：外部系统通过 Fusion DataTransport 协议发送 <code>InputData</code>（含 ImageInfo/AudioInfo/文本），<code>DataTransportServer</code> 的 <code>image_callback</code> 将其封装为 <code>ServerMessage</code>，经 <code>AgentRuntime</code> 转发至 <code>MsgDispacher.deliver_msg()</code>，后者根据消息中的 <code>scenario_id</code> 路由到具体 Dispatcher。</p>
+
+<p>消息出站流程：Dispatcher 处理完毕后，通过 <code>SendResultNotification()</code> 将结果回传给 <code>DataTransportServer</code>，再通过 Fusion IPC 返回外部系统。对于需要流式输出的场景（如 GUI Agent 和 ActiveVision），使用 <code>StreamProcessor</code> + <code>stream_callback_handler</code> 实现分段推送。</p>
+
+<h3 id="sec-dt-dump">8.3 消息录制与回放</h3>
+<p>每个 Dispatcher 都内置了 <code>DataDump</code> 实例，通过 <code>set_data_dump_flag()</code> 控制数据录制开关。录制的内容包括：</p>
+
+<table>
+<thead>
+<tr><th>录制内容</th><th>格式</th><th>用途</th></tr>
+</thead>
+<tbody>
+<tr><td>输入消息</td><td>JSON + 二进制图像</td><td>重放时模拟外部输入</td></tr>
+<tr><td>Prompt (system + user)</td><td>文本</td><td>Prompt 调试和优化</td></tr>
+<tr><td>LLM 输出</td><td>JSON</td><td>精度验证和回归测试</td></tr>
+<tr><td>推理耗时</td><td>时间戳</td><td>性能分析</td></tr>
+</tbody>
+</table>
+
+<p>启动时通过命令行参数 <code>-d/--dump</code> 控制录制行为（默认值为 1，启用录制）。录制的完整消息流可用于离线回放调试，避免依赖真实硬件环境。</p>
+
+<div class="info-box">
+<div class="title">与 aadkcore 的集成关系</div>
+<p><code>AgentRuntime</code>（来自 aadkcore）提供了 Server/Client 管理和消息分发的通用框架。<code>agent_group</code> 通过实现 <code>AgentPlugin</code> 接口并以 <code>libagent_group.so</code> 形式提供插件库，实现了框架与业务的解耦。AgentRuntime 可以动态加载不同的插件库，支持不同车型和项目的灵活配置。</p>
+</div>
+
+</main>
+
+<!-- ===== Scripts at bottom ===== -->
+<script defer src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+var b=document.getElementById('themeBtn');
+b.onclick=function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('theme',h.dataset.theme)}catch(e){}};
+try{var s=localStorage.getItem('theme');if(s)document.documentElement.dataset.theme=s}catch(e){}
+
+var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.remove('active')});var l=document.querySelector('.sidebar a[href="#'+e.target.id+'"]');if(l)l.classList.add('active')}})},{rootMargin:'-60px 0px -70% 0px'});
+document.querySelectorAll('h2[id],h3[id]').forEach(function(h){obs.observe(h)});
+
+window.addEventListener('load',function(){
+  try{if(typeof mermaid!=='undefined'){mermaid.initialize({startOnLoad:true,theme:document.documentElement.dataset.theme==='dark'?'dark':'default',securityLevel:'loose'})}}catch(e){}
+});
+</script>
+</body>
+</html>

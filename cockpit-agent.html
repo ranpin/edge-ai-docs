@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Part E: 座舱端侧 Agent 总览 — Edge AI Docs</title>
+<style>
+:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-h:52px}
+[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+.top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;z-index:1000}
+.top-nav .logo{font-weight:700;font-size:15px;color:var(--accent);margin-right:24px;text-decoration:none}
+.top-nav .links{display:flex;gap:2px;flex-wrap:wrap}
+.top-nav .links a{padding:4px 10px;border-radius:5px;text-decoration:none;color:var(--text2);font-size:12px;font-weight:500}
+.top-nav .links a:hover{background:var(--accentL);color:var(--accent)}
+.top-nav .links a.active{background:var(--accent);color:#fff}
+.top-nav .right{margin-left:auto}
+.theme-btn{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--text)}
+.sidebar{position:fixed;top:var(--nav-h);left:0;bottom:0;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;z-index:900}
+.sidebar a{display:block;padding:4px 16px 4px 20px;text-decoration:none;color:var(--text2);font-size:12px;border-left:3px solid transparent}
+.sidebar a:hover{color:var(--accent);background:var(--accentL)}
+.sidebar a.active{color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.sidebar .toc-part{padding:8px 20px 4px;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px}
+.main{margin-left:var(--sidebar-w);margin-top:var(--nav-h);padding:28px 40px 60px;max-width:900px}
+h1{font-size:26px;font-weight:800;margin-bottom:6px}
+.subtitle{font-size:14px;color:var(--muted);margin-bottom:28px}
+h2{font-size:20px;font-weight:700;margin:36px 0 14px;padding-bottom:6px;border-bottom:2px solid var(--accentL)}
+h3{font-size:16px;font-weight:600;margin:20px 0 10px}
+p{margin-bottom:10px;color:var(--text2)}
+strong{color:var(--text)}
+.info-box{padding:14px 16px;border-radius:7px;margin:14px 0;border-left:4px solid var(--info);background:var(--bg2);font-size:14px}
+.info-box.warn{border-left-color:var(--warning)}
+.info-box.ok{border-left-color:var(--success)}
+.info-box.err{border-left-color:var(--danger)}
+.info-box .title{font-weight:700;font-size:13px;margin-bottom:4px}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
+th{background:var(--accentL);color:var(--accentD);font-weight:600}
+tr:nth-child(even){background:var(--bg2)}
+.mermaid-wrap{margin:16px 0;padding:16px;background:var(--bg2);border-radius:7px;overflow-x:auto}
+.chart-wrap{margin:16px 0;background:var(--bg2);border-radius:7px;padding:12px}
+.chart-box{width:100%;height:360px}
+pre{background:var(--bg3);border-radius:7px;padding:14px;overflow-x:auto;font-size:13px;margin:10px 0}
+code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
+:not(pre)>code{background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--accent)}
+/* CSS-only tabs */
+.tabs{margin:16px 0}
+.tabs input{display:none}
+.tabs label{display:inline-block;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent}
+.tabs input:checked+label{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-panel{display:none;padding:14px 0}
+#t1:checked~#p1,#t2:checked~#p2,#t3:checked~#p3,#t4:checked~#p4{display:block}
+.entry-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;margin:20px 0 32px}
+.entry-card{display:block;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px 24px;text-decoration:none;color:var(--text);transition:all .2s}
+.entry-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.1);border-color:var(--accent)}
+.entry-card h3{font-size:17px;font-weight:700;margin-bottom:6px}
+.entry-card .desc{font-size:13px;color:var(--text2);margin-bottom:10px}
+.entry-card .tags{display:flex;gap:4px;flex-wrap:wrap}
+.entry-card .tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:var(--accentL);color:var(--accent)}
+@media(max-width:900px){.sidebar{display:none}.main{margin-left:0;padding:20px 16px 60px}}
+@media print{.top-nav,.sidebar,.theme-btn{display:none!important}.main{margin:0;padding:16px;max-width:100%}}
+</style>
+</head>
+<body>
+
+<!-- ===== Top Navigation ===== -->
+<nav class="top-nav">
+  <a href="index.html" class="logo">Edge AI Docs</a>
+  <div class="links">
+    <a href="cockpit-hardware.html">A.硬件</a>
+    <a href="cockpit-training.html">B.训练</a>
+    <a href="cockpit-infer.html">C.推理优化</a>
+    <a href="cockpit-deploy.html">D.部署</a>
+    <a href="cockpit-agent-core.html">E1.核心框架</a>
+    <a href="cockpit-agent-group.html">E2.场景Agent</a>
+    <a href="cockpit-debug.html">F.调试</a>
+    <a href="cockpit-interview.html">面试</a>
+  </div>
+  <div class="right">
+    <button class="theme-btn" id="themeBtn">&#9790; / &#9788;</button>
+  </div>
+</nav>
+
+<!-- ===== Sidebar TOC ===== -->
+<aside class="sidebar">
+  <div class="toc-part">Part E: Agent 总览</div>
+  <a href="cockpit-agent-core.html" style="font-weight:600;color:var(--accent)">→ E1: aadkcore 核心框架</a>
+  <a href="cockpit-agent-group.html" style="font-weight:600;color:var(--accent)">→ E2: 场景 Agent 应用</a>
+  <div class="toc-part" style="margin-top:12px">概述章节</div>
+  <a href="#ch1">1. 座舱大模型 Agent 架构</a>
+  <a href="#ch2">2. 端侧 Agent 框架设计</a>
+  <a href="#ch3">3. 座舱场景 Agent 应用</a>
+</aside>
+
+<!-- ===== Main Content ===== -->
+<main class="main">
+
+<h1>Part E: 座舱端侧 Agent 总览</h1>
+<p class="subtitle">端侧大模型选型、Agent 框架设计概述与场景应用概览</p>
+
+<div class="info-box ok">
+<div class="title">aadkcore + agent_group 架构</div>
+<p>座舱端侧 Agent 系统由两个核心模块组成：<strong>aadkcore</strong> 提供统一模型接口、调度器、MCP/A2A 协议等基础设施（编译为 <code>libaadkcore.so</code>）；<strong>agent_group</strong> 基于 aadkcore 的插件接口实现各场景 Agent（编译为 <code>libagent_group.so</code>，运行时动态加载）。详细文档请查看下方两个入口：</p>
+</div>
+
+<div class="entry-grid">
+  <a class="entry-card" href="cockpit-agent-core.html">
+    <h3>E1: aadkcore 核心框架</h3>
+    <p class="desc">统一模型接口（ModelInstance）、模型调度器（ModelScheduler）、多音区对话管理、RAG 知识增强、MCP 工具协议、A2A 协议、运行时与插件机制、LLM Flow</p>
+    <div class="tags"><span class="tag">C++17</span><span class="tag">MCP</span><span class="tag">A2A</span><span class="tag">ModelScheduler</span></div>
+  </a>
+  <a class="entry-card" href="cockpit-agent-group.html">
+    <h3>E2: 场景 Agent 应用</h3>
+    <p class="desc">车辆控制 Agent（30+ 技能）、主动视觉 Agent（6 大模式）、闲聊 Agent、GUI Agent、Prompt 模板工程、数据通路与 Fusion 通信</p>
+    <div class="tags"><span class="tag">车控</span><span class="tag">主动视觉</span><span class="tag">闲聊</span><span class="tag">GUI Agent</span></div>
+  </a>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 12 -->
+<!-- ============================================================ -->
+<h2 id="ch1">1. 座舱大模型 Agent 架构</h2>
+
+<h3>12.1 端侧 LLM 选型对比</h3>
+<p>在 SA8397P 级别硬件上（Hexagon NPU 约 70 TOPS INT8），可运行的端侧大模型需要兼顾推理速度、模型质量和内存占用。当前座舱场景的首选是 <strong>Qwen3-Omni-4B</strong>——原生支持文本、图像、音频、视频四种模态输入，非常契合座舱多模态交互需求：</p>
+
+<table>
+<thead>
+<tr><th>模型</th><th>参数量</th><th>量化精度</th><th>生成速度 (tok/s)</th><th>内存占用</th><th>中文能力</th><th>适用场景</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Qwen3-Omni-4B</strong></td><td>4B</td><td>INT4</td><td>~10</td><td>~2.5 GB</td><td>优秀</td><td>多模态座舱 Agent (语音+视觉+车控)</td></tr>
+<tr><td><strong>Qwen3-4B</strong></td><td>4B</td><td>INT4</td><td>~12</td><td>~2.5 GB</td><td>优秀</td><td>纯文本 Function Calling、对话</td></tr>
+<tr><td><strong>Qwen3-1.7B</strong></td><td>1.7B</td><td>INT4</td><td>~28</td><td>~1.2 GB</td><td>良好</td><td>轻量级意图识别、低延迟场景</td></tr>
+<tr><td><strong>Llama3.2-3B</strong></td><td>3B</td><td>INT4</td><td>~15</td><td>~2.0 GB</td><td>中等</td><td>多语言场景、海外车型</td></tr>
+</tbody>
+</table>
+
+<div class="info-box ok">
+<div class="title">选型建议</div>
+<p>国内座舱场景首选 <strong>Qwen3-Omni-4B</strong>：原生支持音频输入/输出，省去独立 ASR+TTS 模块，系统架构更简洁；中文能力和 Function Calling 能力在同尺寸模型中领先。INT4 量化后内存约 2.5GB，SA8397P 可承载。如果延迟预算极紧（TTFT &lt; 200ms），可用 Qwen3-1.7B 做意图识别前端 + Qwen3-Omni-4B 做复杂推理的级联架构。</p>
+</div>
+
+<h3>12.2 多模态融合架构</h3>
+<p>座舱 Agent 的核心架构是多模态融合：将语音、视觉、车辆状态等异构输入统一编码后送入端侧 LLM 进行推理决策，再通过 Task Planner 分发到不同的执行器。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph LR
+    subgraph 输入层
+        A1["语音/ASR"]
+        A2["视觉/DMS"]
+        A3["车辆状态<br/>CAN Bus"]
+        A4["上下文<br/>Context"]
+    end
+
+    subgraph 融合层
+        B["多模态编码器<br/>Multimodal Encoder"]
+    end
+
+    subgraph 推理层
+        C["端侧 LLM<br/>推理核心"]
+    end
+
+    subgraph 规划层
+        D["Task Planner<br/>任务规划器"]
+    end
+
+    subgraph 执行层
+        E1["语音回复/TTS"]
+        E2["车辆控制<br/>Car Control"]
+        E3["UI 更新"]
+        E4["安全告警<br/>Safety Alert"]
+    end
+
+    A1 --> B
+    A2 --> B
+    A3 --> B
+    A4 --> B
+    B --> C
+    C --> D
+    D --> E1
+    D --> E2
+    D --> E3
+    D --> E4
+</div></div>
+
+<p>多模态编码器负责将不同模态的原始数据对齐到统一的 embedding 空间。语音通过 ASR 转为文本 token；视觉通过 DMS 提取驾驶员状态特征向量；车辆状态从 CAN Bus 读取并编码为结构化 token。LLM 在统一的 token 序列上完成推理，输出结构化的 action plan。</p>
+
+<!-- ============================================================ -->
+<!-- Chapter 13 -->
+<!-- ============================================================ -->
+<h2 id="ch2">2. 端侧 Agent 框架设计</h2>
+
+<h3>13.1 Function Calling 流程</h3>
+<p>端侧 Agent 的核心能力是 Function Calling：用户发出自然语言指令，LLM 解析意图后调用注册的 Tool 完成操作，最后将结果汇总回复用户。下面以一个典型的复合指令为例：</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+sequenceDiagram
+    participant U as 用户
+    participant LLM as 端侧 LLM
+    participant TR as Tool Router
+    participant AC as 空调 API
+    participant NAV as 导航 API
+
+    U->>LLM: "太热了，调空调22度，导航去加油站"
+    LLM->>LLM: 意图解析：识别2个意图<br/>1. 空调控制 → set_ac(22°C)<br/>2. 导航 → navigate(nearest_gas_station)
+    LLM->>TR: 分发 Tool Calls
+    TR->>AC: set_temperature(22)
+    AC-->>TR: {"status":"ok","current_temp":"22°C"}
+    TR->>NAV: search_and_navigate("加油站")
+    NAV-->>TR: {"station":"中石化(前方2.3km)","eta":"4min"}
+    TR-->>LLM: 汇总两个 Tool 结果
+    LLM->>U: "已把空调调到22度。最近的加油站是<br/>中石化，前方2.3公里，约4分钟到达，<br/>已为您开始导航。"
+</div></div>
+
+<h3>13.2 Tool Use 设计要点</h3>
+<p>端侧 Agent 的 Tool 体系需要兼顾灵活性和安全性。以下是关键设计考量：</p>
+
+<table>
+<thead>
+<tr><th>设计要点</th><th>方案</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>工具注册</strong></td><td>JSON Schema 描述</td><td>每个工具通过 JSON Schema 定义函数名、参数类型、必填项和描述。LLM 根据 Schema 生成结构化调用参数，无需 Few-shot 示例。</td></tr>
+<tr><td><strong>安全沙箱</strong></td><td>L1 / L2 / L3 三级</td><td><strong>L1 只读</strong>：查询天气/音乐，无需确认；<strong>L2 可逆</strong>：调空调/开窗，需语音确认；<strong>L3 不可逆</strong>：发送消息/支付，需二次确认+生物认证。</td></tr>
+<tr><td><strong>延迟预算</strong></td><td>&lt; 2s 端到端</td><td>从用户说完到执行完成 &lt; 2 秒。其中 ASR ~300ms，LLM 推理 ~800ms，Tool 执行 ~500ms，TTS ~400ms。</td></tr>
+<tr><td><strong>离线能力</strong></td><td>本地优先 + 云端 fallback</td><td>核心 Tools（车控、本地音乐、导航缓存）全部本地化。联网后自动同步云端 Tools（在线搜索、实时路况）。</td></tr>
+<tr><td><strong>错误处理</strong></td><td>重试 + 降级 + 告知</td><td>Tool 调用失败时：先重试 1 次 → 尝试降级方案 → 告知用户并建议替代操作。</td></tr>
+<tr><td><strong>并发调度</strong></td><td>DAG 依赖图</td><td>多个 Tool 调用时分析依赖关系，无依赖的并行执行（如上例空调和导航可并行），有依赖的串行执行。</td></tr>
+</tbody>
+</table>
+
+<h3>13.3 记忆系统架构</h3>
+<p>端侧 Agent 需要三层记忆系统来支撑个性化和上下文连贯性：</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph TB
+    subgraph 短期记忆
+        ST1["KV Cache<br/>当前对话上下文"]
+        ST2["对话窗口<br/>最近 N 轮对话"]
+    end
+
+    subgraph 长期记忆
+        LT1["用户偏好<br/>温度/音乐/路线"]
+        LT2["驾驶习惯<br/>常走路线/时间规律"]
+        LT3["个人信息<br/>称呼/家庭/工作地"]
+    end
+
+    subgraph 情景记忆
+        EP1["行程记录<br/>历史导航/目的地"]
+        EP2["交互记录<br/>历史对话摘要"]
+        EP3["事件记录<br/>故障/维保/加油"]
+    end
+
+    ST1 -->|"摘要提取"| LT1
+    ST2 -->|"习惯学习"| LT2
+    LT1 -->|"偏好注入"| ST1
+    LT2 -->|"习惯注入"| ST2
+    EP1 -.->|"按需检索"| ST1
+    EP2 -.->|"按需检索"| ST2
+    EP3 -.->|"按需检索"| ST1
+</div></div>
+
+<p><strong>短期记忆</strong>保存在 KV Cache 和对话窗口中，随对话实时更新；<strong>长期记忆</strong>持久化在本地存储，通过 embedding 检索注入当前上下文；<strong>情景记忆</strong>记录具体事件，按需检索补充。三者协同实现了"越用越懂你"的效果。</p>
+
+<div class="info-box">
+<div class="title">端侧记忆 vs 云端记忆</div>
+<table>
+<thead>
+<tr><th>维度</th><th>端侧记忆</th><th>云端记忆</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>隐私性</strong></td><td>数据全部本地，零上传</td><td>需上传至云端服务器</td></tr>
+<tr><td><strong>延迟</strong></td><td>零网络延迟，本地读取 &lt; 1ms</td><td>依赖网络，50-500ms</td></tr>
+<tr><td><strong>离线能力</strong></td><td>完全离线可用</td><td>断网不可用</td></tr>
+<tr><td><strong>存储容量</strong></td><td>受限于本地存储（通常 1-4 GB）</td><td>几乎无限</td></tr>
+<tr><td><strong>跨设备同步</strong></td><td>不支持（或需加密同步）</td><td>原生支持</td></tr>
+<tr><td><strong>数据持久性</strong></td><td>设备更换需迁移</td><td>云端永久保存</td></tr>
+</tbody>
+</table>
+<p>座舱场景下，端侧记忆是首选方案：驾驶习惯和个人偏好属于高敏感数据，零延迟和离线能力对驾驶安全至关重要。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 14 -->
+<!-- ============================================================ -->
+<h2 id="ch3">3. 座舱场景 Agent 应用</h2>
+
+<p>以下展示四个典型的座舱 Agent 应用场景，涵盖语音交互、主动安全、个性化推荐和多模态融合。</p>
+
+<div class="tabs">
+  <input type="radio" name="tabs" id="t1" checked><label for="t1">智能语音助手</label>
+  <input type="radio" name="tabs" id="t2"><label for="t2">主动安全提醒</label>
+  <input type="radio" name="tabs" id="t3"><label for="t3">个性化推荐</label>
+  <input type="radio" name="tabs" id="t4"><label for="t4">多模态车控</label>
+
+  <div class="tab-panel" id="p1">
+    <h3>场景一：智能语音助手</h3>
+    <p><strong>数据流</strong>：ASR（语音识别） → 端侧 LLM（意图理解 + 推理） → Function Calling（工具调用） → TTS（语音合成）</p>
+    <p>智能语音助手是座舱 Agent 的核心场景。用户通过自然语言发出指令，LLM 解析意图后通过 Function Calling 调用车控 API、导航 API、媒体 API 等工具完成操作，最后通过 TTS 语音回复结果。</p>
+    <p><strong>典型对话示例</strong>：</p>
+    <pre><code>用户: "帮我把座椅加热打开，温度调到最高"
+LLM 解析: tool_call: seat_heater(position="driver", level=3)
+系统执行: 座椅加热已开启，等级3（最高）
+TTS 回复: "已为您打开驾驶座加热，调到最高档。"</code></pre>
+    <p><strong>技术挑战</strong>：</p>
+    <table>
+    <thead><tr><th>挑战</th><th>影响</th><th>应对方案</th></tr></thead>
+    <tbody>
+    <tr><td><strong>车内噪声鲁棒性</strong></td><td>高速/开窗场景 ASR 识别率下降</td><td>多麦克风波束成形 + 降噪前处理 + 端侧 ASR 模型微调</td></tr>
+    <tr><td><strong>KV Cache 管理</strong></td><td>多轮对话内存持续增长</td><td>Sliding Window Attention + KV Cache 压缩（INT8 量化 KV）</td></tr>
+    <tr><td><strong>TTFT 首 Token 时间</strong></td><td>用户感知延迟的核心指标</td><td>Prompt Caching + INT4 量化 + 模型预热（常驻内存）</td></tr>
+    </tbody>
+    </table>
+  </div>
+
+  <div class="tab-panel" id="p2">
+    <h3>场景二：主动安全提醒</h3>
+    <p><strong>数据流</strong>：DMS（驾驶员监测） + 车辆状态 + 驾驶时长 → LLM 综合判断 → 分级告警</p>
+    <p>主动安全提醒是端侧 Agent 区别于传统规则引擎的关键场景。LLM 能综合多维信息做出更智能的判断，而非简单的阈值触发。</p>
+    <p><strong>典型场景示例</strong>：</p>
+    <pre><code>输入信号：
+- DMS: 频繁眨眼(blink_rate=28/min)，眼睛闭合时间增长
+- 车辆状态: 连续行驶2小时12分钟，车速105km/h
+- 环境: 高速路，前方5公里有服务区
+
+LLM 综合分析：
+- 疲劳指数: 0.78 (高风险)
+- 安全建议等级: L2 (强烈建议休息)
+- 可行方案: 前方服务区可达
+
+TTS 输出: "您已连续驾驶超过2小时，检测到疲劳迹象。
+前方5公里是XX服务区，建议您靠边休息。
+需要我导航到服务区吗？"</code></pre>
+    <p><strong>分级告警策略</strong>：</p>
+    <table>
+    <thead><tr><th>等级</th><th>触发条件</th><th>告警方式</th><th>示例</th></tr></thead>
+    <tbody>
+    <tr><td><strong>L0 提示</strong></td><td>轻微疲劳迹象</td><td>屏幕提示 + 低音量语音</td><td>"已驾驶1.5小时，注意休息"</td></tr>
+    <tr><td><strong>L1 建议</strong></td><td>中度疲劳 + 可行休息点</td><td>语音 + 导航建议</td><td>"前方有服务区，建议休息"</td></tr>
+    <tr><td><strong>L2 警告</strong></td><td>高度疲劳/频繁分心</td><td>强语音 + 座椅振动 + 降温</td><td>"检测到严重疲劳，请立即休息！"</td></tr>
+    <tr><td><strong>L3 紧急</strong></td><td>闭眼 &gt; 2s / 车道偏离</td><td>急促警报 + ADAS 介入</td><td>紧急制动辅助 + 双闪 + 减速</td></tr>
+    </tbody>
+    </table>
+  </div>
+
+  <div class="tab-panel" id="p3">
+    <h3>场景三：个性化推荐</h3>
+    <p><strong>数据流</strong>：长期记忆（用户偏好） + 当前上下文（时间/位置/车辆状态） → LLM 推理 → 个性化建议</p>
+    <p>个性化推荐利用端侧长期记忆，结合实时上下文做出主动推荐，无需用户发起对话。</p>
+    <p><strong>典型场景示例</strong>：</p>
+    <pre><code>上下文信号：
+- 时间: 周一 18:05（下班时间）
+- 位置: 公司停车场
+- 长期记忆: 常走路线-回家，周一通常听播客
+- 历史行为: 最近在听《硬地骇客》播客，上次听到第23期
+
+LLM 推理：
+- 场景识别: 下班通勤
+- 推荐项: [导航回家, 播放播客, 空调设置]
+
+主动推荐: "下班了！已为您规划回家路线，预计38分钟。
+要继续播放《硬地骇客》第24期吗？
+空调已自动调至您偏好的24度。"</code></pre>
+    <p><strong>推荐系统设计</strong>：</p>
+    <table>
+    <thead><tr><th>推荐类型</th><th>触发条件</th><th>数据来源</th><th>推荐策略</th></tr></thead>
+    <tbody>
+    <tr><td><strong>通勤推荐</strong></td><td>上下班时间 + 固定地点</td><td>行程记录 + 时间规律</td><td>路线 + 媒体 + 环境</td></tr>
+    <tr><td><strong>媒体推荐</strong></td><td>行驶中 + 无音频播放</td><td>播放历史 + 偏好标签</td><td>续播 / 相似内容</td></tr>
+    <tr><td><strong>环境调节</strong></td><td>上车 / 时间变化</td><td>历史温度偏好 + 季节</td><td>自动调节空调/氛围灯</td></tr>
+    <tr><td><strong>充电提醒</strong></td><td>电量 &lt; 30% + 回家路线</td><td>充电站数据 + 路线</td><td>推荐沿途充电站</td></tr>
+    </tbody>
+    </table>
+  </div>
+
+  <div class="tab-panel" id="p4">
+    <h3>场景四：多模态车控</h3>
+    <p><strong>数据流</strong>：语音 + 手势 + 注视方向 → VLM 多模态融合 → 意图消歧 → Function Calling 执行</p>
+    <p>多模态车控是端侧 Agent 的高级场景，通过融合多种输入模态来消除自然语言的歧义性。</p>
+    <p><strong>典型场景示例</strong>：</p>
+    <pre><code>多模态输入：
+- 语音: "打开这个"（指代不明确）
+- 注视方向: 头部转向副驾车窗方向
+- 手势: 无明显手势
+- 车辆状态: 副驾车窗当前关闭
+
+VLM 融合分析：
+- 语音意图: open(target=?)  → 目标不明确
+- 注视焦点: 副驾车窗区域 (confidence=0.87)
+- 消歧结果: open(target="passenger_window")
+
+执行: window_control(position="passenger", action="open")
+TTS: "好的，已为您打开副驾车窗。"</code></pre>
+    <p><strong>多模态融合策略</strong>：</p>
+    <table>
+    <thead><tr><th>模态组合</th><th>场景</th><th>融合方法</th><th>消歧效果</th></tr></thead>
+    <tbody>
+    <tr><td><strong>语音 + 注视</strong></td><td>"打开这个"+ 看向车窗</td><td>注视区域映射到车辆部件</td><td>解决"这个"的指代歧义</td></tr>
+    <tr><td><strong>语音 + 手势</strong></td><td>"调大一点"+ 旋转手势</td><td>手势识别方向和幅度</td><td>确定调节目标和程度</td></tr>
+    <tr><td><strong>语音 + 注视 + 手势</strong></td><td>"关掉那边的"+ 指向 + 看</td><td>多信号置信度加权融合</td><td>最高消歧精度</td></tr>
+    <tr><td><strong>纯手势</strong></td><td>手掌向下压（降低音量）</td><td>预定义手势库直接映射</td><td>无需语音的快速交互</td></tr>
+    </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 15 -->
+<!-- ============================================================ -->
+<div class="info-box">
+<div class="title">LLM 推理优化</div>
+<p>KV Cache 优化、TTFT 优化、投机采样、约束解码、推理引擎对比等内容已整合到独立文档 → <a href="cockpit-infer.html"><strong>Part C: 推理优化</strong></a></p>
+</div>
+
+</main>
+
+<!-- ===== Scripts at bottom ===== -->
+<script defer src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+var b=document.getElementById('themeBtn');
+b.onclick=function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('theme',h.dataset.theme)}catch(e){}};
+try{var s=localStorage.getItem('theme');if(s)document.documentElement.dataset.theme=s}catch(e){}
+
+var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.remove('active')});var l=document.querySelector('.sidebar a[href="#'+e.target.id+'"]');if(l)l.classList.add('active')}})},{rootMargin:'-60px 0px -70% 0px'});
+document.querySelectorAll('h2[id]').forEach(function(h){obs.observe(h)});
+
+window.addEventListener('load',function(){
+  try{if(typeof mermaid!=='undefined'){mermaid.initialize({startOnLoad:true,theme:document.documentElement.dataset.theme==='dark'?'dark':'default',securityLevel:'loose'})}}catch(e){}
+});
+</script>
+</body>
+</html>

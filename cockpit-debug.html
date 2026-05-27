@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Part F: 调试与工具链 — Edge AI Docs</title>
+<style>
+:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-h:52px}
+[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+.top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;z-index:1000}
+.top-nav .logo{font-weight:700;font-size:15px;color:var(--accent);margin-right:24px;text-decoration:none}
+.top-nav .links{display:flex;gap:2px;flex-wrap:wrap}
+.top-nav .links a{padding:4px 10px;border-radius:5px;text-decoration:none;color:var(--text2);font-size:12px;font-weight:500}
+.top-nav .links a:hover{background:var(--accentL);color:var(--accent)}
+.top-nav .links a.active{background:var(--accent);color:#fff}
+.top-nav .right{margin-left:auto}
+.theme-btn{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--text)}
+.sidebar{position:fixed;top:var(--nav-h);left:0;bottom:0;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;z-index:900}
+.sidebar a{display:block;padding:4px 16px 4px 20px;text-decoration:none;color:var(--text2);font-size:12px;border-left:3px solid transparent}
+.sidebar a:hover{color:var(--accent);background:var(--accentL)}
+.sidebar a.active{color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.sidebar .toc-part{padding:8px 20px 4px;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px}
+.main{margin-left:var(--sidebar-w);margin-top:var(--nav-h);padding:28px 40px 60px;max-width:900px}
+h1{font-size:26px;font-weight:800;margin-bottom:6px}
+.subtitle{font-size:14px;color:var(--muted);margin-bottom:28px}
+h2{font-size:20px;font-weight:700;margin:36px 0 14px;padding-bottom:6px;border-bottom:2px solid var(--accentL)}
+h3{font-size:16px;font-weight:600;margin:20px 0 10px}
+p{margin-bottom:10px;color:var(--text2)}
+strong{color:var(--text)}
+.info-box{padding:14px 16px;border-radius:7px;margin:14px 0;border-left:4px solid var(--info);background:var(--bg2);font-size:14px}
+.info-box.warn{border-left-color:var(--warning)}
+.info-box.ok{border-left-color:var(--success)}
+.info-box.err{border-left-color:var(--danger)}
+.info-box .title{font-weight:700;font-size:13px;margin-bottom:4px}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
+th{background:var(--accentL);color:var(--accentD);font-weight:600}
+tr:nth-child(even){background:var(--bg2)}
+.mermaid-wrap{margin:16px 0;padding:16px;background:var(--bg2);border-radius:7px;overflow-x:auto}
+.chart-wrap{margin:16px 0;background:var(--bg2);border-radius:7px;padding:12px}
+.chart-box{width:100%;height:360px}
+pre{background:var(--bg3);border-radius:7px;padding:14px;overflow-x:auto;font-size:13px;margin:10px 0}
+code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
+:not(pre)>code{background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--accent)}
+ol.steps{margin:10px 0 10px 20px;color:var(--text2)}
+ol.steps li{margin-bottom:6px}
+ol.steps code{font-size:12px}
+@media(max-width:900px){.sidebar{display:none}.main{margin-left:0;padding:20px 16px 60px}}
+@media print{.top-nav,.sidebar,.theme-btn{display:none!important}.main{margin:0;padding:16px;max-width:100%}}
+</style>
+</head>
+<body>
+
+<!-- ===== Top Navigation ===== -->
+<nav class="top-nav">
+  <a href="index.html" class="logo">Edge AI Docs</a>
+  <div class="links">
+    <a href="cockpit-hardware.html">A.硬件</a>
+    <a href="cockpit-training.html">B.训练</a>
+    <a href="cockpit-infer.html">C.推理优化</a>
+    <a href="cockpit-deploy.html">D.部署</a>
+    <a href="cockpit-agent-core.html">E1.核心框架</a>
+    <a href="cockpit-agent-group.html">E2.场景Agent</a>
+    <a href="cockpit-debug.html" class="active">F.调试</a>
+    <a href="cockpit-interview.html">面试</a>
+  </div>
+  <div class="right">
+    <button class="theme-btn" id="themeBtn">&#9790; / &#9788;</button>
+  </div>
+</nav>
+
+<!-- ===== Sidebar TOC ===== -->
+<aside class="sidebar">
+  <div class="toc-part">Part F: 调试与工具链</div>
+  <a href="#ch1">1. 调试工具全景</a>
+  <a href="#sec-tools">1.1 工具总览</a>
+  <a href="#sec-tree">1.2 排障决策树</a>
+  <a href="#sec-fastrpc">1.3 FastRPC 排障</a>
+  <a href="#sec-perf">1.4 性能优化清单</a>
+  <a href="#ch2">2. LLM 精度调试</a>
+  <a href="#ch3">3. 内存与 OOM 排障</a>
+  <a href="#ch4">4. Crash 分析与案例</a>
+  <a href="#ch5">5. 日志与监控体系</a>
+</aside>
+
+<!-- ===== Main Content ===== -->
+<main class="main">
+
+<h1>Part F: 调试与工具链</h1>
+<p class="subtitle">Chapter 16 — 调试工具全景、排障决策树、FastRPC 排障、性能优化清单</p>
+
+<!-- ============================================================ -->
+<!-- Chapter 16 -->
+<!-- ============================================================ -->
+<h2 id="ch1">1. 调试工具全景</h2>
+
+<p>端侧 AI 模型在 SA8397P 上的部署调试涉及精度验证、性能调优、稳定性排查等多个环节。掌握正确的工具链和排障方法论是高效解决问题的关键。</p>
+
+<h3 id="sec-tools">1.1 调试工具总览</h3>
+
+<table>
+<thead>
+<tr><th>工具</th><th>类别</th><th>用途</th><th>典型使用场景</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>qnn-net-run</strong></td>
+  <td>精度验证</td>
+  <td>在目标硬件上运行 QNN 模型，输入测试数据并输出推理结果，用于逐层对比精度</td>
+  <td>量化后模型精度下降时，对比 FP32 参考输出定位精度损失层；验证 Context Binary 输出是否与 ONNX 一致</td>
+</tr>
+<tr>
+  <td><strong>qnn-profile-viewer</strong></td>
+  <td>性能分析</td>
+  <td>解析 QNN profiling 数据，可视化每个算子的执行时间、运行后端和内存使用</td>
+  <td>延迟不达标时，检查是否有算子 fallback 到 CPU；分析 HTP 算子执行时间分布，定位性能瓶颈</td>
+</tr>
+<tr>
+  <td><strong>Hexagon IDE / Simulator</strong></td>
+  <td>DSP 开发</td>
+  <td>Hexagon DSP 集成开发环境，包含模拟器、调试器、性能分析器</td>
+  <td>自定义 HTP 算子开发与调试；VTCM 使用优化；HVX 向量化代码性能验证</td>
+</tr>
+<tr>
+  <td><strong>Snapdragon Profiler</strong></td>
+  <td>系统级分析</td>
+  <td>全系统性能分析工具，支持 CPU/GPU/DSP/NPU 多核心负载监控和时间线分析</td>
+  <td>多模型并发时分析各核心利用率；端到端 pipeline 延迟分解；CPU-DSP 交互时序分析</td>
+</tr>
+<tr>
+  <td><strong>mini-dm</strong></td>
+  <td>日志诊断</td>
+  <td>高通轻量级诊断日志工具，捕获 DSP 子系统的实时日志和 crash 信息</td>
+  <td>DSP crash 后获取 crash dump 和调用栈；FastRPC 通信异常排查；SSR（子系统重启）事件分析</td>
+</tr>
+<tr>
+  <td><strong>AIMET</strong></td>
+  <td>量化工具</td>
+  <td>AI Model Efficiency Toolkit，高通开源的模型量化与压缩工具，支持 PTQ/QAT</td>
+  <td>量化敏感度分析（逐层量化精度影响）；混合精度量化策略搜索；量化后模型精度恢复（AdaRound / CLE）</td>
+</tr>
+</tbody>
+</table>
+
+<h3 id="sec-tree">1.2 排障决策树</h3>
+<p>当端侧推理出现问题时，按以下决策树系统排查，避免盲目调试：</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+flowchart TD
+    START["推理出现问题"] --> Q1{"结果正确？"}
+
+    Q1 -->|"否"| ACC["精度问题分支"]
+    Q1 -->|"是"| Q2{"延迟达标？"}
+
+    ACC --> ACC1["1. qnn-net-run 逐层对比<br/>FP32 vs INT8 输出"]
+    ACC1 --> ACC2["2. 定位精度损失层<br/>检查 SNR / COS 相似度"]
+    ACC2 --> ACC3["3. 检查预处理对齐<br/>输入 normalize / resize<br/>是否与训练一致"]
+    ACC3 --> ACC4["4. AIMET 敏感度分析<br/>对损失层提升精度<br/>或使用 AdaRound"]
+
+    Q2 -->|"否"| PERF["性能问题分支"]
+    Q2 -->|"是"| Q3{"稳定运行？"}
+
+    PERF --> PERF1["1. qnn-profile-viewer<br/>检查算子运行后端"]
+    PERF1 --> PERF2["2. 定位 CPU fallback 算子<br/>替换为 HTP 支持的算子"]
+    PERF2 --> PERF3["3. 检查 VTCM 利用率<br/>是否 spill 到 DDR"]
+    PERF3 --> PERF4["4. Snapdragon Profiler<br/>分析多核调度和<br/>pipeline 并行度"]
+
+    Q3 -->|"否"| STAB["稳定性问题分支"]
+    Q3 -->|"是"| OK["正常运行"]
+
+    STAB --> STAB1["1. mini-dm 获取<br/>DSP crash log"]
+    STAB1 --> STAB2["2. dmesg 检查<br/>SSR 事件"]
+    STAB2 --> STAB3["3. 分析 crash 调用栈<br/>定位故障算子或内存越界"]
+    STAB3 --> STAB4["4. 检查 VTCM/DDR<br/>内存分配是否超限"]
+
+    style START fill:#4361ee,color:#fff
+    style OK fill:#2ecc71,color:#fff
+    style ACC fill:#e74c3c,color:#fff
+    style PERF fill:#f39c12,color:#fff
+    style STAB fill:#e74c3c,color:#fff
+</div></div>
+
+<h3 id="sec-fastrpc">1.3 FastRPC 排障指南</h3>
+<p>FastRPC 是 ARM CPU 与 Hexagon DSP 之间的远程过程调用机制。FastRPC 通信异常是端侧部署中最常见的问题之一。以下是系统排障步骤：</p>
+
+<div class="info-box">
+<div class="title">FastRPC 排障六步法</div>
+<ol class="steps">
+<li>
+  <strong>检查 FastRPC 驱动状态</strong><br/>
+  运行 <code>dmesg | grep fastrpc</code> 查看 FastRPC 驱动加载日志。正常应看到 <code>fastrpc: device opened</code>。如果出现 <code>fastrpc: error</code>，说明驱动未正确加载或设备节点异常。
+</li>
+<li>
+  <strong>获取 DSP 实时日志</strong><br/>
+  运行 <code>mini-dm</code> 捕获 DSP 子系统日志。关注 <code>HAP_</code> 前缀的日志行，特别是 <code>HAP_power</code>、<code>HAP_mem</code> 相关错误。如果 mini-dm 无输出，说明 DSP 子系统可能未启动。
+</li>
+<li>
+  <strong>验证设备节点</strong><br/>
+  运行 <code>ls /dev/adsprpc-smd*</code> 检查 FastRPC 设备节点是否存在。正常应看到 <code>/dev/adsprpc-smd</code> 和 <code>/dev/adsprpc-smd-secure</code>。节点缺失说明 DSP 固件未加载或 remoteproc 异常。
+</li>
+<li>
+  <strong>检查 remoteproc 状态</strong><br/>
+  运行 <code>cat /sys/class/remoteproc/remoteproc*/state</code> 查看 DSP 子系统运行状态。正常应为 <code>running</code>。如果是 <code>offline</code> 或 <code>crashed</code>，需要检查固件路径和 SSR 日志。
+</li>
+<li>
+  <strong>检查 SELinux 策略</strong><br/>
+  运行 <code>getenforce</code> 查看 SELinux 状态。如果为 <code>Enforcing</code>，FastRPC 调用可能被 SELinux 策略拒绝。开发阶段可临时设置为 <code>Permissive</code>，生产环境需正确配置 SELinux 策略文件。
+</li>
+<li>
+  <strong>验证 testsig 签名</strong><br/>
+  检查 <code>testsig</code> 文件是否正确部署。未签名或签名不匹配的 DSP 库无法加载。开发阶段需确保 testsig 与设备序列号匹配，使用 <code>elfsigner</code> 工具签名。
+</li>
+</ol>
+</div>
+
+<div class="info-box warn">
+<div class="title">常见陷阱</div>
+<p>FastRPC 调用返回 <code>AEE_ECONNREFUSED</code>（错误码 -14）时，通常不是网络问题而是 DSP 侧 skeleton 库加载失败。请检查：(1) skeleton .so 文件是否推送到 <code>/vendor/lib/rfsa/dsp/</code>；(2) 文件权限是否为 755；(3) testsig 是否匹配。</p>
+</div>
+
+<h3 id="sec-perf">1.4 常见性能优化清单</h3>
+<p>以下清单涵盖端侧推理的常见性能优化点，按优先级排序：</p>
+
+<table>
+<thead>
+<tr><th>优先级</th><th>优化项</th><th>检查方法</th><th>预期提升</th><th>注意事项</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>P0</strong></td>
+  <td>消除 CPU fallback 算子</td>
+  <td><code>qnn-profile-viewer</code> 查看每个算子的 backend 字段</td>
+  <td>单算子 10-100x</td>
+  <td>Fallback 到 CPU 的算子会引入 CPU-DSP 数据搬运开销，是性能杀手。替换为 HTP 原生支持的算子或拆分为可支持的算子组合。</td>
+</tr>
+<tr>
+  <td><strong>P0</strong></td>
+  <td>使用 Context Binary</td>
+  <td>对比 <code>.so</code> 模式和 <code>.bin</code> 模式的加载时间</td>
+  <td>加载时间减少 50-80%</td>
+  <td>Context Binary 将图优化、内存规划等离线完成，避免运行时开销。生产环境必须使用 Context Binary。</td>
+</tr>
+<tr>
+  <td><strong>P1</strong></td>
+  <td>VTCM 利用率优化</td>
+  <td>Hexagon Profiler 查看 VTCM hit/miss ratio</td>
+  <td>10-30%</td>
+  <td>VTCM 是 DSP 的片上高速缓存（~4MB）。确保热点算子的权重和中间结果能放入 VTCM，避免 spill 到 DDR。</td>
+</tr>
+<tr>
+  <td><strong>P1</strong></td>
+  <td>量化精度选择</td>
+  <td>对比 INT8 vs INT16 精度和速度</td>
+  <td>INT8 比 INT16 快 1.5-2x</td>
+  <td>优先使用 INT8；对精度敏感的层（如最后的分类头）可保持 INT16 混合精度。</td>
+</tr>
+<tr>
+  <td><strong>P1</strong></td>
+  <td>输入预处理 offload</td>
+  <td>Snapdragon Profiler 对比 CPU vs GPU 预处理耗时</td>
+  <td>20-40%</td>
+  <td>将 resize/normalize/color conversion 从 CPU offload 到 GPU 或 ISP，减少 CPU 负担和数据搬运。</td>
+</tr>
+<tr>
+  <td><strong>P2</strong></td>
+  <td>Batch 优化</td>
+  <td>测试不同 batch size 的吞吐量</td>
+  <td>10-30%</td>
+  <td>在多路摄像头场景下，合并多路输入为 batch 推理可提高 NPU 利用率。但会增加单帧延迟。</td>
+</tr>
+<tr>
+  <td><strong>P2</strong></td>
+  <td>Pipeline 并行</td>
+  <td>Snapdragon Profiler 时间线分析</td>
+  <td>20-50%</td>
+  <td>将预处理、推理、后处理三个阶段 pipeline 化，利用 CPU/GPU/NPU 异构并行。需仔细设计 buffer 管理。</td>
+</tr>
+<tr>
+  <td><strong>P2</strong></td>
+  <td>模型结构优化</td>
+  <td>AIMET + qnn-net-run 对比</td>
+  <td>模型级别变化</td>
+  <td>通道剪枝、深度可分离卷积替换、激活函数替换（Swish → ReLU6）。需重新训练/微调。</td>
+</tr>
+<tr>
+  <td><strong>P3</strong></td>
+  <td>电源管理配置</td>
+  <td><code>cat /sys/class/devfreq/soc:qcom,cpubw/cur_freq</code></td>
+  <td>5-15%</td>
+  <td>确保 DSP 运行在最高频率档位。开发阶段可锁定高频避免动态降频影响性能基准测试结果。</td>
+</tr>
+<tr>
+  <td><strong>P3</strong></td>
+  <td>内存对齐与布局</td>
+  <td>检查输入 tensor 的 stride 和 alignment</td>
+  <td>5-10%</td>
+  <td>确保输入 tensor 128 字节对齐；使用 NHWC 布局（HTP 原生格式）避免运行时 transpose。</td>
+</tr>
+</tbody>
+</table>
+
+<div class="info-box ok">
+<div class="title">性能优化黄金法则</div>
+<p>端侧推理性能优化的投入产出比通常为：<strong>消除 fallback &gt; Context Binary &gt; 量化精度 &gt; 预处理 offload &gt; Pipeline 并行 &gt; 结构优化</strong>。建议按此顺序逐项排查，先摘低垂果实。90% 的性能问题可以在前三项解决。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 2: LLM 精度调试 -->
+<!-- ============================================================ -->
+<h2 id="ch2">2. LLM 精度调试</h2>
+
+<p>端侧 LLM 量化部署后，精度问题表现为<strong>输出质量下降</strong>而非简单的数值偏差。与传统视觉模型的精度调试（对比 mAP/IoU）不同，LLM 精度问题往往是隐性的——模型仍然能"说话"，但 Function Calling 准确率下降、出现幻觉、或多轮对话失去连贯性。</p>
+
+<h3>2.1 量化精度损失定位</h3>
+
+<p>端侧 LLM 量化后精度下降的系统排查流程：</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+flowchart TD
+    A["量化后输出异常"] --> B{"对比 FP16 基线<br/>输出是否一致?"}
+    B -->|"完全不同"| C["检查输入预处理<br/>tokenizer / 图像 resize<br/>是否与训练一致"]
+    B -->|"部分偏差"| D["Perplexity 对比<br/>FP16 vs INT4"]
+    C --> C1["修复预处理后重测"]
+    D --> E{"Perplexity 增幅<br/>超过 5%?"}
+    E -->|"是"| F["逐层精度分析<br/>定位敏感层"]
+    E -->|"否"| G["检查 sampling 参数<br/>temperature / top_p"]
+    F --> H["敏感层提升精度<br/>INT4→INT8 混合量化"]
+    G --> G1["统一 sampling 后重测"]
+    H --> I["重新量化验证"]
+
+    style A fill:#e74c3c,color:#fff
+    style H fill:#2ecc71,color:#fff
+</div></div>
+
+<table>
+<thead>
+<tr><th>问题现象</th><th>可能原因</th><th>排查方法</th><th>解决方案</th></tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Function Calling 调错工具</strong></td>
+<td>量化导致分类头精度下降</td>
+<td>对比 FP16 和 INT4 在相同输入下的 logits 分布</td>
+<td>最后几层（LM Head / 分类头）保持 INT8 或 FP16</td>
+</tr>
+<tr>
+<td><strong>参数提取错误</strong></td>
+<td>数字 token 的量化敏感</td>
+<td>测试不同数字（温度、速度）的提取准确率</td>
+<td>Embedding 层保持高精度；增加数字相关训练数据</td>
+</tr>
+<tr>
+<td><strong>多轮对话失忆</strong></td>
+<td>KV Cache INT8 量化导致上下文信息丢失</td>
+<td>对比 FP16 KV Cache 和 INT8 KV Cache 的多轮对话质量</td>
+<td>KV Cache 使用 INT8 而非 INT4；关键层 KV 保持 FP16</td>
+</tr>
+<tr>
+<td><strong>多模态描述偏差</strong></td>
+<td>视觉编码器量化敏感</td>
+<td>单独对比视觉编码器 FP16 vs INT8 的特征余弦相似度</td>
+<td>ViT 部分使用较高精度量化（INT8）</td>
+</tr>
+<tr>
+<td><strong>随机输出乱码</strong></td>
+<td>量化模型加载错误或权重损坏</td>
+<td>MD5 校验量化模型文件完整性</td>
+<td>重新转换量化模型</td>
+</tr>
+</tbody>
+</table>
+
+<h3>2.2 量化敏感层分析</h3>
+
+<p>LLM 的不同层对量化的敏感度差异很大。通常以下层最为敏感：</p>
+
+<table>
+<thead>
+<tr><th>层类型</th><th>量化敏感度</th><th>原因</th><th>建议精度</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Embedding 层</strong></td><td>高</td><td>词表映射精度直接影响 token 表示</td><td>INT8 或 FP16</td></tr>
+<tr><td><strong>LM Head（输出层）</strong></td><td>高</td><td>决定最终 token 选择，微小误差可能改变输出</td><td>INT8 或 FP16</td></tr>
+<tr><td><strong>前几层 Attention</strong></td><td>中-高</td><td>底层特征提取对后续所有层有级联影响</td><td>INT8</td></tr>
+<tr><td><strong>中间层 FFN</strong></td><td>低</td><td>冗余度高，量化容忍度大</td><td>INT4</td></tr>
+<tr><td><strong>后几层 Attention</strong></td><td>中</td><td>接近输出，精度影响较直接</td><td>INT8 或 INT4</td></tr>
+<tr><td><strong>Vision Encoder</strong></td><td>中-高</td><td>图像特征编码精度影响多模态理解</td><td>INT8</td></tr>
+</tbody>
+</table>
+
+<pre><code># 逐层精度敏感度分析 (AIMET 方式)
+# 逐个将每层量化为 INT4，其余保持 FP16，观察 Perplexity 变化
+
+for layer_idx in range(num_layers):
+    # 仅量化第 layer_idx 层为 INT4，其余 FP16
+    model = load_fp16_model()
+    quantize_single_layer(model, layer_idx, bits=4)
+    ppl = evaluate_perplexity(model, eval_dataset)
+    print(f"Layer {layer_idx}: PPL = {ppl:.2f} (delta = {ppl - fp16_ppl:+.2f})")
+
+# 输出示例:
+# Layer 0 (Embed):   PPL = 8.95 (delta = +1.32)  ← 高敏感
+# Layer 1 (Attn):    PPL = 8.12 (delta = +0.49)  ← 中敏感
+# Layer 17 (FFN):    PPL = 7.68 (delta = +0.05)  ← 低敏感
+# Layer 35 (LMHead): PPL = 9.21 (delta = +1.58)  ← 高敏感</code></pre>
+
+<div class="info-box ok">
+<div class="title">混合精度量化策略</div>
+<p>基于敏感度分析结果，推荐的混合精度策略：<strong>Embedding + LM Head 用 INT8，前 2 层和后 2 层 Attention 用 INT8，其余全部 INT4</strong>。相比全 INT4，Perplexity 增幅从 ~1.5% 降至 ~0.5%，而模型大小仅增加约 10%。这是端侧部署中精度和体积的最佳平衡点。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 3: 内存与 OOM 排障 -->
+<!-- ============================================================ -->
+<h2 id="ch3">3. 内存与 OOM 排障</h2>
+
+<h3>3.1 端侧 LLM 内存构成</h3>
+
+<p>端侧 LLM 推理的内存占用由以下部分组成，理解各部分的大小和增长模式是排障的前提：</p>
+
+<table>
+<thead>
+<tr><th>内存组成</th><th>大小估算 (Qwen3-Omni-4B INT4)</th><th>是否随推理增长</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>模型权重</strong></td><td>~2.5 GB</td><td>否（常驻）</td><td>INT4 量化后的全部参数</td></tr>
+<tr><td><strong>KV Cache</strong></td><td>~19 MB/512 tokens (INT8)</td><td>是（随序列长度线性增长）</td><td>每层 2 × n_kv_heads × head_dim × seq_len</td></tr>
+<tr><td><strong>激活值</strong></td><td>~200-500 MB</td><td>是（随 batch size）</td><td>推理过程中的中间计算结果</td></tr>
+<tr><td><strong>运行时开销</strong></td><td>~100-200 MB</td><td>否</td><td>QNN 运行时、Context Binary 元数据、内存池</td></tr>
+<tr><td><strong>Vision Encoder</strong></td><td>~300-500 MB</td><td>否（独立模型）</td><td>ViT 权重 + 图像预处理缓冲区</td></tr>
+<tr><td><strong>总计</strong></td><td>~3.5-4.0 GB（初始）</td><td>KV Cache 持续增长</td><td>峰值取决于最大序列长度和并发数</td></tr>
+</tbody>
+</table>
+
+<h3>3.2 KV Cache OOM 排障</h3>
+
+<p>KV Cache 是端侧 LLM 最常见的 OOM 来源。随着对话轮次增加，KV Cache 持续增长直至内存耗尽：</p>
+
+<pre><code>KV Cache 内存计算:
+
+  per_token = 2 × n_layers × n_kv_heads × head_dim × dtype_bytes
+            = 2 × 36 × 4 × 128 × 1B (INT8)
+            = 36,864 Bytes ≈ 36 KB/token
+
+  不同序列长度的 KV Cache 占用:
+    256 tokens:   36KB × 256   ≈ 9 MB
+    512 tokens:   36KB × 512   ≈ 18 MB
+    1024 tokens:  36KB × 1024  ≈ 36 MB
+    2048 tokens:  36KB × 2048  ≈ 72 MB
+    4096 tokens:  36KB × 4096  ≈ 144 MB
+
+  多请求并发 (Continuous Batching):
+    4 个请求 × 1024 tokens/请求 ≈ 144 MB
+
+  结合模型权重 2.5GB + 激活值 0.5GB:
+    总内存 ≈ 3.0 GB + KV Cache</code></pre>
+
+<table>
+<thead>
+<tr><th>OOM 场景</th><th>触发条件</th><th>症状</th><th>解决方案</th></tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>长对话 OOM</strong></td>
+<td>单轮对话超过 max_seq_len</td>
+<td>DSP crash 或 SSR</td>
+<td>设置 max_seq_len 硬限制 + Sliding Window 截断旧上下文</td>
+</tr>
+<tr>
+<td><strong>多请求 OOM</strong></td>
+<td>多音区同时发起长请求</td>
+<td>后到达的请求分配 KV Cache 失败</td>
+<td>KV Cache 预算管理：按优先级淘汰低优先级请求的缓存</td>
+</tr>
+<tr>
+<td><strong>多模型 OOM</strong></td>
+<td>ViT + LLM + ASR + TTS 同时驻留</td>
+<td>DDR 总用量超限</td>
+<td>模型分时加载：ASR/TTS 用完卸载，仅保留 LLM 常驻</td>
+</tr>
+<tr>
+<td><strong>内存泄漏</strong></td>
+<td>请求完成后 KV Cache 未正确释放</td>
+<td>内存使用持续上升，不随对话结束回落</td>
+<td>引用计数检查；每轮对话结束后验证 KV Cache 释放</td>
+</tr>
+</tbody>
+</table>
+
+<h3>3.3 内存监控与预警</h3>
+
+<pre><code class="language-bash"># 实时监控 DSP 内存使用
+# 方法 1: 查看 ION/DMA-BUF 分配
+cat /sys/kernel/debug/dma_buf/bufinfo
+
+# 方法 2: 查看进程 VSS/RSS
+cat /proc/$(pidof system_agent)/status | grep -E "VmRSS|VmSize"
+
+# 方法 3: 查看 SMMU (System MMU) 映射
+cat /sys/kernel/debug/iommu/*/info  # 查看 DSP 的 IOMMU 映射大小
+
+# 方法 4: 持续监控脚本
+while true; do
+    RSS=$(cat /proc/$(pidof system_agent)/status | grep VmRSS | awk '{print $2}')
+    echo "$(date +%H:%M:%S) RSS: ${RSS} KB"
+    sleep 5
+done</code></pre>
+
+<div class="info-box warn">
+<div class="title">内存水位线设计</div>
+<p>建议设置三级内存水位线：<strong>绿色</strong>（&lt; 70% 总内存）正常运行；<strong>黄色</strong>（70-85%）触发 KV Cache 压缩和低优先级请求淘汰；<strong>红色</strong>（&gt; 85%）停止接受新请求，仅完成当前请求后释放。通过 aadk_monitor 服务定期检查并上报内存使用。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 4: Crash 分析与案例 -->
+<!-- ============================================================ -->
+<h2 id="ch4">4. Crash 分析与案例</h2>
+
+<h3>4.1 端侧 LLM 常见 Crash 类型</h3>
+
+<table>
+<thead>
+<tr><th>Crash 类型</th><th>触发场景</th><th>日志特征</th><th>排查要点</th></tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>DSP SSR (子系统重启)</strong></td>
+<td>HTP 算子执行异常 / VTCM 访问越界</td>
+<td><code>dmesg</code> 中出现 <code>subsys-restart</code> 或 <code>ssr_event</code></td>
+<td>mini-dm 获取 DSP crash dump → 分析 crash PC 地址 → 定位算子</td>
+</tr>
+<tr>
+<td><strong>SIGABRT / SIGSEGV</strong></td>
+<td>CPU 侧内存越界 / 空指针</td>
+<td>tombstone 文件中有调用栈和寄存器信息</td>
+<td>addr2line 解析 crash 地址到源码行 → 检查 DataMessage 生命周期</td>
+</tr>
+<tr>
+<td><strong>FastRPC Timeout</strong></td>
+<td>CPU→DSP 调用超时（默认 ~2s）</td>
+<td><code>fastrpc: invoke timed out</code></td>
+<td>DSP 侧是否死锁；模型推理是否超长；QNN Context 是否加载失败</td>
+</tr>
+<tr>
+<td><strong>QNN Context 加载失败</strong></td>
+<td>Context Binary 与硬件不匹配</td>
+<td><code>QnnContext_createFromBinary failed</code></td>
+<td>检查 Context Binary 编译目标 (SOC) 是否匹配当前硬件</td>
+</tr>
+<tr>
+<td><strong>OOM Kill</strong></td>
+<td>系统内存不足触发 Low Memory Killer</td>
+<td><code>lowmemorykiller: kill process</code></td>
+<td>检查内存使用曲线，定位内存泄漏或 KV Cache 未释放</td>
+</tr>
+</tbody>
+</table>
+
+<h3>4.2 DSP Crash 分析流程</h3>
+
+<div class="info-box">
+<div class="title">DSP Crash 排障四步法</div>
+<ol class="steps">
+<li>
+  <strong>获取 Crash Dump</strong><br/>
+  <code>mini-dm</code> 启动实时日志捕获。Crash 发生后，DSP 会输出 crash info 包括 crash PC、LR（返回地址）、寄存器状态。同时通过 <code>dmesg | grep -i "ssr\|subsys\|crash\|fastrpc"</code> 获取内核侧日志。
+</li>
+<li>
+  <strong>定位 Crash 地址</strong><br/>
+  使用 <code>hexagon-addr2line</code> 将 crash PC 地址映射到具体的源文件和行号。需要带调试符号的 DSP 库（<code>_skel.so</code> 的调试版本）。
+</li>
+<li>
+  <strong>分析调用上下文</strong><br/>
+  根据 LR（返回地址链）还原调用栈。关注：是在哪个 QNN 算子执行时 crash？输入 tensor 的 shape 和数值范围是否异常？是否在特定输入条件下才会复现？
+</li>
+<li>
+  <strong>复现与验证</strong><br/>
+  使用 <code>qnn-net-run</code> 单独运行导致 crash 的子图，尝试不同输入复现问题。定位到具体算子后，检查算子的输入约束（如 padding 要求、shape 限制）是否满足。
+</li>
+</ol>
+</div>
+
+<h3>4.3 典型案例分析</h3>
+
+<h3>案例 1：量化模型间歇性输出乱码</h3>
+<table>
+<tr><th>现象</th><td>INT4 量化模型在长时间运行后（~2 小时）偶发输出乱码 token</td></tr>
+<tr><th>排查</th><td>1. 短时间运行正常 → 排除模型文件损坏<br/>2. 内存监控发现 KV Cache 持续增长 → 存在未释放<br/>3. 乱码出现时 KV Cache 已占满预分配空间，新 token 写入越界</td></tr>
+<tr><th>根因</th><td>多轮对话清理逻辑中，当用户切换 scenario_id 时，旧 scenario 的 KV Cache 未被释放</td></tr>
+<tr><th>修复</th><td>在 scenario 切换时主动调用 KV Cache 清理；增加 KV Cache 使用量的边界检查</td></tr>
+</table>
+
+<h3>案例 2：特定图片输入导致 DSP Crash</h3>
+<table>
+<tr><th>现象</th><td>某张图片送入 Vision Encoder 时 DSP 立即 SSR</td></tr>
+<tr><th>排查</th><td>1. mini-dm 获取 crash dump，PC 地址指向 QNN Conv2D 算子<br/>2. 分析图片：分辨率为 1920×1080（非标准输入尺寸）<br/>3. Vision Encoder 输入要求 448×448，但预处理 resize 未执行就送入了原始分辨率</td></tr>
+<tr><th>根因</th><td>图像预处理 pipeline 中的 resize 函数在接收 YUV420 格式时路径异常，跳过了 resize 直接送入模型</td></tr>
+<tr><th>修复</th><td>在 model_inference.cpp 的 image format conversion 之后增加 shape 校验断言</td></tr>
+</table>
+
+<h3>案例 3：多音区并发导致 FastRPC Timeout</h3>
+<table>
+<tr><th>现象</th><td>驾驶员和副驾同时发送语音指令时，偶发 FastRPC timeout（~10% 复现率）</td></tr>
+<tr><th>排查</th><td>1. Snapdragon Profiler 时间线分析：两个请求的 Prefill 同时到达 HTP<br/>2. 单独执行每个请求均正常 → 并发争抢问题<br/>3. HTP 在处理第一个请求的 Prefill 时，第二个请求的 FastRPC 调用排队等待超过 2s timeout</td></tr>
+<tr><th>根因</th><td>ModelScheduler 未对 Prefill 阶段做分片，大 Prompt 的 Prefill 独占 HTP 时间过长</td></tr>
+<tr><th>修复</th><td>1. Prefill 分片：将长 Prompt 分为多段，每段之间允许插入高优先级请求<br/>2. FastRPC timeout 从 2s 调整为 5s<br/>3. 高优先级请求（车控）可抢占低优先级（闲聊）的 Prefill</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<!-- Chapter 5: 日志与监控体系 -->
+<!-- ============================================================ -->
+<h2 id="ch5">5. 日志与监控体系</h2>
+
+<h3>5.1 aadkcore 日志系统</h3>
+
+<p>aadkcore 框架内置了多级日志系统，用于端侧 Agent 的运行时诊断：</p>
+
+<table>
+<thead>
+<tr><th>日志级别</th><th>用途</th><th>典型内容</th><th>生产环境开启</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>ERROR</strong></td><td>不可恢复错误</td><td>模型加载失败、FastRPC crash、OOM</td><td>始终开启</td></tr>
+<tr><td><strong>WARN</strong></td><td>可恢复异常</td><td>Tool 调用超时后重试、KV Cache 接近上限</td><td>始终开启</td></tr>
+<tr><td><strong>INFO</strong></td><td>关键流程</td><td>请求开始/结束、模型加载完成、LoRA 切换</td><td>推荐开启</td></tr>
+<tr><td><strong>DEBUG</strong></td><td>详细调试</td><td>每个 token 的生成时间、KV Cache 使用量、Prompt 内容</td><td>仅调试时开启</td></tr>
+<tr><td><strong>TRACE</strong></td><td>算子级追踪</td><td>QNN 每个算子的执行时间和内存分配</td><td>仅性能分析时开启</td></tr>
+</tbody>
+</table>
+
+<pre><code class="language-bash"># 端侧日志查看方法
+
+# 1. Android 平台 (logcat)
+adb logcat -s AADK:* | grep -E "ERROR|WARN|ModelRunner|Scheduler"
+
+# 2. Linux 平台 (systemd journal)
+journalctl -u agentcore.service -f --no-pager
+
+# 3. 数据 dump 调试 (通过 Android 系统属性)
+# 开启输入输出 dump (model_inference.cpp 中读取此属性)
+adb shell setprop persist.aadk.data_dump 1
+# dump 文件保存在 /data/local/tmp/aadk_dump/
+
+# 4. mini-dm DSP 日志
+mini-dm  # 捕获 Hexagon DSP 实时日志</code></pre>
+
+<h3>5.2 aadk_monitor 健康监控</h3>
+
+<p>aadkcore 附带独立的监控服务 <code>aadk_monitor</code>（通过 systemd 管理），负责持续监控 Agent 进程的健康状态：</p>
+
+<table>
+<thead>
+<tr><th>监控项</th><th>检查方式</th><th>告警阈值</th><th>自动恢复</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>进程存活</strong></td><td>定期检查 system_agent 进程是否存在</td><td>进程不存在</td><td>自动重启（systemd Restart=always）</td></tr>
+<tr><td><strong>内存使用</strong></td><td>读取 /proc/PID/status VmRSS</td><td>VmRSS &gt; 配置阈值的 85%</td><td>日志告警 + 触发 KV Cache 清理</td></tr>
+<tr><td><strong>推理延迟</strong></td><td>统计最近 N 次推理的 TTFT 和 TPOT</td><td>P99 延迟 &gt; 配置阈值</td><td>日志告警 + 性能数据上报</td></tr>
+<tr><td><strong>DSP 状态</strong></td><td>检查 remoteproc 状态</td><td>状态为 crashed 或 offline</td><td>记录 crash 信息 + 等待 SSR 恢复</td></tr>
+<tr><td><strong>心跳检测</strong></td><td>向 system_agent 发送 health check 请求</td><td>连续 3 次无响应</td><td>强制重启 system_agent</td></tr>
+</tbody>
+</table>
+
+<h3>5.3 性能数据采集 (Profiling)</h3>
+
+<p>aadkcore 通过 <code>registerProfilingCallback</code> 接口支持实时性能数据采集，便于监控和优化：</p>
+
+<table>
+<thead>
+<tr><th>性能指标</th><th>采集方式</th><th>典型值 (Qwen3-Omni-4B INT4)</th><th>异常阈值</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>TTFT</strong></td><td>Prefill 开始到第一个 token 输出</td><td>600-800 ms (S=350)</td><td>&gt; 1500 ms</td></tr>
+<tr><td><strong>TPOT</strong></td><td>相邻 token 间隔</td><td>70-100 ms (~10-14 tok/s)</td><td>&gt; 200 ms</td></tr>
+<tr><td><strong>模型加载时间</strong></td><td>Context Binary 加载到推理就绪</td><td>2-5 s (Context Binary)</td><td>&gt; 10 s</td></tr>
+<tr><td><strong>KV Cache 使用率</strong></td><td>当前使用 / 最大分配</td><td>变化范围 0-100%</td><td>持续 &gt; 80%</td></tr>
+<tr><td><strong>NPU 利用率</strong></td><td>HTP 忙时间 / 总时间</td><td>推理时 &gt; 90%</td><td>&lt; 50% (可能有 fallback)</td></tr>
+</tbody>
+</table>
+
+<div class="info-box ok">
+<div class="title">调试工具选择指南</div>
+<p>快速参考：<strong>精度问题</strong> → qnn-net-run + AIMET 逐层分析；<strong>性能问题</strong> → qnn-profile-viewer + Snapdragon Profiler；<strong>稳定性问题</strong> → mini-dm + dmesg + aadk_monitor 日志；<strong>内存问题</strong> → /proc/PID/status + DMA-BUF 统计；<strong>FastRPC 问题</strong> → 排障六步法（第 1 章）。先确定问题类别，再选对应工具，避免盲目排查。</p>
+</div>
+
+</main>
+
+<!-- ===== Scripts at bottom ===== -->
+<script defer src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
+<script defer src="https://unpkg.com/echarts@5/dist/echarts.min.js"></script>
+<script>
+var b=document.getElementById('themeBtn');
+b.onclick=function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('theme',h.dataset.theme)}catch(e){}};
+try{var s=localStorage.getItem('theme');if(s)document.documentElement.dataset.theme=s}catch(e){}
+
+var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.remove('active')});var l=document.querySelector('.sidebar a[href="#'+e.target.id+'"]');if(l)l.classList.add('active')}})},{rootMargin:'-60px 0px -70% 0px'});
+document.querySelectorAll('h2[id],h3[id]').forEach(function(h){obs.observe(h)});
+
+window.addEventListener('load',function(){
+  try{if(typeof mermaid!=='undefined'){mermaid.initialize({startOnLoad:true,theme:document.documentElement.dataset.theme==='dark'?'dark':'default',securityLevel:'loose'})}}catch(e){}
+  try{initCharts()}catch(e){}
+});
+
+function initCharts(){
+  if(typeof echarts==='undefined')return;
+}
+</script>
+</body>
+</html>

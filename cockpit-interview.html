@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智能座舱面试指南 — Edge AI Docs</title>
+<style>
+:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-h:52px}
+[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+.top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;z-index:1000}
+.top-nav .logo{font-weight:700;font-size:15px;color:var(--accent);margin-right:24px;text-decoration:none}
+.top-nav .links{display:flex;gap:2px;flex-wrap:wrap}
+.top-nav .links a{padding:4px 10px;border-radius:5px;text-decoration:none;color:var(--text2);font-size:12px;font-weight:500}
+.top-nav .links a:hover{background:var(--accentL);color:var(--accent)}
+.top-nav .links a.active{background:var(--accent);color:#fff}
+.top-nav .right{margin-left:auto}
+.theme-btn{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--text)}
+.sidebar{position:fixed;top:var(--nav-h);left:0;bottom:0;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;z-index:900}
+.sidebar a{display:block;padding:4px 16px 4px 20px;text-decoration:none;color:var(--text2);font-size:12px;border-left:3px solid transparent}
+.sidebar a:hover{color:var(--accent);background:var(--accentL)}
+.sidebar a.active{color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.sidebar .toc-part{padding:8px 20px 4px;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px}
+.main{margin-left:var(--sidebar-w);margin-top:var(--nav-h);padding:28px 40px 60px;max-width:900px}
+h1{font-size:26px;font-weight:800;margin-bottom:6px}
+.subtitle{font-size:14px;color:var(--muted);margin-bottom:28px}
+h2{font-size:20px;font-weight:700;margin:36px 0 14px;padding-bottom:6px;border-bottom:2px solid var(--accentL)}
+h3{font-size:16px;font-weight:600;margin:20px 0 10px}
+p{margin-bottom:10px;color:var(--text2)}
+strong{color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
+th{background:var(--accentL);color:var(--accentD);font-weight:600}
+tr:nth-child(even){background:var(--bg2)}
+pre{background:var(--bg3);border-radius:7px;padding:14px;overflow-x:auto;font-size:13px;margin:10px 0}
+code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
+:not(pre)>code{background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--accent)}
+.q-card{margin:14px 0;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.q-header{padding:10px 14px;background:var(--bg2);cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:14px}
+.q-header:hover{background:var(--bg3)}
+.q-header .diff{font-size:11px;padding:2px 8px;border-radius:4px;font-weight:700}
+.diff-easy{background:#d4edda;color:#155724}
+.diff-mid{background:#fff3cd;color:#856404}
+.diff-hard{background:#f8d7da;color:#721c24}
+.q-body{padding:14px;display:none}
+.q-card.open .q-body{display:block}
+.q-card.open .q-header::after{content:'▲';font-size:11px}
+.q-card:not(.open) .q-header::after{content:'▼';font-size:11px}
+.key{display:inline-block;background:var(--accentL);color:var(--accent);padding:1px 6px;border-radius:3px;font-size:12px;font-weight:600;margin:0 2px}
+@media(max-width:900px){.sidebar{display:none}.main{margin-left:0;padding:20px 16px 60px}}
+@media print{.top-nav,.sidebar,.theme-btn{display:none!important}.main{margin:0;padding:16px;max-width:100%}}
+</style>
+</head>
+<body>
+
+<!-- ===== Top Navigation ===== -->
+<nav class="top-nav">
+  <a href="index.html" class="logo">Edge AI Docs</a>
+  <div class="links">
+    <a href="cockpit-hardware.html">A.硬件</a>
+    <a href="cockpit-training.html">B.训练</a>
+    <a href="cockpit-infer.html">C.推理优化</a>
+    <a href="cockpit-deploy.html">D.部署</a>
+    <a href="cockpit-agent-core.html">E1.核心框架</a>
+    <a href="cockpit-agent-group.html">E2.场景Agent</a>
+    <a href="cockpit-debug.html">F.调试</a>
+    <a href="cockpit-interview.html" class="active">面试</a>
+  </div>
+  <div class="right">
+    <button class="theme-btn" id="themeBtn">&#9790; / &#9788;</button>
+  </div>
+</nav>
+
+<!-- ===== Sidebar TOC ===== -->
+<aside class="sidebar">
+  <div class="toc-part">智能座舱面试指南</div>
+  <a href="#sec1">一、硬件与系统</a>
+  <a href="#sec2">二、算法与训练</a>
+  <a href="#sec3">三、部署与优化</a>
+  <a href="#sec4">四、Agent 与大模型</a>
+  <a href="#sec5">五、综合系统设计</a>
+  <a href="#sec6">六、系统设计答题框架</a>
+  <a href="#sec7">七、项目经验包装</a>
+  <a href="#sec8">八、行为面试准备</a>
+</aside>
+
+<!-- ===== Main Content ===== -->
+<main class="main">
+
+<h1>智能座舱面试指南</h1>
+<p class="subtitle">基于 Qualcomm SA8397P 平台 · 48 道精选题 · 覆盖硬件/训练/部署/Agent/系统设计/面试方法论</p>
+
+<!-- ========================================================== -->
+<!-- Section 1: 硬件与系统 — 概念辨析题 (10 questions) -->
+<!-- ========================================================== -->
+<h2 id="sec1">一、硬件与系统 — 概念辨析题</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q1: DSP 和 CPU 在 AI 推理中的核心区别是什么？为什么座舱场景优先选择 DSP？</span>
+    <span class="diff diff-easy">初级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">CPU</span> 是通用处理器，擅长复杂控制流和低延迟单线程任务，但其 SIMD 宽度有限（如 NEON 128-bit），在大规模矩阵运算上吞吐量不足。<span class="key">DSP</span>（Digital Signal Processor）则针对高吞吐并行数据流设计，SA8397P 上的 <span class="key">CDSP</span> 具备 <span class="key">HVX</span> 向量单元（1024-bit SIMD）和 <span class="key">HMX</span> 矩阵加速单元，能在更低功耗下完成大量 MAC 运算。座舱场景需要同时运行 DMS、OMS、手势识别等多个模型，对吞吐和功耗都有严格要求。DSP 以不到 CPU 三分之一的功耗达到数倍推理吞吐，且不会占用 CPU 资源影响座舱 HMI 渲染流畅度。此外，DSP 上的 <span class="key">VTCM</span>（Vector Tightly Coupled Memory）提供低延迟片上缓存，避免频繁访问 DDR，进一步降低推理时延。因此在座舱批量 AI 任务中，DSP 是性价比最优的计算单元。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q2: 请解释 HVX、HMX、HTP 三者之间的关系。</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">HTP</span>（Hexagon Tensor Processor）是 Qualcomm 对 DSP 上 AI 加速能力的整体品牌抽象，它并不是一个独立的硬件核心，而是 <span class="key">CDSP</span> 上多个硬件单元的协同组合。<span class="key">HVX</span>（Hexagon Vector eXtension）是 DSP 上的 1024-bit SIMD 向量扩展单元，擅长逐元素的激活函数、归一化、Resize 等向量操作。<span class="key">HMX</span>（Hexagon Matrix eXtension）是专为矩阵乘法设计的加速器，能高效执行 INT8/INT16 的矩阵运算，用于卷积和全连接层。在实际推理中，QNN Runtime 会将模型中的不同算子分配给最合适的单元：矩阵密集型的 Conv/FC 层走 HMX，逐点操作如 ReLU/Softmax 走 HVX，标量控制逻辑走 Hexagon 标量核心。三者在 HTP 框架下协同工作，构成完整的端侧 AI 推理引擎。理解这种层级关系有助于调试算子 fallback 问题——当某个算子不被 HMX 支持时，它会退回 HVX 甚至 CPU 执行，导致性能骤降。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q3: FastRPC 和 Android Binder 有什么区别？为什么 DSP 通信不用 Binder？</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">Android Binder</span> 是 Linux 内核提供的 IPC 机制，用于 Android 进程间通信，数据需要经过序列化/反序列化和至少一次内存拷贝（copy_from_user / copy_to_user），主要服务于 CPU 侧的 Java/Native 服务调用。<span class="key">FastRPC</span> 是 Qualcomm 专门设计的跨处理器 RPC 框架，用于 CPU（HLOS）与 DSP 之间的通信。FastRPC 最大的优势在于支持 <span class="key">零拷贝</span>（zero-copy）数据传输：通过 <span class="key">ION</span> 或 <span class="key">DMA-BUF</span> 分配共享内存，CPU 和 DSP 可以直接访问同一块物理内存，避免数据拷贝的开销。Binder 无法跨处理器域调用 DSP，它只能在 CPU 侧的进程间工作。此外，FastRPC 内建了 DSP 侧的 <span class="key">PD</span>（Protection Domain）管理、签名校验和异常恢复机制，能在 DSP 进程崩溃时自动 SSR 恢复。对于座舱场景中每帧 30fps 的图像推理而言，FastRPC 的零拷贝特性直接决定了端到端延迟是否能满足实时性要求。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q4: QNN 和 SNPE 的关系是什么？新项目应该选哪个？</span>
+    <span class="diff diff-easy">初级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">SNPE</span>（Snapdragon Neural Processing Engine）是 Qualcomm 早期推出的端侧推理 SDK，提供模型转换（DLC 格式）、量化和推理 API。<span class="key">QNN</span>（Qualcomm AI Engine Direct）是其下一代替代方案，采用更底层、更灵活的图级 API 设计。QNN 支持 <span class="key">Context Binary</span> 离线编译、自定义算子注册、多后端（HTP/GPU/CPU）统一接口，并且与最新芯片（如 SA8397P）的 HTP 特性深度绑定。SNPE 目前已进入维护模式，不再针对新芯片做深度优化，某些新算子只在 QNN 上可用。新项目应无条件选择 QNN。迁移时需要注意：SNPE 使用 DLC 模型格式，QNN 使用 <span class="key">.cpp 模型 + .bin 权重</span> 或预编译的 Context Binary（.bin）；SNPE 的 UserBuffer 对应 QNN 的 Tensor；SNPE 的运行时后端选择方式也与 QNN 不同。QNN 在 SA8397P 上能充分利用 HMX，而 SNPE 可能无法触发 HMX 加速路径。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q5: SDSP 和 CDSP 的区别是什么？AI 推理为什么不能用 SDSP？</span>
+    <span class="diff diff-easy">初级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">CDSP</span>（Compute DSP）是面向通用高性能计算设计的 DSP，配备了 <span class="key">HVX</span> 和 <span class="key">HMX</span> 硬件加速单元，以及大容量 <span class="key">VTCM</span>，是 AI 推理的主力计算单元。<span class="key">SDSP</span>（Sensor DSP）则面向低功耗传感器处理场景，如 Always-On 语音唤醒、传感器 Hub 数据融合等，它通常只有标量核心和有限的 HVX 能力，没有 HMX 矩阵加速单元。SDSP 的设计目标是在极低功耗（微瓦级）下持续运行，而非高吞吐计算。因此，AI 模型推理必须在 CDSP 上执行。如果错误地将推理任务提交到 SDSP，不仅会因为缺少 HMX 导致大量算子 fallback 到标量执行而极度缓慢，还可能因 VTCM 不足而直接报错。在 QNN 初始化时通过指定 backend 为 <code>libQnnHtp.so</code> 并确认 DSP 类型为 CDSP，可以避免此类问题。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q6: Protection Domain (PD) 和 Virtual Machine (VM) 在系统隔离中有什么区别？</span>
+    <span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">VM</span>（Virtual Machine）是由 <span class="key">Type-1 Hypervisor</span>（SA8397P 上为 Qualcomm 自研的 Gunyah Hypervisor）在硬件层面实现的完整操作系统隔离。每个 VM 拥有独立的内存空间、CPU 调度和外设访问权限，VM 之间的隔离由硬件 MMU 和 Stage-2 页表保证，一个 VM 崩溃不会影响其他 VM。在座舱场景中，通常会划分为 Android VM（信息娱乐）、QNX/Linux VM（仪表盘）和安全 VM（ADAS 预警）。<span class="key">PD</span>（Protection Domain）则是 DSP 侧的软件级进程隔离机制，运行在同一个 DSP 核心上。每个 PD 有独立的地址空间和资源限额，由 DSP 操作系统（QuRT）管理。PD 隔离的粒度小于 VM：一个 PD 崩溃后可以通过 <span class="key">SSR</span> 机制快速重启而不影响其他 PD，但极端情况下（如 DSP 硬件异常）可能导致整个 DSP 域重置。通常每个推理会话运行在独立的 <span class="key">User PD</span> 中，与系统级 Static PD 隔离，防止用户模型 bug 影响系统稳定性。两者的核心区别在于：VM 是硬件级隔离（跨处理器），PD 是软件级隔离（DSP 内部）。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q7: VTCM 在 DSP 推理中扮演什么角色？容量不足时会有什么后果？</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">VTCM</span>（Vector Tightly Coupled Memory）是 DSP 上直接与 HVX/HMX 单元相连的片上 SRAM，访问延迟仅为 1-2 个周期，远低于 DDR 的数百个周期。在推理过程中，VTCM 用于存储当前计算所需的权重分片、中间激活值和临时缓冲区。QNN Runtime 在编译 Context Binary 时会根据 VTCM 容量做 tiling 决策——将大的张量切分为能放入 VTCM 的小块，循环加载计算。SA8397P 的 CDSP 通常配备 8MB VTCM。当 VTCM 容量不足以容纳一个 tile 时，Runtime 会自动回退到 DDR 直接访问模式（<span class="key">TCM fallback</span>），这会导致单层推理延迟增加 3-10 倍。多模型并发推理时，VTCM 需要在不同模型之间分时复用，因此合理控制每个模型的 VTCM 占用量至关重要。可通过 QNN Profile 工具观察每层的 VTCM 使用情况，对 VTCM 密集层做针对性的 tiling 优化或降低该层的 batch size。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q8: ION 共享内存在座舱推理管线中如何实现零拷贝？</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">ION</span> 是 Android 上的共享内存分配器（在新内核上逐步被 <span class="key">DMA-BUF Heap</span> 取代），它能分配物理连续或 IOMMU 映射的内存块，并通过文件描述符（fd）在不同处理器和进程间共享。在座舱推理管线中，零拷贝数据路径的典型实现是：Camera HAL 采集图像后，将帧数据直接写入 ION buffer；应用层通过 fd 将该 buffer 注册给 QNN 作为输入 Tensor；QNN 通过 <span class="key">FastRPC</span> 将 fd 传递给 DSP，DSP 的 SMMU 将同一块物理内存映射到自己的地址空间。全程没有数据拷贝——CPU 和 DSP 操作的是同一块物理内存。需要注意 <span class="key">Cache 一致性</span>：CPU 写入后需要做 cache flush，DSP 读取前需要做 cache invalidate，否则 DSP 可能读到 CPU 缓存中的脏数据。QNN 的 <code>MemHandle</code> API 封装了这些细节，但在自定义预处理管线中需要手动管理。零拷贝路径可以节省 1080p 图像约 6MB 的拷贝时间（约 0.5-1ms），对 30fps 管线的 33ms 预算而言节省显著。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q9: 为什么座舱平台使用 Type-1 Hypervisor 而非 Type-2？对 AI 推理有什么影响？</span>
+    <span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">Type-1 Hypervisor</span>（裸机型）直接运行在硬件之上，无需宿主操作系统，代表如 Qualcomm <span class="key">Gunyah</span>、QNX Hypervisor。<span class="key">Type-2 Hypervisor</span>（托管型）运行在宿主 OS 之上，如 VirtualBox、VMware Workstation。座舱选择 Type-1 的核心原因有三：第一，<strong>安全隔离</strong>——仪表盘 VM 和信息娱乐 VM 的隔离由硬件保证，符合 ISO 26262 功能安全要求；第二，<strong>确定性延迟</strong>——Type-1 的 VM 切换开销极低（微秒级），不会因宿主 OS 调度抖动导致仪表盘渲染卡顿；第三，<strong>攻击面小</strong>——没有宿主 OS 意味着更少的安全漏洞。对 AI 推理的影响主要体现在资源分配上：Hypervisor 会将 DSP、GPU 等硬件外设静态分配给特定 VM，推理任务只能使用所在 VM 被分配的 DSP 核心。如果 DMS 模型运行在 Android VM 中，它只能使用分配给 Android VM 的 CDSP；如果 ADAS VM 也需要 DSP，就需要在 Hypervisor 层面做资源规划。跨 VM 共享 DSP 需要通过 <span class="key">virtio</span> 或 Hypervisor 提供的 passthrough 机制，会增加延迟。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q10: SSR（Subsystem Restart）机制是什么？DSP 崩溃后系统如何恢复？</span>
+    <span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">SSR</span>（Subsystem Restart）是 Qualcomm 平台上的子系统故障恢复机制。当 DSP（或其他子系统如 Modem、ADSP）发生不可恢复的异常（如非法内存访问、看门狗超时）时，SSR 框架会自动重启该子系统而不影响主系统（CPU/Android）的运行。SSR 的工作流程为：DSP 发生异常后，硬件看门狗触发中断通知 CPU 侧的 <span class="key">PIL</span>（Peripheral Image Loader）驱动；PIL 收集 DSP 侧的 crashdump（寄存器状态、调用栈）存储到 <code>/data/vendor/ramdump</code>；随后 PIL 重新加载 DSP 固件镜像并重启 DSP。整个过程通常耗时 200-500ms。对 AI 推理的影响是：所有正在 DSP 上运行的推理会话会丢失，QNN 侧会收到 <code>QNN_COMMON_ERROR_SYSTEM_COMMUNICATION</code> 错误。应用层需要实现 <span class="key">SSR 感知恢复</span> 逻辑：监听 SSR 事件（通过 <code>/dev/subsys_*</code> 节点或 qmi indication），在 DSP 重启后重新初始化 QNN context、重新加载 Context Binary、恢复推理管线。生产环境中必须有 SSR 恢复策略，否则 DSP 崩溃一次就会导致 DMS 等安全功能永久失效。建议将 Context Binary 预加载到内存中以加速恢复，目标是将恢复时间控制在 1 秒以内。</p>
+  </div>
+</div>
+
+<!-- ========================================================== -->
+<!-- Section 2: 算法与训练题 (8 questions) -->
+<!-- ========================================================== -->
+<h2 id="sec2">二、算法与训练题</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q11: 为座舱端侧部署选择 AI 模型时，核心评估指标有哪些？</span>
+    <span class="diff diff-easy">初级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>端侧模型选择需要综合评估五个核心维度。第一是 <span class="key">算子兼容性</span>：模型中所有算子必须被 QNN HTP 后端原生支持，否则会 fallback 到 CPU 执行导致延迟剧增，需要在选型阶段用 <code>qnn-net-run --backend libQnnHtp.so</code> 验证全图是否能上 HTP。第二是 <span class="key">量化友好性</span>：模型结构应对 INT8 量化鲁棒，含大量 depthwise conv、hardswish 等算子的模型（如 MobileNetV3）在量化后精度损失小。第三是 <span class="key">推理延迟</span>：DMS 场景要求单帧推理低于 15ms（30fps），模型的 MACs 和内存带宽需求需匹配 CDSP 的能力。第四是 <span class="key">模型大小</span>：Context Binary 需要常驻内存或快速加载，座舱内存预算有限，通常单模型控制在 5-20MB。第五是 <span class="key">精度</span>：在满足以上约束后，选择 mAP/accuracy 最高的方案。实践中推荐的技术路线是以 <span class="key">EfficientNet-Lite</span> 或 <span class="key">MobileNetV2</span> 系列为 backbone，配合 SSD/CenterNet 等轻量检测头。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q12: 如何用知识蒸馏提升座舱端侧小模型的精度？请描述具体策略。</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">知识蒸馏</span>（Knowledge Distillation）的核心思路是用大模型（Teacher）的"软标签"指导小模型（Student）训练，使 Student 学到 Teacher 的暗知识。在座舱场景中，典型策略如下：Teacher 选择 ResNet-101 或 ConvNeXt-Base 级别的模型，在大规模数据上训练至收敛；Student 选择 MobileNetV2 或 EfficientNet-Lite0。蒸馏 loss 由两部分组成：<span class="key">软标签 KL 散度</span>（温度 T 通常取 4-6）和 <span class="key">硬标签交叉熵</span>，按 alpha=0.7:0.3 加权。对于检测任务，还可以做 <span class="key">特征蒸馏</span>——让 Student 的中间特征图（FPN 输出）在 L2 距离上逼近 Teacher 的对应层，这对定位精度提升效果显著。需要注意的是，蒸馏时的数据应使用与部署环境一致的座舱真实数据（包括 IR 夜视、不同光照），而非仅用 ImageNet 预训练数据集。蒸馏后的 Student 模型还需要进一步做 <span class="key">QAT</span>（量化感知训练）以确保 INT8 量化后精度不退化。实践经验表明，特征蒸馏 + QAT 的组合可以在 MobileNetV2 上将 DMS 检测 mAP 提升 3-5 个百分点。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q13: DMS 数据集中驾驶员分心/疲劳样本严重不平衡，如何处理？</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>DMS 数据集中正常驾驶样本通常占 80% 以上，而闭眼、打哈欠、低头看手机等分心/疲劳样本只占不到 20%，存在严重的 <span class="key">类别不平衡</span>。处理策略分为数据级和算法级两个层面。数据级方面：第一，对少数类做 <span class="key">数据增强</span>——在闭眼样本上施加不同亮度、IR 噪声、遮挡模拟（戴口罩/墨镜）等变换；第二，用 <span class="key">合成数据</span>——通过 3D 人脸模型（如 FLAME）渲染不同头部姿态和表情的合成图像；第三，<span class="key">过采样</span>少数类或 <span class="key">欠采样</span> 多数类，使每个 batch 中各类样本大致均衡。算法级方面：第一，使用 <span class="key">Focal Loss</span>（gamma=2）替代标准交叉熵，自动对难分类样本加权；第二，对分心/疲劳类别手动设置更高的 class weight；第三，在评估指标上不能只看 overall accuracy，必须关注 <span class="key">每类的 Recall</span> 和 <span class="key">F1-score</span>，特别是漏检率——漏检一次分心驾驶比误报十次的后果严重得多。生产中建议 Recall 目标不低于 95%，Precision 不低于 85%。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q14: PTQ 和 QAT 分别适用于什么场景？如何决策？</span>
+    <span class="diff diff-easy">初级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">PTQ</span>（Post-Training Quantization，训练后量化）不需要重新训练，只需用一小批标定数据（通常 500-1000 张）统计每层的激活值范围，然后将 FP32 权重和激活量化为 INT8。优点是快速便捷，缺点是对某些模型（特别是深层网络和含 Concat/Add 分支的模型）精度损失可能较大。<span class="key">QAT</span>（Quantization-Aware Training，量化感知训练）在训练过程中插入模拟量化节点（fake quantize），让模型在训练时就学会适应量化误差。QAT 通常需要额外训练 10-20 个 epoch，但精度损失远小于 PTQ。决策原则如下：首先尝试 PTQ，用 QNN 的 <code>qnn-converter</code> 做 INT8 量化后验证精度——如果精度下降在 1% 以内，直接使用 PTQ；如果下降超过 2%，启用 QAT。对于座舱安全相关模型（如 DMS 疲劳检测），建议无论 PTQ 精度如何都做 QAT，因为量化引入的微小误差在边界样本上可能导致漏检。QAT 实现上推荐使用 PyTorch 的 <span class="key">torch.ao.quantization</span> 模块或 Qualcomm 的 <span class="key">AIMET</span> 工具，它们支持直接导出 QNN 兼容的量化参数。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q15: LoRA 能否用于端侧视觉模型的微调？有什么限制？</span>
+    <span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">LoRA</span>（Low-Rank Adaptation）最初为 LLM 微调设计，通过在冻结的预训练权重旁注入低秩分解矩阵（A、B）来减少可训练参数量。理论上 LoRA 可以应用于任何线性层，包括 CNN 中的 1x1 Conv 和全连接层。在端侧视觉模型上使用 LoRA 微调有以下优势：可训练参数量减少 90% 以上，训练显存占用大幅降低，适合在有限 GPU 资源上对预训练 backbone 做领域适配。但存在几个关键限制：第一，<span class="key">部署时需要权重合并</span>——LoRA 的 A、B 矩阵需要在部署前与原始权重合并（W' = W + BA），否则多一次矩阵乘法会增加推理延迟，合并后模型大小与原始相同。第二，<span class="key">depthwise conv 不适用</span>——LoRA 依赖矩阵分解，而 depthwise conv 的权重形状（C_out x 1 x K x K）不适合做低秩分解，而 MobileNet 系列大量使用 depthwise conv。第三，对于分类/检测头等参数量已经很少的层，LoRA 的收益不如全量微调。实践建议是：仅对 backbone 中的 pointwise conv（1x1）和最终 FC 层施加 LoRA（rank=4-8），检测头做全量微调，然后导出合并后的完整模型进行 QNN 量化部署。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q16: Mixed Precision（混合精度）量化策略如何设计？哪些层不适合 INT8？</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">混合精度量化</span> 是指模型中不同层使用不同的量化位宽（如部分层 INT8、部分层 INT16 或 FP16），在精度和性能之间取得最优平衡。设计策略的核心是识别 <span class="key">量化敏感层</span>——即量化后精度下降贡献最大的层。常见的敏感层包括：网络的第一个卷积层（输入动态范围大）、含有 <span class="key">Softmax/LayerNorm</span> 的层（指数运算对精度敏感）、<span class="key">SE Module</span>（Squeeze-and-Excitation）中的 Sigmoid 通道注意力、以及特征金字塔中的多尺度 Concat 节点（不同分辨率特征的数值范围差异大）。实操流程：先对全模型做 INT8 PTQ，用逐层灵敏度分析工具（如 AIMET 的 <code>QuantAnalyzer</code>）计算每层在 INT8 下的精度损失贡献，将 top-5 敏感层提升为 INT16。在 QNN 中可通过 <span class="key">encoding override</span> 或在转换时指定 <code>--act_bw 16</code> 对特定层设置精度。需要注意，INT16 层的推理延迟约为 INT8 的 1.5-2 倍，因此只应对真正敏感的层使用高精度，通常控制在模型总层数的 5-10%。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q17: IR 红外模型和 RGB 模型之间能否做迁移学习？有哪些注意事项？</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>可以做迁移学习，且这是座舱 DMS 开发中的常见实践。<span class="key">IR 红外图像</span> 和 <span class="key">RGB 图像</span> 在低层特征（边缘、纹理）上有一定共性，因此用 RGB 数据预训练的 backbone 权重可以作为 IR 模型的初始化。注意事项如下：第一，<span class="key">输入通道适配</span>——IR 通常是单通道灰度图，而 RGB 预训练模型的第一层卷积接受 3 通道输入。常见做法是将 3 通道权重取平均合并为 1 通道，或将 IR 图像复制为 3 通道输入。推荐前者，因为后者会增加 3 倍的输入带宽和第一层计算量。第二，<span class="key">数据分布差异</span>——IR 图像的像素值分布、对比度特征与 RGB 差异较大，特别是在不同温度环境下 IR 图像的亮度会变化。因此需要对 IR 数据做独立的 <span class="key">归一化统计</span>，不能直接使用 ImageNet 的 mean/std。第三，<span class="key">微调策略</span>——建议先冻结 backbone 前 3/4 的层只微调后面的层和检测头（10 epoch），然后解冻全部层以较低学习率（1/10）全量微调（20 epoch）。第四，确保微调数据包含 IR 特有的场景，如戴红外透光墨镜、完全黑暗环境、驾驶员面部有红外反射器等边界案例。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q18: 在端侧设备上做 On-device Fine-tuning 是否可行？有哪些方案？</span>
+    <span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>端侧在线微调（<span class="key">On-device Fine-tuning</span>）在技术上可行但面临严峻挑战，目前仅适用于特定受限场景。核心挑战包括：第一，<span class="key">训练内存需求</span>——即使最小的 MobileNetV2 模型，全量训练时需要存储梯度和优化器状态，内存占用约为推理的 3-4 倍，座舱 SoC 的共享内存可能不足；第二，DSP 上的 QNN 目前只支持推理，<span class="key">不支持反向传播</span>，训练只能在 CPU/GPU 上进行，但 SA8397P 的 GPU 主要面向图形渲染，训练效率低；第三，<span class="key">数据隐私和标签获取</span>——端侧缺乏标注数据，无监督或自监督方案质量难以保证。可行的方案有几种：第一，<span class="key">仅微调最后 1-2 个全连接层</span>（分类头），参数量小、可在 CPU 上用 TensorFlow Lite 或 ONNX Runtime 完成，用于做用户个性化适配（如适配特定驾驶员的面部特征）；第二，<span class="key">特征提取 + 在线 SVM/KNN</span>——冻结 backbone 只做特征提取，用传统 ML 分类器替代神经网络头，计算量极低；第三，<span class="key">联邦学习</span>——在端侧计算梯度更新，定期上传到云端聚合，但这依赖网络连接且有延迟。总结来说，当前座舱场景的最佳实践是在云端训练、端侧推理，仅在需要个性化适配时做最末层的轻量微调。</p>
+  </div>
+</div>
+
+<!-- ========================================================== -->
+<!-- Section 3: 部署与优化题 (8 questions) -->
+<!-- ========================================================== -->
+<h2 id="sec3">三、部署与优化题</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q19: 请完整描述一个模型从训练到在 SA8397P 上运行的 QNN 部署流水线。</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>完整的 <span class="key">QNN 部署流水线</span> 分为五个阶段。第一阶段，<strong>模型导出</strong>：将 PyTorch/TF 训练好的模型导出为 <span class="key">ONNX</span> 格式（推荐 opset 13+），确保所有算子有标准 ONNX 对应。第二阶段，<strong>模型转换</strong>：使用 <code>qnn-onnx-converter</code> 将 ONNX 转换为 QNN IR（生成 .cpp 模型定义和 .bin 权重文件），此时可以指定量化参数或标记自定义算子。第三阶段，<strong>量化</strong>：准备 500-1000 张代表性标定数据，使用 <code>qnn-net-run --input_list calibration_list.txt</code> 收集激活值范围，生成 <span class="key">encoding 文件</span>（记录每层的 scale 和 zero_point）。第四阶段，<strong>编译 Context Binary</strong>：使用 <code>qnn-context-binary-generator</code> 将量化后的模型编译为目标芯片的 <span class="key">Context Binary</span>（.bin），这一步会做算子调度、VTCM tiling、HMX/HVX 分配等芯片级优化，生成的二进制可直接被 DSP 加载执行。第五阶段，<strong>上板部署</strong>：将 Context Binary 推送到设备，应用通过 <code>QnnContext_createFromBinary()</code> 加载，注册输入输出 Tensor，调用 <code>QnnGraph_execute()</code> 执行推理。部署后需要用 <code>qnn-profile-viewer</code> 分析每层耗时，验证无算子 fallback。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q20: Context Binary 预编译和动态加载（JIT 编译）有什么区别？各有什么优劣？</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">Context Binary</span>（离线预编译）是在开发阶段使用 <code>qnn-context-binary-generator</code> 将模型提前编译为目标芯片的优化二进制。<span class="key">动态加载</span>（JIT 编译）是在设备端运行时从 .cpp/.bin 源文件实时编译模型图。两者的区别体现在以下方面。加载速度：Context Binary 的加载时间通常在 50-200ms，因为跳过了图编译步骤；而 JIT 编译需要 2-10 秒（取决于模型大小），因为需要在设备端做完整的算子调度和优化。<strong>优化程度</strong>：Context Binary 在编译时可以针对具体芯片型号做深度优化（如 VTCM tiling、指令排布），优化程度更高；JIT 编译受限于设备端编译器的时间预算，优化可能不够充分。<strong>灵活性</strong>：JIT 编译支持在运行时动态修改图结构（如动态 batch size），Context Binary 是固定的。<strong>磁盘占用</strong>：Context Binary 通常比源模型小 20-40%，因为去掉了冗余元数据。<span class="key">生产环境必须使用 Context Binary</span>，因为冷启动速度直接影响用户体验——座舱系统上电后需要在 3 秒内启动 DMS。JIT 编译仅用于开发调试阶段快速验证模型修改。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q21: 如何设计一条从摄像头到推理结果的零拷贝数据路径？</span>
+    <span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>零拷贝数据路径的设计目标是让图像数据从 Camera 传感器采集到 DSP 推理完成，全程不经过 CPU 内存拷贝。完整设计如下。<strong>第一步，Camera 采集</strong>：Camera HAL 通过 <span class="key">V4L2</span> 驱动采集图像，帧数据直接写入 <span class="key">ION/DMA-BUF</span> 分配的共享缓冲区。这里需要配置 V4L2 使用 <code>VIDIOC_REQBUFS</code> 的 <code>V4L2_MEMORY_DMABUF</code> 模式。<strong>第二步，预处理</strong>：如果需要 Resize/CSC（色彩空间转换），优先使用 <span class="key">GPU</span> 或 <span class="key">DPU</span>（Display Processing Unit）的硬件 scaler 完成，避免 CPU 软件处理。GPU 可以直接操作 ION buffer 的 fd，输出同样写入另一块 ION buffer。<strong>第三步，QNN 推理</strong>：将预处理后的 ION buffer fd 通过 <code>QnnMem_register()</code> 注册为 QNN 输入 Tensor。QNN 内部通过 <span class="key">FastRPC</span> 将 fd 传递给 DSP，DSP 的 <span class="key">SMMU</span>（System Memory Management Unit）将同一块物理内存映射到 DSP 地址空间。<strong>第四步，结果读取</strong>：推理结果 Tensor 同样在共享内存中，CPU 直接读取。整条路径中需要注意 <span class="key">cache coherency</span>：在 CPU 写入 buffer 后调用 <code>msync()</code> 或 DMA-BUF 的 <code>begin_cpu_access/end_cpu_access</code> ioctl 刷新缓存。此设计可以将 1080p 图像的端到端延迟降低 2-3ms。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q22: 座舱中多个 AI 模型（DMS/OMS/手势/语音）如何调度以共享 CDSP？</span>
+    <span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>多模型共享 CDSP 的调度策略需要综合考虑优先级、延迟和资源分配。首先，<span class="key">优先级分层</span>：DMS（驾驶员监测）优先级最高，因为涉及行车安全，必须保证 30fps 实时性；OMS（乘员监测）次之，15fps 即可；手势识别和语音关键词检测优先级最低。其次，<span class="key">调度模式选择</span>：QNN 支持同一 CDSP 上的多 Context 并发，但 HTP 硬件在同一时刻只能执行一个 graph。因此实际是 <span class="key">时分复用</span>（Time-Division Multiplexing）——多个模型按优先级排队执行。高优先级模型可以 <span class="key">抢占</span> 低优先级模型的执行。实现方式是通过 QNN 的 <code>QnnHtpPerfInfrastructure</code> API 设置每个 session 的优先级。<strong>具体策略</strong>：DMS 和 OMS 使用不同摄像头，帧率不同，可以错峰调度——DMS 每 33ms 提交一次推理，OMS 每 66ms 提交一次，手势识别在用户举手触发时才提交。对 VTCM 的分配可通过编译时的 <code>vtcm_mb</code> 参数控制每个模型的 VTCM 上限。另一种高级方案是将 DMS 和 OMS 合并为一个多任务模型（共享 backbone + 多头），减少模型切换开销和 backbone 重复计算。生产中建议建立调度监控，当 DMS 帧率低于 25fps 时自动降低其他模型的帧率或暂停非关键任务。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q23: 座舱 AI 系统的冷启动优化有哪些关键措施？</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">冷启动</span> 指系统上电到第一帧推理结果输出的时间。座舱场景要求 DMS 在上电后 3 秒内就绑定，因此冷启动优化至关重要。关键措施包括以下几点。第一，<span class="key">使用 Context Binary</span>：预编译的 Context Binary 跳过 JIT 编译步骤，加载时间从 5-10 秒缩短到 200ms 以内。第二，<span class="key">模型预加载</span>：在系统启动的 early init 阶段（init.rc 中）就开始加载 Context Binary 到内存，与其他系统初始化并行执行。第三，<span class="key">DSP 预热</span>：DSP 固件加载和 PD 初始化需要时间，可以在系统启动时发送一个 dummy 推理请求来触发 DSP 侧的资源分配和缓存预热。第四，<span class="key">Camera 管线并行启动</span>：Camera HAL 初始化和模型加载并行进行，不要串行等待。第五，<span class="key">减少依赖链</span>：AI 服务不应等待非必要的 Android 系统服务就绪，可以作为 Native daemon 独立启动。第六，<span class="key">持久化 DSP 内存映射</span>：使用 persistent mapping 避免每次启动重新做 SMMU 页表配置。通过以上优化，冷启动时间可以从默认的 8-10 秒缩短到 2 秒以内。建议建立冷启动时间的 CI 回归测试，防止新功能导致启动延迟退化。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q24: 请设计一个完整的 DMS 推理管线，从传感器到决策输出。</span>
+    <span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>完整的 <span class="key">DMS 推理管线</span> 包含以下阶段。<strong>采集层</strong>：IR 摄像头（940nm 近红外 + 主动补光灯）以 30fps 采集 1280x960 灰度图像，通过 MIPI CSI-2 接口输入 ISP，ISP 完成去噪和自动增益控制后输出到 <span class="key">ION buffer</span>。<strong>预处理层</strong>：GPU shader 或 DPU 硬件 scaler 将图像从 1280x960 Resize 到模型输入尺寸（如 224x224），同时做归一化（减 mean 除 std），输出写入另一块 ION buffer，全程零拷贝。<strong>推理层</strong>：QNN 从 ION buffer 读取输入，在 CDSP 上执行 Context Binary 推理。模型采用多任务架构：共享 MobileNetV2 backbone，三个并行检测头分别输出人脸关键点（68 点）、头部姿态（yaw/pitch/roll）和眼部状态（EAR 眼睛纵横比）。单帧推理耗时约 8-12ms。<strong>后处理层</strong>：在 CPU 上基于关键点计算 <span class="key">PERCLOS</span>（单位时间内眼睛闭合比例，阈值 0.4）、连续哈欠次数、头部偏转角度。后处理采用时序滤波（滑动窗口 3 秒）消除瞬间误判。<strong>决策层</strong>：状态机驱动的决策引擎，综合 PERCLOS、哈欠频率、头部偏转等多维指标，输出疲劳/分心等级（L0-L3）。L2 触发语音提醒，L3 触发仪表盘红色警告并上报车身控制器。整条管线端到端延迟目标：33ms 以内（传感器到决策输出）。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q25: 如何对端侧推理进行延迟 Profiling？常见瓶颈有哪些？</span>
+    <span class="diff diff-easy">初级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>QNN 提供了内建的 <span class="key">Profiling 机制</span>，通过在创建 context 时设置 <code>QnnProfile_create()</code>，推理完成后调用 <code>QnnProfile_getEvents()</code> 可以获取每层的执行时间、排队时间和数据传输时间。更方便的方式是使用 <code>qnn-net-run</code> 命令行工具加 <code>--profiling_level detailed</code> 参数运行模型，生成 JSON 格式的 profiling 报告，再用 <code>qnn-profile-viewer</code> 可视化分析。常见瓶颈包括以下几类：第一，<span class="key">算子 fallback</span>——某些算子不被 HTP 支持（如动态 shape 算子、特殊激活函数），回退到 CPU 执行，单层延迟可能从微秒级增加到毫秒级。第二，<span class="key">数据搬运</span>——输入输出 Tensor 如果没有使用 ION 共享内存，每帧需要经 FastRPC 拷贝数据，1080p 图像约增加 1ms。第三，<span class="key">VTCM 溢出</span>——大 feature map 层（如高分辨率的早期卷积层）无法完整放入 VTCM，导致频繁的 DDR 访问。第四，<span class="key">量化/反量化开销</span>——混合精度模型中 INT8 和 INT16 层之间的精度转换会引入额外计算。定位瓶颈后针对性优化：fallback 算子用等效的 HTP 支持算子替换，数据搬运改用零拷贝，VTCM 溢出层做 tiling 优化或降低 feature map 分辨率。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q26: FastRPC 调用超时如何排查和解决？</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">FastRPC 超时</span> 是座舱 AI 开发中常见的问题，表现为推理调用阻塞数秒后返回错误码 <code>AEE_EEXPIRED</code> 或应用直接 ANR。排查步骤如下。第一步，<strong>检查 DSP 状态</strong>：通过 <code>cat /sys/kernel/debug/fastrpc/state</code> 查看 FastRPC 通道状态，确认 CDSP 是否正常响应。如果显示 "not ready"，可能是 DSP 固件未加载或已 SSR。第二步，<strong>查看 DSP 日志</strong>：使用 <code>adb shell cat /d/ipc_logging/FastRPC/log</code> 或 <code>logcat -s adsprpc</code> 查看 FastRPC 驱动日志，关注 "invoke failed" 和 "timeout" 相关信息。第三步，<strong>检查 PD 签名</strong>：如果是首次部署，可能因为 DSP 侧 PD 的 <span class="key">签名校验失败</span> 导致库加载失败。User PD 中的 .so 必须经过 Qualcomm <span class="key">testsig</span>（开发阶段）或正式签名。第四步，<strong>检查内存映射</strong>：ION buffer 的 fd 必须通过 <code>remote_register_buf()</code> 注册到 FastRPC，否则 DSP 无法访问该内存。第五步，<strong>检查 DSP 负载</strong>：如果 CDSP 被其他推理任务打满（利用率 >95%），新请求会排队超时。可通过 <code>cat /sys/class/devfreq/soc:qcom,cdsp-cdsp-l3-lat/cur_freq</code> 查看 CDSP 频率和负载。解决方案：对签名问题安装 testsig；对负载问题降低并发模型数或提升 CDSP 频率；对内存映射问题确保所有共享 buffer 正确注册。</p>
+  </div>
+</div>
+
+<!-- ========================================================== -->
+<!-- Section 4: Agent 与大模型题 (8 questions) -->
+<!-- ========================================================== -->
+<h2 id="sec4">四、Agent 与大模型题</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q27: 如何为座舱选择合适的端侧大语言模型？评估标准是什么？</span>
+    <span class="diff diff-easy">初级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>座舱端侧 <span class="key">LLM</span> 的选择受限于内存、算力和延迟三个硬约束。评估标准如下。第一，<span class="key">模型大小</span>：SA8397P 可用内存通常在 4-8GB（与其他应用共享），因此模型参数量需控制在 1B-4B 级别，INT4 量化后权重大小在 0.5-2.5GB。首选模型为 <span class="key">Qwen3-Omni-4B</span>——这是一个 4B 参数的多模态模型，原生支持文本、图像、音频、视频输入及音频输出，INT4 量化后约 2.5GB，可以用单一模型替代传统的 ASR + LLM + TTS 三段式管线，大幅简化系统架构。备选模型有 <span class="key">Phi-3-mini</span>（3.8B，纯文本）。第二，<span class="key">TTFT</span>（Time To First Token）：用户发出语音指令后，首个 token 的生成延迟应低于 600ms，否则体验卡顿。这主要取决于 prefill 阶段的 KV Cache 计算速度。第三，<span class="key">生成速度</span>：decode 阶段的吞吐需达到 ~10 tokens/s 以上，以匹配中文语音播报速度。Qwen3-Omni-4B 在 SA8397P 上 INT4 推理可达约 10 tok/s。第四，<span class="key">多模态能力</span>：Qwen3-Omni-4B 原生支持音频输入/输出，可直接接收麦克风音频流并生成语音回复，省去独立 ASR 和 TTS 模型的部署和延迟开销。第五，<span class="key">Function Calling 能力</span>：模型需要支持结构化的工具调用输出，能将自然语言指令转换为 API 调用（如"打开空调"、"导航到最近的加油站"）。建议的技术路线是选择 Qwen3-Omni-4B 做 INT4 量化（GPTQ/AWQ），配合 QNN 的 <span class="key">transformers 加速后端</span> 在 CDSP 上运行 attention 计算、GPU 上运行 embedding 层。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q28: 端侧 Function Calling 如何设计？与云端方案有什么区别？</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">Function Calling</span> 是让 LLM 在生成文本时输出结构化的工具调用请求（函数名 + 参数），由外部系统执行后将结果返回给 LLM。端侧实现与云端有以下关键区别。第一，<strong>工具集规模</strong>：云端 LLM（如 GPT-4）可以处理数百个工具定义，但端侧 1-3B 模型的 context window 有限（通常 2048-4096 tokens），工具描述需要精简。建议将座舱工具分为 <span class="key">核心工具集</span>（空调、导航、音乐、电话，约 10-15 个）和 <span class="key">扩展工具集</span>，每次对话只注入用户意图相关的子集。第二，<strong>输出格式</strong>：端侧模型的 JSON 生成能力可能不如大模型稳定，建议使用 <span class="key">constrained decoding</span>（约束解码）——在 decode 阶段通过 logits mask 强制输出合法的 JSON 结构，或使用更简单的格式如 <code>TOOL: func_name(arg1=val1, arg2=val2)</code>。第三，<strong>延迟要求</strong>：端侧 Function Calling 需要在 1 秒内完成意图识别和参数提取，不能像云端那样做多轮 chain-of-thought。第四，<strong>fallback 机制</strong>：端侧模型解析失败时应 fallback 到基于规则的 NLU（正则匹配 + 槽位填充），保证基本功能可用。设计上建议采用 <span class="key">两阶段架构</span>：第一阶段用小型意图分类器（BERT-tiny）做快速意图路由，第二阶段仅在需要复杂理解时调用 LLM 做 Function Calling。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q29: 端侧 Agent 的 Tool Use 需要哪些安全沙箱级别？如何设计？</span>
+    <span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>端侧 Agent 的 <span class="key">Tool Use</span> 安全沙箱需要分层设计，因为不同工具的风险等级差异巨大。建议设计三个安全级别。<span class="key">Level 0（信息查询）</span>：只读操作，如查询天气、查询车辆状态、播放音乐。这类工具无需额外授权，LLM 可以自由调用。<span class="key">Level 1（环境控制）</span>：改变座舱环境的操作，如调节空调温度、打开车窗、调整座椅。这类工具需要 <span class="key">参数范围校验</span>——空调温度限制在 16-30 度，车窗开度不超过设定值（高速行驶时禁止全开）。校验由工具执行器（而非 LLM）在调用前完成。<span class="key">Level 2（安全关键）</span>：涉及行车安全的操作，如解锁车门、启动发动机、修改导航目的地（可能影响行驶路线）。这类工具必须经过 <span class="key">用户确认</span>（语音二次确认或物理按键确认），且在某些行驶状态下完全禁止（如行驶中不允许解锁车门）。实现上，每个工具注册时声明其安全级别，Agent 框架在调用前检查当前车辆状态（车速、挡位、门锁状态）和工具安全级别，决定是否执行、是否需要确认、或是否拒绝。还需要 <span class="key">速率限制</span>——防止 LLM 幻觉导致工具被高频重复调用（如 1 秒内连续调用 10 次空调调节）。所有 Tool Use 操作需记录审计日志，包含时间戳、调用者、参数和执行结果。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q30: 端侧 LLM 的 KV Cache 管理有哪些策略？内存不够时怎么办？</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">KV Cache</span> 存储了 Transformer 注意力层中每个 token 的 Key 和 Value 向量，避免重复计算。对于一个 4B 参数的多模态模型（如 Qwen3-Omni-4B），每个 token 的 KV Cache 约占 1-2MB（取决于层数、头数和多模态 token 开销），2048 tokens 的 context window 需要约 2-3GB KV Cache，这在端侧内存受限环境下压力巨大。管理策略包括：第一，<span class="key">滑动窗口注意力</span>（Sliding Window Attention）：只保留最近 N 个 token 的 KV Cache（如 512），超出窗口的旧 token 的 KV 被丢弃。这牺牲了长距离依赖但大幅降低内存占用。第二，<span class="key">KV Cache 量化</span>：将 KV Cache 从 FP16 量化到 INT8 甚至 INT4，内存减半或减至四分之一，对生成质量影响可控（perplexity 增加 <1%）。第三，<span class="key">PagedAttention</span>：借鉴虚拟内存的分页思想，将 KV Cache 分为固定大小的 page（如 16 tokens/page），按需分配和释放，避免内存碎片。第四，<span class="key">重要性驱动的淘汰</span>：基于 attention score 统计识别"不重要"的历史 token，优先淘汰其 KV Cache。座舱场景中对话通常较短（5-10 轮），建议组合使用滑动窗口（窗口大小 1024）+ KV Cache INT8 量化，可以将内存占用控制在 800MB 以内。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q31: 如何优化端侧 LLM 的 TTFT（首 Token 延迟）？</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">TTFT</span>（Time To First Token）由 prefill 阶段决定——模型需要处理完整个输入 prompt（包括系统提示词、工具描述、用户输入）后才能开始生成第一个 token。优化策略包括以下几个层面。<strong>Prompt 层面</strong>：第一，<span class="key">缩短 system prompt</span>——将冗长的工具描述压缩，只保留当前意图相关的工具子集；第二，<span class="key">Prompt Cache</span>——system prompt 部分在多轮对话间不变，其 KV Cache 可以预计算并缓存到内存中，下次对话直接复用，跳过 system prompt 的 prefill。<strong>计算层面</strong>：第一，<span class="key">分块 prefill</span>（Chunked Prefill）——将长 prompt 分为多个 chunk 逐步处理，每处理完一个 chunk 就可以响应其他高优先级任务（如 DMS），降低系统调度抖动；第二，利用 <span class="key">GPU + DSP 异构计算</span>——embedding 层和最终的 LM head 在 GPU 上执行，attention + FFN 在 DSP 上执行，两者 pipeline 并行。<strong>模型层面</strong>：选择 <span class="key">GQA</span>（Grouped-Query Attention）架构的模型（如 Qwen3-Omni-4B 使用 GQA），其 KV head 数量少于 Q head，prefill 计算量更小。通过以上优化组合，可以将 4B 模型在 SA8397P 上的 TTFT 从 3 秒优化到 400-600ms。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q32: Speculative Decoding（投机解码）的原理是什么？端侧能用吗？</span>
+    <span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">Speculative Decoding</span>（投机解码）的核心思想是用一个小而快的 <span class="key">draft 模型</span> 先快速生成 K 个候选 token（如 K=4），然后用大的 <span class="key">target 模型</span> 一次性并行验证这 K 个 token 的概率分布是否可接受。如果 draft 模型的预测被 target 模型接受（通过 rejection sampling 判断），则一次 forward pass 就确认了 K 个 token；如果某个位置被拒绝，从该位置重新采样。理论上，当 draft 模型的 acceptance rate 较高时（>70%），可以将 decode 速度提升 2-3 倍，且 <span class="key">输出分布与 target 模型完全一致</span>——不损失任何质量。端侧能否使用取决于条件：需要有一个与 target 模型分布匹配度高的 draft 模型。方案一，<span class="key">自回归 draft</span>：使用同架构但更小的模型（如 target 是 1.5B，draft 用 0.5B），但需要同时在内存中加载两个模型，内存压力大。方案二，<span class="key">Self-Speculative Decoding</span>：target 模型自身的浅层输出（跳过后面的层）作为 draft prediction，只需一个模型。方案三，<span class="key">Medusa/EAGLE 头</span>：在 target 模型最后一层后面接多个轻量预测头，每个头并行预测下一个 token，验证时复用 target 模型的 KV Cache。端侧推荐方案三，因为额外内存开销仅为几个小的线性层（约 10-50MB），且不需要加载第二个模型。但实现复杂度较高，需要修改推理引擎的 decode 循环。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q33: 端云混合推理架构如何设计？如何决定哪些请求走端侧、哪些走云端？</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">端云混合推理</span> 架构的核心是让简单请求在端侧快速处理，复杂请求上传云端处理，兼顾延迟和能力。路由决策可以基于以下维度。第一，<span class="key">意图复杂度</span>：单步指令（"打开空调"、"播放音乐"）由端侧 LLM 处理，多步推理（"帮我规划从北京到上海的自驾路线，途经三个充电站"）路由到云端。可以训练一个轻量分类器（BERT-tiny）做复杂度预测。第二，<span class="key">网络状态</span>：有 4G/5G 连接时优先使用云端以获得更好的响应质量；网络不可用时（隧道、地下车库）全部走端侧，保证功能可用。第三，<span class="key">隐私等级</span>：涉及用户隐私的请求（通话内容、行程历史）强制在端侧处理，不上传云端。架构设计上建议采用 <span class="key">Router + Endpoint</span> 模式：Router 接收用户请求，根据上述规则决定路由；端侧 Endpoint 运行 1.5B 量化模型；云端 Endpoint 调用 70B+ 级别模型 API。两个 Endpoint 共享统一的 Function Calling 协议和工具集定义，使上层应用无感知切换。还需要 <span class="key">降级策略</span>：云端超时 3 秒无响应时自动降级到端侧；端侧 DSP 被 DMS 占满时将 LLM 请求排队延迟处理或上传云端。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q34: 座舱端侧 Agent 的 Memory（记忆系统）如何设计？</span>
+    <span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>座舱 Agent 的 <span class="key">记忆系统</span> 需要分为三个层级来设计。<span class="key">短期记忆</span>（Working Memory）：当前对话的上下文，存储在 <span class="key">KV Cache</span> 中，随对话结束而清除。受端侧 context window 限制（2048-4096 tokens），需要在多轮对话时做摘要压缩——每 5 轮对话用 LLM 生成一句话摘要替代原始对话历史，保持 context 不溢出。<span class="key">中期记忆</span>（Episodic Memory）：记录用户的偏好和习惯模式，如常用导航目的地、空调偏好温度、音乐类型。存储在本地 <span class="key">SQLite</span> 数据库中，以键值对或结构化记录形式保存。Agent 在处理请求时通过 <span class="key">检索增强</span>（RAG）从中期记忆中提取相关偏好注入 prompt。例如用户说"导航回家"，Agent 从记忆中检索到家庭地址直接填入。<span class="key">长期记忆</span>（Semantic Memory）：座舱领域知识库，包含车辆功能说明、道路规则等，用 <span class="key">向量数据库</span>（如 FAISS 本地部署）存储。查询时先将用户输入向量化（用小型 embedding 模型如 BGE-small），检索 top-3 相关知识片段注入 context。三层记忆的存储介质不同：短期在 DRAM（KV Cache），中期在 Flash/eMMC（SQLite），长期在 Flash/eMMC（向量索引）。需要特别注意 <span class="key">隐私保护</span>：中期记忆中的用户数据必须加密存储，且在车辆转让时支持一键清除。</p>
+  </div>
+</div>
+
+<!-- ========================================================== -->
+<!-- Section 5: 综合系统设计题 (4 questions, all 高级) -->
+<!-- ========================================================== -->
+<h2 id="sec5">五、综合系统设计题</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q35: 请设计一个完整的 DMS 系统，从传感器选型到量产部署。</span>
+    <span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>完整的 <span class="key">DMS 系统设计</span> 需要覆盖以下七个维度。<strong>传感器选型</strong>：选择 940nm 近红外摄像头（分辨率 1280x960，帧率 30fps），配合主动 IR LED 补光灯（功率 200mW），保证全天候（白天强光、夜间全黑）的人脸成像质量。镜头选择广角（FOV 80-100 度）以覆盖不同体型驾驶员。<strong>数据采集与标注</strong>：收集覆盖不同种族、年龄、佩戴物（眼镜/口罩/帽子）的驾驶员数据，标注人脸关键点 68 点、眼部状态（睁/闭）、嘴部状态（张/闭）、头部姿态三轴角度。数据量目标：20 万张以上，其中疲劳/分心样本占比不低于 30%（通过增强和合成补充）。<strong>模型设计</strong>：采用多任务学习架构，<span class="key">MobileNetV2 backbone</span> + 三个并行头（关键点回归头、分类头、姿态回归头）。使用 <span class="key">知识蒸馏</span>（Teacher: HRNet-W48）+ <span class="key">QAT</span> 训练，目标：关键点 NME < 3%、闭眼分类 Recall > 97%。<strong>部署优化</strong>：QNN Context Binary 部署在 CDSP，零拷贝数据路径，单帧推理 < 10ms。<strong>后处理与决策</strong>：滑动窗口时序滤波，PERCLOS 阈值 0.4，连续哈欠 3 次触发 L2 警告，持续偏头 > 3 秒触发 L2 分心警告。<strong>系统可靠性</strong>：实现 SSR 感知恢复（恢复时间 < 1 秒），watchdog 监控推理线程，crash 自动重启。<strong>量产验证</strong>：通过 Euro NCAP 2025 DMS 评估规程测试，在标准测试场景（夜间、戴墨镜、光照变化）下满足检测率要求。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q36: 设计一个支持多模态输入的座舱 Agent 架构。</span>
+    <span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>多模态座舱 Agent 需要处理 <span class="key">语音</span>、<span class="key">手势</span>、<span class="key">视觉</span>（注视方向）和 <span class="key">触屏</span> 四种输入模态。架构设计如下。<strong>输入层</strong>：每种模态有独立的感知模块——语音通过 <span class="key">ASR</span> 模型（如 Whisper-small 端侧部署）转为文本；手势通过手势识别模型输出离散手势 ID（挥手、指向、OK 等）；视觉通过 DMS 模型输出驾驶员注视区域（仪表盘/中控/后视镜/前方）；触屏通过 Android InputManager 获取触摸事件。<strong>融合层</strong>：采用 <span class="key">早期融合 + 晚期融合</span> 混合策略。早期融合：将 ASR 文本和手势 ID 拼接为统一的文本序列输入 LLM（如 "用户说:导航到公司 | 手势:指向中控屏 | 注视:中控区域"）。晚期融合：对于需要视觉理解的场景（如"这是什么建筑"），将摄像头图像通过 <span class="key">视觉编码器</span>（MobileViT）提取特征向量，作为 LLM 的 visual token 输入。<strong>推理层</strong>：LLM 基于融合后的多模态输入做意图理解和 Function Calling。<strong>冲突消解</strong>：当多模态输入冲突时（如语音说"关闭空调"但手势指向音乐界面），优先级规则为语音 > 手势 > 注视 > 触屏（语音是最明确的意图表达）。<strong>上下文感知</strong>：Agent 根据当前驾驶状态调整模态权重——高速驾驶时降低触屏交互权重、强化语音交互，停车时开放全部模态。整个架构需要一个 <span class="key">Session Manager</span> 维护多轮对话状态和模态历史，确保跨模态的连续交互体验。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q37: 设计座舱多模型调度系统，同时管理 DMS、OMS、手势识别和语音模型。</span>
+    <span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>多模型调度系统需要在有限的 CDSP 和 GPU 资源上并行运行 4+ 个模型，设计要点如下。<strong>资源清单</strong>：SA8397P 有 1 个 CDSP（含 HTP）、1 个 GPU（Adreno）和 8 核 CPU。模型到硬件的映射策略：<span class="key">DMS 和 OMS</span> 的 CNN 推理在 CDSP（HTP）上执行；<span class="key">手势识别</span> 使用较小模型也在 CDSP 上；<span class="key">Qwen3-Omni-4B</span>（多模态 LLM，原生支持音频输入/输出，可替代独立的 ASR + LLM + TTS 管线）的 attention 在 CDSP、embedding 在 GPU 上；若仍需独立语音关键词检测则在 SDSP 或 CPU 上运行。<strong>调度算法</strong>：采用 <span class="key">优先级抢占式调度</span>（Priority Preemptive Scheduling）。优先级定义：DMS (P0, 安全关键) > OMS (P1) > 手势 (P2) > LLM (P3) > 其他 (P4)。P0 任务可以抢占 P3/P4 任务的 CDSP 执行。<strong>时间片管理</strong>：一帧 33ms 的时间预算分配：DMS 10ms + OMS 8ms + 手势 5ms + buffer 10ms。LLM 推理在 DMS/OMS 的间隙（buffer 时间）和低帧率时段执行。<strong>动态降级</strong>：当 CDSP 利用率超过 85% 时，自动执行降级策略——降低 OMS 帧率（30fps->15fps）、暂停手势识别、延迟 LLM 推理。<strong>监控与保护</strong>：每个模型设置执行时间 <span class="key">watchdog</span>，超过预期时间 2 倍则强制终止并记录日志。CDSP 温度超过 85 度时触发 <span class="key">热保护</span>——降频运行或暂停非安全模型。<strong>共享优化</strong>：DMS 和 OMS 共享 MobileNetV2 backbone（多任务模型），减少 40% 的重复计算。整个调度系统作为独立的 Native daemon 运行，通过 <span class="key">Binder</span> 接口向上层应用暴露推理结果。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q38: 设计 DSP SSR 故障恢复策略，确保生产环境中 DMS 功能持续可用。</span>
+    <span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>生产级 <span class="key">SSR 恢复策略</span> 需要覆盖检测、恢复、降级和预防四个方面。<strong>故障检测</strong>：主动检测——AI 推理线程设置 <span class="key">看门狗</span>，如果连续 3 帧未收到推理结果（超过 100ms），判定为 DSP 异常；被动检测——监听内核 <code>subsys_notif</code> 事件（通过 <code>/dev/subsys_cdsp</code> 节点的 poll），接收 SSR 发生的 BEFORE_SHUTDOWN 和 AFTER_POWERUP 通知。<strong>恢复流程</strong>：分为三个阶段。Phase 1（0-200ms）：收到 AFTER_POWERUP 通知后，立即释放旧的 QNN Context 和 Tensor 资源（此时 DSP 侧的资源已丢失，CPU 侧需要清理残留引用）。Phase 2（200-500ms）：重新初始化 QNN Backend 和 Device，创建新的 Context，加载预缓存在内存中的 <span class="key">Context Binary</span>（避免从 Flash 重新读取，节省 200ms）。Phase 3（500-800ms）：重新注册 ION buffer 为输入 Tensor，提交第一帧推理请求验证恢复成功。总恢复时间目标：<span class="key">800ms 以内</span>。<strong>降级策略</strong>：在 DSP 恢复期间（800ms 窗口内），DMS 切换到 <span class="key">CPU fallback 模式</span>——在 CPU 上运行一个极轻量的人脸检测模型（仅检测人脸有/无），以 10fps 帧率提供最基本的驾驶员存在检测。如果连续 SSR 次数超过 3 次/分钟，判定为硬件故障，上报诊断码（DTC）并通知仪表盘显示"DMS 功能受限"。<strong>预防措施</strong>：在 User PD 中运行推理（而非 Static PD），隔离用户模型的崩溃影响；对输入数据做边界检查防止 NaN/Inf 传入 DSP；定期监控 DSP 温度和频率，高温时主动降负载。所有 SSR 事件需写入持久化日志（包含 crashdump 路径、恢复耗时、触发原因），用于 OTA 后的远程诊断分析。</p>
+  </div>
+</div>
+
+<!-- ========================================================== -->
+<!-- Section 6: 系统设计答题框架 -->
+<!-- ========================================================== -->
+<h2 id="sec6">六、系统设计答题框架</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q39: 面试中遇到系统设计题，应该用怎样的结构化思路作答？</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>推荐使用 <span class="key">RASCEF</span> 六步法，该框架特别适合端侧 AI 系统设计题：</p>
+    <p><strong>R — Requirements（需求澄清）</strong>：用 2-3 分钟向面试官确认约束条件。关键问题包括：目标平台算力和内存（如 SA8397P ~70 TOPS / 16GB）、延迟要求（首字延迟 &lt;1s？端到端 &lt;200ms？）、并发场景（同时运行几个模型）、离线/在线要求、安全等级（ASIL-B？）。<strong>不要跳过这一步</strong>——端侧系统的设计决策高度依赖硬件约束，和云端系统设计有本质区别。</p>
+    <p><strong>A — Architecture（顶层架构）</strong>：画一张 3-5 个模块的架构图。对于端侧 AI 系统，典型模块包括：数据采集层（Camera/Mic/CAN）→ 预处理层（ISP/音频编码）→ 推理引擎层（模型加载/调度/执行）→ 后处理与决策层（Agent/规则引擎）→ 输出层（HMI/CAN 信号/语音合成）。每个模块用一句话说明职责，先让面试官看到全局。</p>
+    <p><strong>S — Scale & Storage（规模与存储）</strong>：在端侧场景中，"规模"不是 QPS 而是 <span class="key">资源预算</span>。计算关键数据：模型大小（INT4 量化后 ~2.5GB）、KV Cache 占用（Qwen3-4B: 32层×2×32×128×2B×seq_len）、DDR 带宽分配（总带宽 ~68 GB/s 需在 CPU/GPU/DSP/ISP/DPU 间分配）。存储方面需考虑 Flash 读取速度对模型加载时间的影响。</p>
+    <p><strong>C — Core Algorithm（核心算法与模型选型）</strong>：阐述技术选型的依据。例如：为什么选 4B 而非 7B 模型（内存和延迟约束）、量化方案选择（INT4 vs INT8 的精度/速度权衡）、注意力优化方案（FlashAttention 在 VTCM 上的 tiling 策略）、是否需要 LoRA 做场景适配。</p>
+    <p><strong>E — Engineering Details（工程细节）</strong>：深入 1-2 个关键子系统展开。这是展示深度的环节——可以讲多模型调度的优先级抢占机制、Continuous Batching 在多区域请求下的实现、KV Cache 的 Page 管理策略、DSP SSR 故障恢复流程等。用具体的数字和流程来支撑。</p>
+    <p><strong>F — Failure Handling（容错与降级）</strong>：端侧系统必须讨论的环节。涵盖：模型推理超时的降级策略、DSP 崩溃后的恢复流程、离线场景下的功能退化方案、OTA 更新失败的回滚机制。展示你对生产环境复杂性的理解。</p>
+    <p>整体时间分配建议：R（3min）→ A（5min）→ S（5min）→ C（8min）→ E（12min）→ F（5min），总计约 38 分钟，留 2 分钟给面试官追问。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q40: 用 RASCEF 框架回答：设计一个车载端侧多模态大模型交互系统。</span>
+    <span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><strong>R — 需求澄清</strong>：平台为 SA8397P（CDSP ~70 TOPS INT8、16GB LPDDR5x、~68 GB/s 带宽）；需支持语音对话、图像理解（车内外摄像头）、主动场景推荐；首字延迟 &lt;1s，decode 速率 &gt;8 tok/s；同时运行 DMS/OMS 等安全模型不可中断；支持离线使用；需满足 PIPL 和《汽车数据安全管理若干规定》。</p>
+    <p><strong>A — 顶层架构</strong>：五层设计——(1) <span class="key">感知层</span>：4 路摄像头 + 麦克风阵列 + CAN 总线，ISP 硬件完成 RAW→YUV 转换；(2) <span class="key">预处理层</span>：图像 resize/crop 在 GPU 完成，音频 VAD 在 CPU 完成；(3) <span class="key">推理引擎层</span>：ModelScheduler 管理模型生命周期，优先级调度 DMS(P0)/OMS(P1)/LLM(P3)，Qwen3-Omni-4B INT4 部署在 CDSP 上，使用 Continuous Batching 服务多区域请求；(4) <span class="key">Agent 决策层</span>：SystemAgent 加载场景 Agent 插件（libagent_group.so），通过 MCP 协议调用 Function Calling 完成导航/空调/媒体控制；(5) <span class="key">输出层</span>：流式 TTS 合成（Qwen3-Omni 原生支持音频输出），HMI 渲染通过 Fusion DataTransport 分发到各屏幕。</p>
+    <p><strong>S — 规模与存储</strong>：Qwen3-Omni-4B INT4 权重 ~2.5GB；KV Cache 预算 ~2GB（支持 2048 token 上下文）；DMS/OMS 模型共 ~200MB；系统总内存占用控制在 6GB 以内，留 10GB 给 Android 系统和 HMI。DDR 带宽分析：decode 阶段 LLM 需 ~5 GB/s（权重读取），DMS 30fps 需 ~3 GB/s，ISP ~8 GB/s，DPU ~6 GB/s，总计 ~22 GB/s，低于 68 GB/s 上限。模型从 Flash 冷加载约 8-10s，可通过预加载到 DDR 实现亚秒级切换。</p>
+    <p><strong>C — 核心算法</strong>：选择 Qwen3-Omni-4B 因为它原生支持音频输入和输出，单一模型替代传统的 ASR + LLM + TTS 三段管线，减少串联延迟和内存开销。量化方案采用 GPTQ INT4 per-group 量化，在精度损失可控的前提下将权重压缩至 2.5GB。注意力计算采用 <span class="key">FlashAttention</span>——将 Q/K/V 分块加载到 VTCM（~4MB），分 tile 计算 softmax 后写回 DDR，避免 O(n²) 的中间矩阵 materialization。长上下文场景下辅以 Sliding Window Attention 将 KV Cache 增长控制在常数级别。</p>
+    <p><strong>E — 工程细节（展开 Continuous Batching）</strong>：车内多区域（主驾语音 + 副驾文字 + 后排娱乐）的请求通过 MsgDeliver 进入统一队列。调度器以 <span class="key">iteration 粒度</span>（而非 request 粒度）管理 batch——每个 decode step 完成后，检查是否有新请求进入 prefill、是否有请求完成 EOS。新请求的 prefill 与已有请求的 decode 可在同一 batch 中并行（prefill 在 HMX 上计算密集，decode 在 DDR 带宽受限，二者瓶颈不同，可部分重叠）。资源隔离：每个请求独立管理 KV Cache pages（类 vLLM 的 PagedAttention），request 完成后立即释放对应 pages。优先级策略：主驾语音请求标记 P1 可插队，后排娱乐请求标记 P3 在 CDSP 繁忙时排队等待。</p>
+    <p><strong>F — 容错与降级</strong>：(1) LLM 推理超时（&gt;5s 无输出）——自动降级到本地规则引擎，返回预设回复"抱歉，请稍后再试"；(2) DSP SSR 崩溃——800ms 内完成 Context 重建，期间 DMS 切换到 CPU fallback 的轻量人脸检测模型；(3) 离线场景——所有推理在本地完成，禁用需要网络的 Function Calling（如在线导航），切换到离线地图 API；(4) OTA 模型更新——A/B 分区策略，新模型写入 B 分区，验证推理正确后才切换，失败自动回滚到 A 分区；(5) 热保护——DSP 温度 &gt;85°C 时降低 LLM decode 频率，&gt;95°C 时暂停 LLM 仅保留 DMS。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q41: 系统设计题中如何做好「估算」环节？以 LLM 推理资源估算为例说明。</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>估算是系统设计面试中区分候选人深度的关键环节。对于端侧 LLM 推理，需要掌握以下 <span class="key">三类核心估算</span>：</p>
+    <p><strong>1. 内存估算</strong>：模型权重 = 参数量 × 量化位宽 / 8。Qwen3-4B INT4 = 4×10⁹ × 4 / 8 = 2GB（实际含 embedding 和 overhead 约 2.5GB）。KV Cache = 2 × num_layers × num_kv_heads × head_dim × 2B × seq_len。以 Qwen3-4B（32 层、32 个 KV head、128 维）为例：单 token KV = 2×32×32×128×2 = 512KB，2048 token 上下文 = 1GB。总推理内存 ≈ 权重 + KV Cache + 激活值 ≈ 2.5 + 1.0 + 0.5 = 4GB。</p>
+    <p><strong>2. 延迟估算</strong>：<span class="key">Prefill 延迟</span> = 输入 token 数 × 每 token 计算量 / 算力。每 token FLOPs ≈ 2 × 参数量 = 8 GFLOPs（INT4 算力需折算）。100 token prefill 在 70 TOPS 上 ≈ 100 × 8G / 70T ≈ 11ms（compute-bound，实际受利用率影响约 50-100ms）。<span class="key">Decode 延迟</span> = 权重加载时间 = 模型大小 / 有效带宽。2.5GB / 50 GB/s（有效带宽约为理论带宽 68 GB/s 的 70-75%）= 50ms/token → ~20 tok/s（理论上限），实际受 attention 计算和调度开销影响约 10-15 tok/s。</p>
+    <p><strong>3. 带宽估算</strong>：DDR 总带宽 68 GB/s 需在多个硬件单元间分配。典型负载下：ISP（4 路 camera 30fps）~8 GB/s、DPU（多屏渲染）~6 GB/s、GPU ~4 GB/s、CPU ~3 GB/s，留给 DSP 做 LLM 推理的有效带宽约 45-50 GB/s。面试中可以先算理论值，再打 7 折给出工程预估——这种「先精确后保守」的习惯能展示工程经验。</p>
+    <p><strong>估算技巧</strong>：(1) 数字不需要精确到个位，数量级正确即可；(2) 随身记住几个锚点数字（4B 模型 INT4 ≈ 2.5GB、DDR5 ≈ 68 GB/s、SA8397P ≈ 70 TOPS）然后推导；(3) 给出结论后主动说明假设条件和误差范围，比精确但无法解释的数字更有说服力。</p>
+  </div>
+</div>
+
+<!-- ========================================================== -->
+<!-- Section 7: 项目经验包装 -->
+<!-- ========================================================== -->
+<h2 id="sec7">七、项目经验包装</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q42: 如何在面试中介绍「端侧 AI Agent 框架」项目经验？</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>使用 <span class="key">STAR+I</span> 结构（Situation-Task-Action-Result + Impact）来组织，确保 2-3 分钟内讲完核心信息：</p>
+    <p><strong>S — 背景</strong>：「我在某车企智能座舱团队负责端侧 AI Agent 框架的开发。目标平台是 Qualcomm SA8397P，需要在车载环境下运行多模态大语言模型，支持语音交互、图像理解和智能场景推荐。」——交代行业、平台和核心目标，让面试官快速建立上下文。</p>
+    <p><strong>T — 挑战</strong>：「核心挑战有三个：第一，4B 参数的多模态模型需要在仅 ~70 TOPS 算力和 16GB 内存的边缘设备上达到可用的推理速度；第二，模型推理不能影响 DMS 等安全关键功能的实时性；第三，需要支持多分区乘客同时使用且座舱处于离线状态也要可用。」——用数字量化挑战难度。</p>
+    <p><strong>A — 行动</strong>：「我主导设计并实现了 aadkcore 框架，这是一个 C++17 的端侧 AI Agent 核心库。具体做了：(1) 实现了 ModelScheduler 模块，支持优先级抢占式多模型调度，DMS/OMS 等安全模型以 P0 优先级执行，LLM 推理在间隙时段运行；(2) 基于 Continuous Batching 思想实现了 iteration 级别的请求调度，支持多区域请求并发；(3) 设计了 Agent 插件化架构，场景 Agent 以动态库（libagent_group.so）形式加载，通过 MCP 协议暴露 Function Calling 能力；(4) 适配了三种部署模式——Linux systemd 服务、Android NDK 可执行文件和 APK SO 集成，覆盖开发到量产全流程。」——展示技术深度和系统性。</p>
+    <p><strong>R — 成果</strong>：用可量化的指标。例如「框架上线后 LLM 首字延迟稳定在 800ms 以内，decode 速率 10+ tok/s，DMS 帧率始终保持 30fps 不受 LLM 推理影响。多区域并发场景下 throughput 相比串行处理提升 60%。」</p>
+    <p><strong>I — 影响</strong>：「该框架已在 XX 车型上量产部署，后续扩展支持了 LoRA 热更新能力，实现不停机的模型迭代。」——体现项目的业务价值和可持续性。</p>
+    <p><strong>准备建议</strong>：提前准备好 3 个可以深挖的技术点（如 Continuous Batching 实现细节、DSP SSR 恢复策略、多模型调度算法），面试官追问时能流畅展开。每个技术点准备一个「遇到的具体问题 → 分析过程 → 解决方案 → 验证方法」的小故事。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q43: 如何包装「模型量化与部署优化」相关的项目经验？</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><strong>项目描述模板</strong>：「负责将多模态大模型从训练框架部署到 Qualcomm SA8397P 车载芯片，覆盖 ONNX 导出、QNN 编译、精度调优和性能优化全链路。」</p>
+    <p><strong>可深挖的技术亮点</strong>：</p>
+    <p>(1) <span class="key">ONNX→QNN 转换陷阱处理</span>：「PyTorch 导出 ONNX 时遇到动态 shape 问题——KV Cache 的 seq_len 维度是动态的，但 QNN 后端只支持固定 shape。解决方案是将 KV Cache 按最大长度预分配，通过 mask 控制有效长度，同时将 NCHW 布局转换为 QNN 偏好的 NHWC 避免额外 transpose 开销。」</p>
+    <p>(2) <span class="key">量化精度调优</span>：「INT4 量化后发现模型在长对话场景下出现语义漂移。通过逐层输出对比定位到第 28-31 层的 FFN 模块对量化最敏感。解决方案是将这 4 层的 FFN 保持 INT8 精度（mixed-precision），模型体积仅增加 ~5% 但长对话准确率恢复到 FP16 的 97%。」</p>
+    <p>(3) <span class="key">FlashAttention 端侧适配</span>：「将 FlashAttention 的 tiling 策略适配到 Hexagon DSP 的 VTCM 约束（~4MB）。VTCM 需要同时存放 Q/K/V 的分块和 softmax 中间结果，通过计算最优 tile size（block_size = sqrt(VTCM_size / (3 × head_dim × dtype_size))）在计算效率和 VTCM 利用率之间找到平衡点。」</p>
+    <p><strong>包装原则</strong>：(1) 用「问题→分析→方案→效果」四段式讲述，不要只说"我做了 XX"；(2) 每个亮点附带一个具体数字（延迟降低 XX%、内存减少 XX MB）；(3) 强调端侧和云端的差异——面试官可能熟悉云端部署但不了解端侧约束，这正是你的差异化优势；(4) 准备好解释 Roofline Model 分析和 prefill/decode 的 compute-bound vs memory-bound 特性，这能展示理论功底。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q44: 技术面试中如何讲述「调试排障」经历才能加分？</span>
+    <span class="diff diff-easy">初级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>调试故事是展示工程能力的最佳载体，面试官关注的是 <span class="key">你的排查思路</span> 而非最终答案。使用「现象→假设→验证→根因→修复→复盘」六步讲述：</p>
+    <p><strong>示例 1 — KV Cache 内存泄漏</strong>：「上线后发现系统运行 2 小时后 OOM 崩溃（现象）。初步怀疑是模型推理的内存分配问题（假设）。用 /proc/meminfo 和自研监控工具追踪内存曲线，发现内存以 ~512KB/次 稳定增长（验证）。定位到 Continuous Batching 中请求异常退出时 KV Cache pages 未被释放——正常 EOS 退出有释放逻辑，但客户端断连导致的中途终止没有走到释放路径（根因）。在 request 析构函数中增加 RAII 风格的 page 释放保证（修复）。后续增加了 KV Cache 总量监控告警（复盘）。」</p>
+    <p><strong>示例 2 — DSP 推理间歇性超时</strong>：「每运行约 30 分钟出现一次推理延迟飙升到 500ms+（正常 50ms）。不是必现，且 DSP 没有崩溃。通过 mini-dm 日志排查发现超时时 CDSP 频率从 1.4GHz 降到 600MHz——是 <span class="key">thermal throttling</span> 导致的。根因是 DMS 模型 30fps 持续运行产生的热量积累触发了 DVFS 降频。解决方案是在温度接近阈值时主动降低 DMS 帧率（30→15fps），平滑热量曲线避免触发硬降频。」</p>
+    <p><strong>讲述技巧</strong>：(1) 花 60% 的时间在"假设→验证"环节，展示排查逻辑的系统性；(2) 主动提及走过的弯路（"一开始我以为是 XX 问题，但 XX 证据否定了这个假设"），展示诚实和批判性思维；(3) 复盘环节说明如何防止类似问题再次发生（监控、测试用例、代码审查检查项），展示工程成熟度。</p>
+  </div>
+</div>
+
+<!-- ========================================================== -->
+<!-- Section 8: 行为面试准备 -->
+<!-- ========================================================== -->
+<h2 id="sec8">八、行为面试准备</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q45: 「请介绍一个你主导的技术方案，说说你是如何推动落地的。」</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答题思路：</strong></p>
+    <p>此题考察 <span class="key">技术领导力</span> 和 <span class="key">推动执行力</span>。用 STAR 结构作答，重点放在 Action 和 Result 上：</p>
+    <p><strong>参考回答方向（基于 aadkcore 项目）</strong>：</p>
+    <p><strong>S</strong>：团队最初使用的是将模型推理逻辑直接嵌入各业务模块的方式，每个功能（语音、视觉、推荐）各自管理模型加载和推理调用，导致资源冲突频发、代码重复度高、新功能接入周期长。</p>
+    <p><strong>T</strong>：我提出将推理能力抽象为统一的 Agent 框架，但需要说服团队接受这个额外的架构层——大家担心框架引入额外延迟和学习成本。</p>
+    <p><strong>A</strong>：(1) 先做了一个最小可行原型（MVP），用 2 周时间实现了核心的 ModelScheduler 和消息分发机制，在内部 demo 上展示了多模型并发调度的效果——DMS 帧率不受 LLM 推理影响这一点直接打消了性能顾虑；(2) 编写了接入文档和示例代码，降低新功能接入门槛——新场景 Agent 只需实现一个插件接口即可复用整个推理和调度基础设施；(3) 与 Android 端和 Linux 端同事协作，确保框架支持三种部署模式，不同平台团队可以用同一套代码。</p>
+    <p><strong>R</strong>：框架上线后新功能接入周期从 2 周缩短到 2 天；资源冲突导致的 crash 率下降 90%+；后续 3 个新场景 Agent 均由其他同事独立开发完成，验证了插件化架构的可扩展性。</p>
+    <p><strong>关键要点</strong>：面试官想听到的不只是技术方案本身，更是你如何识别问题、如何说服他人、如何分阶段落地。先做 MVP 验证再推广，这种务实的推动方式比直接"设计完美架构"更有说服力。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q46: 「说说你和同事在技术方案上产生分歧时是如何解决的。」</span>
+    <span class="diff diff-easy">初级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答题思路：</strong></p>
+    <p>此题考察 <span class="key">协作能力</span> 和 <span class="key">沟通技巧</span>。核心原则：展示你尊重不同意见、用数据说话、以项目目标为导向。</p>
+    <p><strong>参考回答方向</strong>：</p>
+    <p><strong>S</strong>：在设计端云协同方案时，我倾向于「Edge-First」架构——所有请求先在端侧处理，超出能力范围再上云。但同事主张「Cloud-Primary」——尽量用云端更强的模型保证效果，端侧只做降级兜底。</p>
+    <p><strong>T</strong>：两种方案各有优劣，需要在用户体验（响应速度 vs 回答质量）和技术约束（网络可靠性、隐私合规）之间找到平衡。</p>
+    <p><strong>A</strong>：(1) 我没有坚持己见，而是提议做一次 <span class="key">数据驱动的对比</span>：分别测量两种方案在正常网络、弱网和离线三种场景下的端到端响应时间和用户满意度；(2) 测试结果显示：正常网络下 Cloud-Primary 的回答质量确实高 15%，但弱网场景（隧道、地库）下响应时间从 1s 飙升到 8s+，用户体验严重退化。考虑到座舱场景有大量弱网和离线时段，Edge-First + 联网时异步上云增强是更稳健的方案；(3) 我把测试数据整理成文档，在团队会议上和同事一起讨论，最终达成共识采用 Edge-First 架构，同时保留 Cloud-Primary 模式作为配置选项，可按 OEM 需求切换。</p>
+    <p><strong>R</strong>：最终方案综合了两人的思路——默认 Edge-First 但保留云端能力，实际上比任何一方的原始提案都更完善。这次经历也建立了团队用 A/B 测试数据驱动技术决策的文化。</p>
+    <p><strong>要避免的雷区</strong>：(1) 不要把对方描述成"不懂技术"或"固执"——展示双方都有合理理由；(2) 不要说"最后领导拍板了"——展示你是主动推动解决而非依赖权威；(3) 结尾强调结果是双赢而非一方妥协。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q47: 「描述一次你犯的技术错误以及你从中学到了什么。」</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答题思路：</strong></p>
+    <p>此题考察 <span class="key">自省能力</span> 和 <span class="key">成长心态</span>。选择一个真实的、有一定严重性的错误（不要选太轻微的），重点放在学到了什么和如何防止重犯。</p>
+    <p><strong>参考回答方向</strong>：</p>
+    <p><strong>S</strong>：在框架开发早期，我为了快速上线，在 KV Cache 管理中使用了简单的预分配策略——为每个请求分配最大上下文长度（2048 token）的 KV Cache 空间，无论实际使用多少。</p>
+    <p><strong>T</strong>：单请求测试时一切正常。但当两个分区同时发起请求时，两份完整 KV Cache（各 1GB）加上模型权重直接超出内存预算，触发 OOM。</p>
+    <p><strong>A</strong>：紧急修复是限制并发数为 1（降级方案），但这不是长期解决办法。我重新设计了 KV Cache 管理策略——参考 vLLM 的 PagedAttention 思想，将 KV Cache 按 page（每 page 存 16 个 token 的 KV）动态分配和释放。请求开始时只分配少量 pages，随 token 生成逐步扩展，请求结束立即回收。</p>
+    <p><strong>R</strong>：改造后同时支持 3 个并发请求，KV Cache 总占用从固定 2GB 降到动态 0.3-1.2GB（取决于实际上下文长度）。</p>
+    <p><strong>Learning</strong>：(1) <span class="key">不要为了快速上线跳过资源估算</span>——当时如果花 30 分钟计算多并发场景的内存需求，就能在设计阶段发现问题；(2) 端侧资源极度有限，云端可以"先分配再优化"的策略在端侧行不通，必须从第一版就考虑资源效率；(3) 此后我在团队中推行了「资源预算审查」的 code review checklist——每个涉及内存分配的 PR 必须附带内存估算和多并发场景的计算。</p>
+    <p><strong>讲述要点</strong>：(1) 不回避责任——"我做的决定"而非"团队的决定"；(2) 错误要有实际后果（OOM 崩溃，不只是"代码不够优雅"）；(3) Learning 要具体到可操作的行为改变（"推行了审查清单"），不要空谈"我以后会更仔细"。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q48: 行为面试通用准备清单与高频问题分类。</span>
+    <span class="diff diff-easy">初级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>行为面试题可归为 <span class="key">五大类</span>，每类至少准备一个与端侧 AI / 座舱项目相关的故事：</p>
+    <table>
+      <tr><th>类别</th><th>高频问题示例</th><th>考察重点</th><th>项目中可用的素材方向</th></tr>
+      <tr><td>技术领导力</td><td>主导过什么技术方案？如何推动落地？</td><td>识别问题、方案设计、影响他人</td><td>aadkcore 框架从 0 到 1 的设计与推广</td></tr>
+      <tr><td>协作沟通</td><td>技术分歧如何解决？跨团队合作经历？</td><td>尊重、数据驱动、共赢</td><td>端云协同方案选型、与 Android/Linux 平台团队协作</td></tr>
+      <tr><td>失败复盘</td><td>犯过什么错？项目失败经历？</td><td>自省、改进、成长</td><td>KV Cache 预分配导致 OOM、量化精度问题排查</td></tr>
+      <tr><td>压力应对</td><td>deadline 紧张时怎么处理？紧急线上问题？</td><td>优先级判断、冷静决策</td><td>DSP SSR 线上崩溃的紧急定位与修复</td></tr>
+      <tr><td>学习成长</td><td>如何快速学习新技术？转型经历？</td><td>学习方法、适应能力</td><td>从越野自动驾驶转型到座舱 LLM Agent 开发</td></tr>
+    </table>
+    <p><strong>准备方法</strong>：(1) 为每一类写下 2 个 STAR 故事大纲（共 10 个），每个控制在 2 分钟口述时间内；(2) 练习时录音回放，检查是否有口头禅、是否超时、是否遗漏了 Result；(3) 每个故事准备 1-2 个面试官可能的追问及应对（"如果重来一次你会怎么做？""这个方案的缺点是什么？"）；(4) 回答中自然地融入技术深度——行为面试不等于不讲技术，用技术细节支撑你的决策和行动会更有说服力。</p>
+    <p><strong>通用回答原则</strong>：(1) 永远用「我」而非「我们」描述你的具体贡献；(2) 每个回答必须有量化的 Result（降低 XX%、缩短 XX 天、支持 XX 个并发）；(3) 即使是失败的故事，也要以正面的 Learning 结尾；(4) 不要编造——面试官的追问会暴露虚构的细节，真实但经过提炼的故事远比完美但虚假的故事更有说服力。</p>
+  </div>
+</div>
+
+</main>
+
+<!-- ===== Scripts at bottom ===== -->
+<script>
+var b=document.getElementById('themeBtn');
+b.onclick=function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('theme',h.dataset.theme)}catch(e){}};
+try{var s=localStorage.getItem('theme');if(s)document.documentElement.dataset.theme=s}catch(e){}
+var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.remove('active')});var l=document.querySelector('.sidebar a[href="#'+e.target.id+'"]');if(l)l.classList.add('active')}})},{rootMargin:'-60px 0px -70% 0px'});
+document.querySelectorAll('h2[id]').forEach(function(h){obs.observe(h)});
+</script>
+</body>
+</html>

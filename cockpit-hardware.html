@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Part A: SA8397P 硬件架构 - Edge AI Docs</title>
+<style>
+:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--shadow:rgba(0,0,0,.08);--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-h:52px}
+[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e;--shadow:rgba(0,0,0,.3)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+.top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;z-index:1000}
+.top-nav .logo{font-weight:700;font-size:15px;color:var(--accent);margin-right:24px;text-decoration:none}
+.top-nav .links{display:flex;gap:2px;flex-wrap:wrap}
+.top-nav .links a{padding:4px 10px;border-radius:5px;text-decoration:none;color:var(--text2);font-size:12px;font-weight:500}
+.top-nav .links a:hover{background:var(--accentL);color:var(--accent)}
+.top-nav .links a.active{background:var(--accent);color:#fff}
+.top-nav .right{margin-left:auto}
+.theme-btn{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--text)}
+.sidebar{position:fixed;top:var(--nav-h);left:0;bottom:0;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;z-index:900}
+.sidebar::-webkit-scrollbar{width:3px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.sidebar .toc-part{padding:8px 20px 4px;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px}
+.sidebar a{display:block;padding:4px 16px 4px 20px;text-decoration:none;color:var(--text2);font-size:12px;border-left:3px solid transparent}
+.sidebar a:hover{color:var(--accent);background:var(--accentL)}
+.sidebar a.active{color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.main{margin-left:var(--sidebar-w);margin-top:var(--nav-h);padding:28px 40px 60px;max-width:900px}
+h1{font-size:26px;font-weight:800;margin-bottom:6px}
+.subtitle{font-size:14px;color:var(--muted);margin-bottom:28px}
+h2{font-size:20px;font-weight:700;margin:36px 0 14px;padding-bottom:6px;border-bottom:2px solid var(--accentL)}
+h3{font-size:16px;font-weight:600;margin:20px 0 10px}
+p{margin-bottom:10px;color:var(--text2)}
+ul,ol{margin:0 0 14px 20px;color:var(--text2)}
+li{margin-bottom:3px}
+strong{color:var(--text)}
+.info-box{padding:14px 16px;border-radius:7px;margin:14px 0;border-left:4px solid var(--info);background:var(--bg2);font-size:14px}
+.info-box.warn{border-left-color:var(--warning)}
+.info-box.ok{border-left-color:var(--success)}
+.info-box.err{border-left-color:var(--danger)}
+.info-box .title{font-weight:700;font-size:13px;margin-bottom:4px}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
+th{background:var(--accentL);color:var(--accentD);font-weight:600}
+tr:nth-child(even){background:var(--bg2)}
+.mermaid-wrap{margin:16px 0;padding:16px;background:var(--bg2);border-radius:7px;overflow-x:auto}
+.chart-wrap{margin:16px 0;background:var(--bg2);border-radius:7px;padding:12px}
+.chart-box{width:100%;height:360px}
+pre{background:var(--bg3);border-radius:7px;padding:14px;overflow-x:auto;font-size:13px;margin:10px 0}
+code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
+:not(pre)>code{background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--accent)}
+@media(max-width:900px){.sidebar{display:none}.main{margin-left:0;padding:20px 16px 60px}}
+@media print{.top-nav,.sidebar,.theme-btn{display:none!important}.main{margin:0;padding:16px;max-width:100%}}
+</style>
+</head>
+<body>
+
+<nav class="top-nav">
+  <a href="index.html" class="logo">Edge AI Docs</a>
+  <div class="links">
+    <a href="cockpit-hardware.html" class="active">A.硬件</a>
+    <a href="cockpit-training.html">B.训练</a>
+    <a href="cockpit-infer.html">C.推理优化</a>
+    <a href="cockpit-deploy.html">D.部署</a>
+    <a href="cockpit-agent-core.html">E1.核心框架</a>
+    <a href="cockpit-agent-group.html">E2.场景Agent</a>
+    <a href="cockpit-debug.html">F.调试</a>
+    <a href="cockpit-interview.html">面试</a>
+  </div>
+  <div class="right"><button class="theme-btn" id="themeBtn">Light/Dark</button></div>
+</nav>
+
+<aside class="sidebar">
+  <div class="toc-part">Part A: 硬件与系统底层</div>
+  <a href="#ch1" class="active">1. SA8397P SoC 全景</a>
+  <a href="#ch2">2. Hexagon DSP 微架构</a>
+  <a href="#ch3">3. DSP 子系统对比</a>
+  <a href="#ch4">4. FastRPC 通信机制</a>
+  <a href="#ch5">5. Hypervisor 与系统可靠性</a>
+  <a href="#ch5-1">&nbsp;&nbsp;5.1 Hypervisor 多域架构</a>
+  <a href="#ch5-2">&nbsp;&nbsp;5.2 Protection Domain</a>
+  <a href="#ch5-3">&nbsp;&nbsp;5.3 SSR 子系统重启</a>
+  <a href="#ch6">6. 内存带宽瓶颈分析</a>
+  <a href="#ch7">7. 功耗与热管理</a>
+  <a href="#ch8">8. 竞品芯片对比</a>
+</aside>
+
+<div class="main">
+
+<h1>Part A: SA8397P 硬件架构</h1>
+<p class="subtitle">Qualcomm 第三代 Snapdragon Digital Chassis 座舱 SoC 硬件全景与 DSP 深度解析</p>
+
+<!-- ==================== Chapter 1 ==================== -->
+<h2 id="ch1">1. SA8397P SoC 全景</h2>
+
+<p>SA8397P 是高通第三代 Snapdragon Digital Chassis 平台的旗舰 SoC，目标是实现<strong>座舱（Cockpit）与 ADAS 融合</strong>。它将传统分立的座舱娱乐芯片和 ADAS 处理芯片整合到一颗 SoC 上，降低 BOM 成本、减少线束复杂度，同时通过 Hypervisor 实现功能安全隔离。</p>
+
+<h3>1.1 SoC 功能模块总览</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph TB
+    SOC["SA8397P SoC"]
+    SOC --> CPU["CPU Cluster<br/>4x Cortex-A78 大核<br/>4x Cortex-A55 小核"]
+    SOC --> GPU["Adreno GPU<br/>图形渲染引擎"]
+    SOC --> DSP["Hexagon DSP<br/>CDSP / ADSP / SDSP"]
+    SOC --> ISP["Spectra ISP<br/>图像信号处理器"]
+    SOC --> DISP["Display Engine<br/>多屏显示控制"]
+    SOC --> VIDEO["Video Codec<br/>编解码引擎"]
+    SOC --> SEC["Security<br/>TrustZone + SPU"]
+    SOC --> MEM["Memory Controller<br/>LPDDR5x 多通道"]
+
+    style SOC fill:#4361ee,color:#fff,stroke:none
+    style CPU fill:#eef2ff,color:#1a1a2e,stroke:#4361ee
+    style GPU fill:#eef2ff,color:#1a1a2e,stroke:#4361ee
+    style DSP fill:#eef2ff,color:#1a1a2e,stroke:#4361ee
+    style ISP fill:#eef2ff,color:#1a1a2e,stroke:#4361ee
+    style DISP fill:#eef2ff,color:#1a1a2e,stroke:#4361ee
+    style VIDEO fill:#eef2ff,color:#1a1a2e,stroke:#4361ee
+    style SEC fill:#eef2ff,color:#1a1a2e,stroke:#4361ee
+    style MEM fill:#eef2ff,color:#1a1a2e,stroke:#4361ee
+</div></div>
+
+<h3>1.2 各模块功能与典型用途</h3>
+
+<table>
+  <thead>
+    <tr><th>模块</th><th>核心规格</th><th>主要职责</th><th>典型用例</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>CPU</strong></td><td>4x A78 @2.5GHz + 4x A55 @1.8GHz</td><td>通用计算、OS 调度</td><td>Android 座舱 UI、应用运行</td></tr>
+    <tr><td><strong>Adreno GPU</strong></td><td>Adreno 730 级别</td><td>3D 渲染、图形合成</td><td>仪表盘渲染、AR-HUD、游戏</td></tr>
+    <tr><td><strong>Hexagon DSP (CDSP)</strong></td><td>HMX + HVX + Scalar</td><td>AI 推理加速</td><td>DMS 驾驶员监控、语音降噪</td></tr>
+    <tr><td><strong>Hexagon DSP (ADSP)</strong></td><td>HVX + Scalar</td><td>音频处理</td><td>ANC 主动降噪、语音前端</td></tr>
+    <tr><td><strong>Hexagon DSP (SDSP)</strong></td><td>Scalar（低功耗）</td><td>传感器融合</td><td>Always-On 碰撞检测</td></tr>
+    <tr><td><strong>Spectra ISP</strong></td><td>三路 ISP，支持 8 路摄像头</td><td>图像信号处理</td><td>环视拼接、HDR 合成</td></tr>
+    <tr><td><strong>Display Engine</strong></td><td>最多 4 个显示输出</td><td>多屏驱动</td><td>中控屏+仪表+HUD+后排</td></tr>
+    <tr><td><strong>Video Codec</strong></td><td>8K@30fps 解码，4K@60fps 编码</td><td>视频编解码</td><td>行车记录仪编码、视频流播放</td></tr>
+    <tr><td><strong>Security</strong></td><td>TrustZone + SPU</td><td>安全启动、密钥管理</td><td>DRM、安全 OTA、V2X 签名</td></tr>
+    <tr><td><strong>Memory</strong></td><td>LPDDR5x 4266MHz 多通道</td><td>统一内存访问</td><td>所有模块共享带宽</td></tr>
+  </tbody>
+</table>
+
+<div class="info-box">
+  <div class="title">为什么选择融合 SoC？</div>
+  <p>传统方案使用独立的座舱芯片 + ADAS 芯片（如 SA8155P + SA8540P），需要两套供电、两套散热、以太网互联，BOM 成本高。SA8397P 通过 Hypervisor 在一颗芯片上隔离多个域（Android 座舱 + QNX ADAS），<strong>硬件成本降低约 30%</strong>，同时数据在片内共享，座舱与 ADAS 之间的通信延迟从毫秒级降至微秒级。面试中常见的对比题：一芯多域 vs 多芯方案的 trade-off。</p>
+</div>
+
+<!-- ==================== Chapter 2 ==================== -->
+<h2 id="ch2">2. Hexagon DSP 微架构</h2>
+
+<p>Hexagon DSP 是 SA8397P 上运行 AI 推理的核心单元。理解其内部微架构对于模型优化至关重要。以 CDSP（Compute DSP）为例，其内部由多个计算单元协同工作。</p>
+
+<h3>2.1 内部架构总览</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph LR
+    subgraph Hexagon_CDSP["Hexagon CDSP 核心"]
+        direction TB
+        SCALAR["Scalar Unit<br/>VLIW 4-way 发射<br/>通用标量计算"]
+        HVX["HVX 向量扩展<br/>128-byte SIMD<br/>图像/向量运算"]
+        HMX["HMX 矩阵加速器<br/>INT8/INT16 矩阵乘<br/>AI 推理核心"]
+        VTCM["VTCM 紧耦合内存<br/>256KB - 1MB SRAM<br/>超低延迟缓存"]
+        HWT["硬件多线程<br/>6 个硬件线程<br/>隐藏访存延迟"]
+    end
+    SCALAR --> HVX
+    HVX --> HMX
+    SCALAR --> VTCM
+    HVX --> VTCM
+    HMX --> VTCM
+    HWT --> SCALAR
+
+    style Hexagon_CDSP fill:#eef2ff,stroke:#4361ee
+    style SCALAR fill:#fff,stroke:#4361ee
+    style HVX fill:#fff,stroke:#4361ee
+    style HMX fill:#4361ee,color:#fff,stroke:none
+    style VTCM fill:#fff,stroke:#f39c12
+    style HWT fill:#fff,stroke:#4361ee
+</div></div>
+
+<h3>2.2 HTP = 品牌名，不是独立硬件</h3>
+
+<p>面试高频考点：<strong>HTP（Hexagon Tensor Processor）不是一个独立的硬件模块</strong>，而是高通的品牌命名，指 HMX + HVX + Scalar + VTCM 协同工作时的整体能力。当 QNN 编译器将一个模型 graph 映射到 CDSP 上执行时，矩阵乘法走 HMX、激活函数走 HVX、控制流走 Scalar、数据缓存在 VTCM，这个协同整体就叫 HTP。</p>
+
+<ul>
+  <li><strong>Scalar Unit</strong>：VLIW 4-way 发射，处理分支、循环控制、地址计算等标量操作</li>
+  <li><strong>HVX</strong>：128-byte 宽 SIMD 向量引擎，适合逐元素运算（ReLU、Add、Sigmoid）和图像处理</li>
+  <li><strong>HMX</strong>：矩阵乘加速器，一拍完成大规模 INT8/INT16 矩阵乘，是 Conv2D/MatMul 的主力</li>
+  <li><strong>VTCM</strong>：256KB~1MB 的紧耦合 SRAM，带宽极高、延迟极低，是性能瓶颈的关键</li>
+  <li><strong>硬件多线程</strong>：6 个硬件线程上下文，一个线程等内存时其他线程继续执行，隐藏访存延迟</li>
+</ul>
+
+<h3>2.3 各计算单元吞吐量对比</h3>
+
+<p>以 INT8 推理为基准，不同计算单元的相对吞吐量差异巨大：</p>
+
+<div class="chart-wrap"><div class="chart-box" id="dspThroughputChart"></div></div>
+
+<noscript>
+<table>
+  <thead><tr><th>计算单元</th><th>相对吞吐量 (INT8)</th></tr></thead>
+  <tbody>
+    <tr><td>Scalar</td><td>1x</td></tr>
+    <tr><td>HVX</td><td>8x</td></tr>
+    <tr><td>HMX</td><td>64x</td></tr>
+    <tr><td>HTP (协同)</td><td>80x</td></tr>
+  </tbody>
+</table>
+</noscript>
+
+<h3>2.4 存储层级与延迟</h3>
+
+<table>
+  <thead>
+    <tr><th>存储层级</th><th>容量</th><th>带宽</th><th>典型延迟</th><th>说明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>VTCM</strong></td><td>256KB ~ 1MB</td><td>~200 GB/s</td><td>~1 ns</td><td>紧耦合 SRAM，HMX/HVX 直接读写</td></tr>
+    <tr><td><strong>L2 Cache</strong></td><td>~1MB</td><td>~100 GB/s</td><td>~10 ns</td><td>DSP 本地 L2 缓存</td></tr>
+    <tr><td><strong>DDR (LPDDR5x)</strong></td><td>8~16 GB（共享）</td><td>~30 GB/s（DSP 份额）</td><td>~100 ns</td><td>与 CPU/GPU 共享，需要仲裁</td></tr>
+  </tbody>
+</table>
+
+<div class="info-box warn">
+  <div class="title">VTCM 是性能瓶颈的核心</div>
+  <p>VTCM 容量有限（通常 1MB），而一个 Conv2D 层的权重+激活可能远超 1MB。QNN 编译器会自动进行 <strong>Tiling（分块）</strong>：将大张量切成小块，分批加载到 VTCM 中计算，再写回 DDR。Tiling 策略直接决定了 DDR 访问次数和性能。面试建议：能画出 Tiling 的数据流动图（DDR → VTCM → 计算 → VTCM → DDR）是加分项。</p>
+</div>
+
+<!-- ==================== Chapter 3 ==================== -->
+<h2 id="ch3">3. DSP 子系统对比</h2>
+
+<p>SA8397P 内部有三个独立的 Hexagon DSP 子系统，各自有独立的固件、时钟域和供电域。AP（Application Processor，即 CPU）通过 FastRPC 与它们通信。</p>
+
+<h3>3.1 三大 DSP 子系统架构</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph LR
+    AP["AP<br/>Application Processor<br/>Android / QNX"]
+    AP -->|FastRPC| CDSP["CDSP<br/>Compute DSP<br/>AI 推理 + 计算"]
+    AP -->|FastRPC| ADSP["ADSP<br/>Audio DSP<br/>音频处理"]
+    AP -->|FastRPC| SDSP["SDSP<br/>Sensor DSP<br/>传感器融合"]
+
+    style AP fill:#4361ee,color:#fff,stroke:none
+    style CDSP fill:#2ecc71,color:#fff,stroke:none
+    style ADSP fill:#f39c12,color:#fff,stroke:none
+    style SDSP fill:#e74c3c,color:#fff,stroke:none
+</div></div>
+
+<h3>3.2 CDSP vs ADSP vs SDSP 详细对比</h3>
+
+<table>
+  <thead>
+    <tr><th>维度</th><th>CDSP</th><th>ADSP</th><th>SDSP</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>核心功能</strong></td><td>AI 推理、通用计算</td><td>音频前端处理、ANC</td><td>传感器融合、低功耗监控</td></tr>
+    <tr><td><strong>关键硬件</strong></td><td>HMX + HVX + Scalar + VTCM</td><td>HVX + Scalar（无 HMX）</td><td>Scalar only（极简）</td></tr>
+    <tr><td><strong>功耗模式</strong></td><td>高性能，按需开关</td><td>中等，常驻运行</td><td>超低功耗（&lt;5mW）</td></tr>
+    <tr><td><strong>延迟要求</strong></td><td>10~100ms（推理帧级）</td><td>&lt;1ms（音频实时）</td><td>100ms~1s（传感器采样）</td></tr>
+    <tr><td><strong>AP 休眠时</strong></td><td>通常随 AP 关闭</td><td>可独立运行（低功耗音频）</td><td>完全独立运行（Always-On）</td></tr>
+    <tr><td><strong>固件格式</strong></td><td>.mbn / .so（签名动态库）</td><td>.mbn / .so</td><td>.mbn / .so</td></tr>
+    <tr><td><strong>FastRPC 库</strong></td><td>libcdsprpc.so</td><td>libadsprpc.so</td><td>libsdsprpc.so</td></tr>
+  </tbody>
+</table>
+
+<div class="info-box ok">
+  <div class="title">SDSP Always-On 场景</div>
+  <p>SDSP 最经典的用例是<strong>碰撞检测</strong>：车辆熄火后（AP 进入深度睡眠），SDSP 持续以 &lt;5mW 功耗监听加速度传感器。当检测到异常加速度（碰撞）时，SDSP 唤醒 AP，AP 启动摄像头录像并发送紧急通知。整个唤醒链路约 200ms。面试中被问到 "Always-On 传感器" 时，SDSP 是标准答案。</p>
+</div>
+
+<!-- ==================== Chapter 4 ==================== -->
+<h2 id="ch4">4. FastRPC 通信机制</h2>
+
+<p>FastRPC（Fast Remote Procedure Call）是高通自研的<strong>跨处理器调用框架</strong>，让 AP 上的用户态进程可以像调用本地函数一样调用 DSP 上的函数。理解 FastRPC 是调试 DSP 部署问题的基础。</p>
+
+<h3>4.1 调用流程</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+sequenceDiagram
+    participant App as AP 用户进程
+    participant Stub as Stub 库 (libXXX_stub.so)
+    participant Kernel as Linux Kernel (adsprpc 驱动)
+    participant SMem as ION 共享内存
+    participant DSP as DSP 处理器
+    participant Skel as Skel 库 (libXXX_skel.so)
+    participant Impl as DSP 实现函数
+
+    App->>Stub: 调用本地函数接口
+    Stub->>Stub: 序列化参数 (IDL 生成)
+    Stub->>Kernel: ioctl 发送请求
+    Kernel->>SMem: 将参数写入共享内存
+    Kernel->>DSP: 触发中断通知
+    DSP->>SMem: 从共享内存读取参数
+    DSP->>Skel: 反序列化参数
+    Skel->>Impl: 调用实际 DSP 实现
+    Impl-->>Skel: 返回结果
+    Skel-->>DSP: 序列化返回值
+    DSP-->>SMem: 将结果写入共享内存
+    DSP-->>Kernel: 触发完成中断
+    Kernel-->>Stub: 返回 ioctl
+    Stub-->>App: 反序列化结果并返回
+</div></div>
+
+<h3>4.2 核心概念对照表</h3>
+
+<table>
+  <thead>
+    <tr><th>FastRPC 概念</th><th>作用说明</th><th>类比</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Stub</strong></td><td>AP 端代理库，封装序列化和 ioctl 调用</td><td>gRPC Client Stub</td></tr>
+    <tr><td><strong>Skel</strong></td><td>DSP 端骨架库，接收请求并调用实现</td><td>gRPC Server Skeleton</td></tr>
+    <tr><td><strong>IDL</strong></td><td>接口定义语言，编译器自动生成 Stub/Skel 代码</td><td>Protobuf / .proto 文件</td></tr>
+    <tr><td><strong>ION 共享内存</strong></td><td>AP 与 DSP 共享的物理连续内存区域</td><td>mmap 共享内存</td></tr>
+    <tr><td><strong>Domain</strong></td><td>目标 DSP 标识（0=ADSP, 3=CDSP, 2=SDSP）</td><td>gRPC 的 target endpoint</td></tr>
+  </tbody>
+</table>
+
+<h3>4.3 ION 共享内存分配示例</h3>
+
+<pre><code>/* ION 共享内存分配 - AP 端 C 代码 */
+#include &lt;linux/ion.h&gt;
+#include &lt;sys/ioctl.h&gt;
+#include &lt;fcntl.h&gt;
+
+int alloc_ion_buffer(int size) {
+    int ion_fd = open("/dev/ion", O_RDONLY);
+    if (ion_fd &lt; 0) {
+        perror("open /dev/ion failed");
+        return -1;
+    }
+
+    struct ion_allocation_data alloc_data = {
+        .len       = size,
+        .heap_id_mask = ION_HEAP_ID_QCOM_SECURE_DISPLAY,  /* 安全堆 */
+        .flags     = ION_FLAG_CACHED,
+    };
+
+    /* 1. 分配物理连续内存 */
+    int ret = ioctl(ion_fd, ION_IOC_ALLOC, &amp;alloc_data);
+    if (ret &lt; 0) {
+        perror("ION_IOC_ALLOC failed");
+        close(ion_fd);
+        return -1;
+    }
+
+    /* 2. 获取文件描述符用于 mmap */
+    int map_fd = alloc_data.fd;
+
+    /* 3. 映射到用户空间虚拟地址 */
+    void *vaddr = mmap(NULL, size,
+                       PROT_READ | PROT_WRITE,
+                       MAP_SHARED, map_fd, 0);
+
+    /* 4. 将 map_fd 传给 FastRPC，DSP 端可直接访问同一物理内存 */
+    /* remote_handle_invoke(..., map_fd, ...); */
+
+    close(ion_fd);
+    return map_fd;
+}</code></pre>
+
+<div class="info-box">
+  <div class="title">FastRPC vs Android Binder</div>
+  <p><strong>Binder</strong> 是 Android 的进程间通信（IPC）机制，用于同一 CPU 上不同进程之间的调用。<strong>FastRPC</strong> 是跨处理器通信（IPC），用于 AP CPU 与 DSP 之间的调用。两者的关键区别：</p>
+  <ul>
+    <li>Binder 通过内核拷贝传递数据（一次拷贝优化）；FastRPC 通过 ION 共享内存实现<strong>零拷贝</strong></li>
+    <li>Binder 的目标是同一 OS 内核中的进程；FastRPC 的目标是运行不同 RTOS（QuRT）的独立处理器</li>
+    <li>FastRPC 有额外的中断和缓存一致性开销，单次调用延迟约 50~200us</li>
+  </ul>
+</div>
+
+<!-- ==================== Chapter 5 ==================== -->
+<h2 id="ch5">5. Hypervisor 与系统可靠性</h2>
+
+<p>SA8397P 通过 Hypervisor 和 Protection Domain 实现多层次的隔离与容错，这是车规级芯片与消费级芯片的核心区别。</p>
+
+<h3 id="ch5-1">5.1 Hypervisor 多域架构</h3>
+
+<p>SA8397P 采用 Type-1 Hypervisor（直接运行在裸机上），将 SoC 资源划分给多个虚拟机（VM），每个 VM 运行独立的操作系统。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph TB
+    HW["SA8397P 硬件"]
+    HYP["Type-1 Hypervisor<br/>直接运行于裸机"]
+    HW --> HYP
+
+    HYP --> VM1["VM1: Android<br/>座舱娱乐系统<br/>中控屏 + 后排娱乐"]
+    HYP --> VM2["VM2: QNX (ASIL-B)<br/>仪表盘 + ADAS<br/>功能安全关键域"]
+    HYP --> VM3["VM3: Linux<br/>ADAS 算法域<br/>感知 + 规划"]
+
+    VM1 --> R1["分配资源: 4x A78, GPU, Display 0-1"]
+    VM2 --> R2["分配资源: 2x A55, Display 2"]
+    VM3 --> R3["分配资源: 2x A55, CDSP, ISP"]
+
+    style HW fill:#4361ee,color:#fff,stroke:none
+    style HYP fill:#e74c3c,color:#fff,stroke:none
+    style VM1 fill:#2ecc71,color:#fff,stroke:none
+    style VM2 fill:#f39c12,color:#fff,stroke:none
+    style VM3 fill:#3498db,color:#fff,stroke:none
+    style R1 fill:#eef2ff,color:#1a1a2e,stroke:#dee2e6
+    style R2 fill:#eef2ff,color:#1a1a2e,stroke:#dee2e6
+    style R3 fill:#eef2ff,color:#1a1a2e,stroke:#dee2e6
+</div></div>
+
+<p>关键特性：</p>
+<ul>
+  <li><strong>硬件级隔离</strong>：每个 VM 有独立的内存空间（SMMU 保护），一个 VM 崩溃不会影响其他 VM</li>
+  <li><strong>资源静态分配</strong>：CPU 核心、GPU 时间片、显示通道在启动时固定分配，避免运行时争抢</li>
+  <li><strong>ASIL-B 认证</strong>：QNX 域满足 ISO 26262 ASIL-B 功能安全等级，可运行仪表盘等安全关键功能</li>
+  <li><strong>跨域通信</strong>：VM 之间通过 Hypervisor 提供的共享内存通道通信，延迟 &lt;100us</li>
+</ul>
+
+<h3 id="ch5-2">5.2 Protection Domain（PD）</h3>
+
+<p>Protection Domain 是 DSP 内部（QuRT RTOS 上）的隔离机制，类似于 OS 中的进程隔离。每个用户进程在 DSP 上对应一个 Guest PD，彼此之间内存隔离。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph TB
+    subgraph CDSP_内部["CDSP 内部 (QuRT RTOS)"]
+        direction TB
+        STATIC["Static PD<br/>QuRT 内核 + FastRPC 框架<br/>常驻运行，不可卸载"]
+        GUEST1["Guest PD 1<br/>Model A (DMS 人脸检测)<br/>独立堆内存"]
+        GUEST2["Guest PD 2<br/>Model B (手势识别)<br/>独立堆内存"]
+        STATIC --> GUEST1
+        STATIC --> GUEST2
+    end
+
+    GUEST1 -.-|"内存隔离<br/>互不可见"| GUEST2
+
+    style CDSP_内部 fill:#eef2ff,stroke:#4361ee
+    style STATIC fill:#4361ee,color:#fff,stroke:none
+    style GUEST1 fill:#2ecc71,color:#fff,stroke:none
+    style GUEST2 fill:#f39c12,color:#fff,stroke:none
+</div></div>
+
+<p>PD 隔离的意义：</p>
+<ul>
+  <li><strong>故障隔离</strong>：Guest PD 1 中的模型崩溃不会影响 Guest PD 2 中的模型</li>
+  <li><strong>独立生命周期</strong>：可以单独加载/卸载某个 PD 中的模型，无需重启整个 DSP</li>
+  <li><strong>资源保护</strong>：每个 Guest PD 有独立的堆内存，防止野指针跨域破坏</li>
+  <li><strong>Static PD 常驻</strong>：FastRPC 框架和 QuRT 内核运行在 Static PD 中，是所有 Guest PD 的"管理者"</li>
+</ul>
+
+<h3 id="ch5-3">5.3 SSR（Subsystem Restart，子系统重启）</h3>
+
+<p>当 DSP 子系统发生不可恢复的错误（如 Watchdog 超时、非法内存访问）时，SSR 机制会自动重启该子系统，而不需要重启整个 SoC。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+stateDiagram-v2
+    [*] --> Running : DSP 正常运行
+    Running --> Crash : Watchdog 超时 / 异常
+    Crash --> Notify : 内核检测到崩溃
+    Notify --> Reload : 重新加载固件
+    Reload --> Init : 固件初始化
+    Init --> Reconnect : FastRPC 重连
+    Reconnect --> Recover : 应用层恢复
+    Recover --> Running : 恢复完成 (~1-3s)
+
+    note right of Crash : PIL 子系统检测到\nDSP 无响应
+    note right of Reconnect : 旧的 FastRPC handle\n全部失效
+</div></div>
+
+<p>SSR 恢复流程耗时约 <strong>1~3 秒</strong>，包括固件重新加载、QuRT 初始化、FastRPC 通道重建等步骤。</p>
+
+<div class="info-box err">
+  <div class="title">开发者必须处理 SSR 事件！</div>
+  <p>SSR 发生后，<strong>所有旧的 FastRPC handle 和 QNN Context 全部失效</strong>。如果应用层不处理 SSR 事件，继续使用旧 handle 调用 DSP 会直接返回错误。正确的处理流程：</p>
+  <ol>
+    <li>监听 SSR 事件（通过 <code>/dev/subsys_XXX</code> 或 rpmsg 通知）</li>
+    <li>收到 "after_shutdown" 事件后，<strong>清理所有旧的 FastRPC handle</strong></li>
+    <li>收到 "after_powerup" 事件后，<strong>重新初始化 QNN Context</strong>（重新加载模型、重建 graph）</li>
+    <li>恢复推理流水线</li>
+  </ol>
+  <p>常见 Bug：开发者忘记处理 SSR，导致 DSP 重启后推理永久失败，只能重启整机。面试中被问到 "DSP 崩溃了怎么办"，SSR + handle 清理是标准答案。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 6: 内存带宽瓶颈分析 -->
+<!-- ============================================================ -->
+<h2 id="ch6">6. 内存带宽瓶颈分析</h2>
+
+<h3>6.1 DDR 带宽共享问题</h3>
+
+<p>SA8397P 的 LPDDR5x 提供约 <strong>~68 GB/s</strong> 理论峰值带宽，但这一带宽由 SoC 内的多个模块共享：</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+flowchart LR
+    subgraph DDR["LPDDR5x ~68 GB/s"]
+        MEM["DDR 控制器"]
+    end
+
+    CPU["Kryo CPU<br/>~15 GB/s"] --> MEM
+    GPU["Adreno GPU<br/>~25 GB/s"] --> MEM
+    DSP["Hexagon DSP<br/>~20 GB/s"] --> MEM
+    ISP["Spectra ISP<br/>~8 GB/s"] --> MEM
+    DPU["显示引擎<br/>~5 GB/s"] --> MEM
+
+    style DSP fill:#4361ee,color:#fff
+    style DDR fill:#2ecc71,color:#fff
+</div></div>
+
+<p>LLM 推理（Decode 阶段）高度依赖 DDR 带宽。当多个模块同时活跃时，DSP 实际可用带宽可能远低于理论峰值：</p>
+
+<table>
+<thead>
+<tr><th>运行场景</th><th>活跃模块</th><th>DSP 可用带宽（估算）</th><th>LLM Decode 影响</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>纯 LLM 推理</strong></td><td>DSP + CPU（少量）</td><td>~50-55 GB/s</td><td>最优：~14 tok/s</td></tr>
+<tr><td><strong>LLM + 摄像头</strong></td><td>DSP + ISP + CPU</td><td>~40-45 GB/s</td><td>轻微下降：~12 tok/s</td></tr>
+<tr><td><strong>LLM + 摄像头 + 渲染</strong></td><td>DSP + ISP + GPU + CPU</td><td>~25-35 GB/s</td><td>明显下降：~8-10 tok/s</td></tr>
+<tr><td><strong>多路摄像头 + LLM + 3D 渲染</strong></td><td>全部模块高负载</td><td>~15-25 GB/s</td><td>严重下降：~5-7 tok/s</td></tr>
+</tbody>
+</table>
+
+<div class="info-box warn">
+<div class="title">带宽争抢是端侧 LLM 的隐性杀手</div>
+<p>实验室环境下的 LLM 推理速度（单独跑模型）与量产环境（多路摄像头 + 3D 仪表盘 + 导航渲染同时运行）可能有 <strong>30-50% 的性能差距</strong>。性能基准测试必须在<strong>全系统负载</strong>下进行，否则上车后会出现严重的延迟回退。解决方案包括：QoS 带宽优先级配置、LLM 推理与 GPU 渲染时间错开、ISP 数据直通 DSP 减少 DDR 搬运。</p>
+</div>
+
+<h3>6.2 VTCM — 片上高速缓存</h3>
+
+<p>VTCM（Vector Tightly Coupled Memory）是 Hexagon DSP 的片上 SRAM，容量约 <strong>4MB</strong>，带宽远高于 DDR（片上访问延迟仅 1-2 个周期）。VTCM 是端侧 LLM 推理优化的关键资源：</p>
+
+<table>
+<thead>
+<tr><th>存储层级</th><th>容量</th><th>访问延迟</th><th>带宽</th><th>LLM 推理用途</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>HVX 寄存器</strong></td><td>~32 KB</td><td>&lt; 1 周期</td><td>—</td><td>向量计算操作数</td></tr>
+<tr><td><strong>VTCM</strong></td><td>~4 MB</td><td>1-2 周期</td><td>远高于 DDR</td><td>FlashAttention 分块、权重预取、KV Cache 热数据</td></tr>
+<tr><td><strong>L2 Cache</strong></td><td>~1-2 MB</td><td>~10 周期</td><td>~200 GB/s</td><td>通用缓存</td></tr>
+<tr><td><strong>DDR (LPDDR5x)</strong></td><td>8-16 GB</td><td>~100 周期</td><td>~68 GB/s</td><td>模型权重、KV Cache、激活值</td></tr>
+</tbody>
+</table>
+
+<p>VTCM 的 4MB 容量虽然有限，但对 LLM 推理至关重要：FlashAttention 的分块计算、权重预取（double buffering）、以及 HMX 矩阵乘法的 tiling 都依赖 VTCM 作为高速中间缓冲。当 VTCM 不足导致数据溢出到 DDR 时（称为 <strong>VTCM spill</strong>），性能可能下降 3-5 倍。</p>
+
+<!-- ============================================================ -->
+<!-- Chapter 7: 功耗与热管理 -->
+<!-- ============================================================ -->
+<h2 id="ch7">7. 功耗与热管理</h2>
+
+<h3>7.1 座舱芯片功耗约束</h3>
+
+<p>汽车座舱环境的功耗和散热约束远比手机或服务器严格：</p>
+
+<table>
+<thead>
+<tr><th>约束维度</th><th>座舱要求</th><th>对比（手机 / 服务器）</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>TDP</strong></td><td>~20-25W（整个 SoC）</td><td>手机 ~5-8W / 服务器 GPU ~300-400W</td></tr>
+<tr><td><strong>散热方式</strong></td><td>被动散热为主（无风扇），部分车型有散热片 + 导热硅脂</td><td>手机被动 / 服务器液冷或主动风扇</td></tr>
+<tr><td><strong>工作温度</strong></td><td>-40°C ~ +85°C（车规级）</td><td>手机 0~35°C / 服务器 10~35°C</td></tr>
+<tr><td><strong>持续运行</strong></td><td>需在高温下持续稳定运行（夏季暴晒后启动）</td><td>手机可降频 / 服务器恒温机房</td></tr>
+</tbody>
+</table>
+
+<h3>7.2 功耗模式与 LLM 推理影响</h3>
+
+<p>SA8397P 支持动态电压频率调节（DVFS），DSP 频率根据负载自动调节。不同功耗模式对 LLM 推理性能有直接影响：</p>
+
+<table>
+<thead>
+<tr><th>功耗模式</th><th>DSP 频率</th><th>LLM 生成速度</th><th>功耗</th><th>适用场景</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>高性能 (Turbo)</strong></td><td>最高频</td><td>~12-14 tok/s</td><td>~20-25W</td><td>用户主动交互时（说话/触控）</td></tr>
+<tr><td><strong>均衡 (Normal)</strong></td><td>中等频</td><td>~8-10 tok/s</td><td>~12-15W</td><td>日常运行，主动推荐等后台任务</td></tr>
+<tr><td><strong>省电 (Low Power)</strong></td><td>低频</td><td>~4-6 tok/s</td><td>~6-8W</td><td>停车等待、后台待机</td></tr>
+</tbody>
+</table>
+
+<h3>7.3 热降频问题</h3>
+
+<p>在高温环境下（如夏季暴晒后），芯片温度可能迅速达到热保护阈值（~100°C 结温），触发<strong>热降频（Thermal Throttling）</strong>：</p>
+
+<pre><code># 查看当前 DSP 温度和频率
+cat /sys/class/thermal/thermal_zone*/temp   # 各区域温度 (milliCelsius)
+cat /sys/class/devfreq/soc:qcom,cdsp/cur_freq  # 当前 CDSP 频率
+
+# 查看是否触发热降频
+dmesg | grep -i "thermal\|throttl"
+
+# 锁定高频 (仅开发调试使用，勿在量产环境使用)
+echo performance > /sys/class/devfreq/soc:qcom,cdsp/governor</code></pre>
+
+<div class="info-box">
+<div class="title">热管理最佳实践</div>
+<p>端侧 LLM 的热管理策略：(1) <strong>按需加载</strong>：用户未交互时将 DSP 降至低频，检测到唤醒词后快速升频；(2) <strong>时间预算分配</strong>：限制连续高负载推理时间（如 Prefill 后插入短暂冷却间隔）；(3) <strong>温度感知调度</strong>：当温度接近阈值时主动降低 batch size 或切换到更小的模型（Qwen3-1.7B）；(4) <strong>避免 GPU 和 DSP 同时满载</strong>：3D 渲染和 LLM 推理交替执行。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 8: 竞品芯片对比 -->
+<!-- ============================================================ -->
+<h2 id="ch8">8. 竞品芯片对比</h2>
+
+<h3>8.1 座舱/智驾芯片横向对比</h3>
+
+<p>以下对比涵盖当前主流座舱和跨域计算芯片，数据来源于各厂商公开资料：</p>
+
+<table>
+<thead>
+<tr><th>芯片</th><th>厂商</th><th>NPU 算力</th><th>工艺</th><th>内存</th><th>TDP</th><th>定位</th></tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>SA8397P</strong></td>
+<td>Qualcomm</td>
+<td>~70 TOPS (INT8)</td>
+<td>4nm</td>
+<td>LPDDR5x, ~68 GB/s</td>
+<td>~20-25W</td>
+<td>高端座舱，支持端侧 LLM</td>
+</tr>
+<tr>
+<td><strong>SA8295P</strong></td>
+<td>Qualcomm</td>
+<td>~30 TOPS (INT8)</td>
+<td>5nm</td>
+<td>LPDDR5, ~51 GB/s</td>
+<td>~15-20W</td>
+<td>主流座舱，支持轻量模型</td>
+</tr>
+<tr>
+<td><strong>Drive Orin</strong></td>
+<td>NVIDIA</td>
+<td>275 TOPS (INT8, DLA+GPU)</td>
+<td>7nm (Samsung)</td>
+<td>LPDDR5, ~205 GB/s</td>
+<td>~45-60W</td>
+<td>智驾 + 座舱跨域</td>
+</tr>
+<tr>
+<td><strong>Thor</strong></td>
+<td>NVIDIA</td>
+<td>~2000 TOPS (FP8, GPU)</td>
+<td>4nm</td>
+<td>HBM/LPDDR5x</td>
+<td>~100W+</td>
+<td>下一代跨域中央计算</td>
+</tr>
+<tr>
+<td><strong>Journey 6</strong></td>
+<td>地平线</td>
+<td>~128 TOPS (INT8, BPU Nash)</td>
+<td>7nm</td>
+<td>LPDDR5</td>
+<td>~25-35W</td>
+<td>智驾为主，可扩展座舱</td>
+</tr>
+<tr>
+<td><strong>CT-X1</strong></td>
+<td>联发科</td>
+<td>~46 TOPS (APU)</td>
+<td>4nm</td>
+<td>LPDDR5x</td>
+<td>~15-20W</td>
+<td>座舱娱乐 + AI 助手</td>
+</tr>
+</tbody>
+</table>
+
+<h3>8.2 端侧 LLM 可行性对比</h3>
+
+<p>从端侧 LLM 部署的角度，各芯片的关键差异在于 <strong>NPU 算力</strong>、<strong>内存带宽</strong> 和 <strong>功耗预算</strong>：</p>
+
+<table>
+<thead>
+<tr><th>芯片</th><th>可运行最大 LLM</th><th>Decode 速度估算</th><th>关键瓶颈</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>SA8397P</strong></td><td>4B (INT4) — Qwen3-Omni-4B</td><td>~10-14 tok/s</td><td>DDR 带宽 68 GB/s 限制 Decode</td></tr>
+<tr><td><strong>SA8295P</strong></td><td>1.7B (INT4) — Qwen3-1.7B</td><td>~15-20 tok/s</td><td>算力 30 TOPS 限制可承载模型大小</td></tr>
+<tr><td><strong>Drive Orin</strong></td><td>7-8B (INT4) — Qwen3-8B</td><td>~20-30 tok/s</td><td>高功耗 (~50W)，被动散热困难</td></tr>
+<tr><td><strong>Thor</strong></td><td>70B+ (FP8)</td><td>~50-100+ tok/s</td><td>功耗和成本，预计 2025+ 量产</td></tr>
+<tr><td><strong>Journey 6</strong></td><td>4B (INT8) — 需适配 BPU</td><td>~8-12 tok/s</td><td>LLM 软件栈成熟度（BPU 主要面向 CNN）</td></tr>
+<tr><td><strong>CT-X1</strong></td><td>1.7-3B (INT4)</td><td>~10-15 tok/s</td><td>NPU 算力较低，适合轻量 LLM</td></tr>
+</tbody>
+</table>
+
+<div class="info-box ok">
+<div class="title">SA8397P 的竞争优势</div>
+<p>在座舱端侧 LLM 场景中，SA8397P 的优势在于：(1) <strong>Hexagon DSP 的 LLM 软件栈最成熟</strong>（QNN SDK + Genie Runtime 已量产验证）；(2) <strong>功耗/算力比最优</strong>（~70 TOPS / ~20W，Orin 需要 275 TOPS / ~50W）；(3) <strong>4nm 工艺</strong>带来更好的能效比和热表现。劣势是<strong>内存带宽偏低</strong>（68 GB/s vs Orin 的 205 GB/s），限制了 Decode 吞吐量上限。未来 SA8797P 等新一代芯片预计会在带宽上有显著提升。</p>
+</div>
+
+</div><!-- end main -->
+
+<script defer src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
+<script defer src="https://unpkg.com/echarts@5/dist/echarts.min.js"></script>
+<script>
+// Theme toggle
+var b=document.getElementById('themeBtn');
+b.onclick=function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('theme',h.dataset.theme)}catch(e){}};
+try{var s=localStorage.getItem('theme');if(s)document.documentElement.dataset.theme=s}catch(e){}
+
+// Sidebar scroll spy
+var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.remove('active')});var l=document.querySelector('.sidebar a[href="#'+e.target.id+'"]');if(l)l.classList.add('active')}})},{rootMargin:'-60px 0px -70% 0px'});
+document.querySelectorAll('h2[id],h3[id]').forEach(function(h){obs.observe(h)});
+
+// Mermaid init (wait for script to load)
+window.addEventListener('load',function(){
+  try{
+    if(typeof mermaid!=='undefined'){mermaid.initialize({startOnLoad:true,theme:document.documentElement.dataset.theme==='dark'?'dark':'default',securityLevel:'loose',flowchart:{useMaxWidth:true}})}
+  }catch(e){console.warn('Mermaid init failed:',e)}
+  try{initCharts()}catch(e){console.warn('Charts init failed:',e)}
+});
+
+function initCharts(){
+  if(typeof echarts==='undefined')return;
+
+  var chartDom=document.getElementById('dspThroughputChart');
+  if(!chartDom)return;
+  var myChart=echarts.init(chartDom);
+
+  var isDark=document.documentElement.dataset.theme==='dark';
+  var textColor=isDark?'#e0e0e0':'#1a1a2e';
+  var subTextColor=isDark?'#adb5bd':'#495057';
+
+  var option={
+    title:{
+      text:'Hexagon DSP 各计算单元 INT8 相对吞吐量',
+      left:'center',
+      textStyle:{fontSize:14,fontWeight:600,color:textColor}
+    },
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'}},
+    grid:{left:'12%',right:'8%',bottom:'12%',top:'18%'},
+    xAxis:{
+      type:'category',
+      data:['Scalar','HVX','HMX','HTP (协同)'],
+      axisLabel:{color:subTextColor,fontSize:12},
+      axisLine:{lineStyle:{color:isDark?'#2a2a3e':'#dee2e6'}}
+    },
+    yAxis:{
+      type:'value',
+      name:'相对吞吐量 (倍)',
+      nameTextStyle:{color:subTextColor,fontSize:11},
+      axisLabel:{color:subTextColor,fontSize:11},
+      splitLine:{lineStyle:{color:isDark?'#2a2a3e':'#e9ecef'}},
+      axisLine:{lineStyle:{color:isDark?'#2a2a3e':'#dee2e6'}}
+    },
+    series:[{
+      type:'bar',
+      data:[
+        {value:1,itemStyle:{color:'#868e96'}},
+        {value:8,itemStyle:{color:'#3498db'}},
+        {value:64,itemStyle:{color:'#4361ee'}},
+        {value:80,itemStyle:{color:'#2ecc71'}}
+      ],
+      barWidth:'45%',
+      label:{show:true,position:'top',fontSize:13,fontWeight:700,color:textColor,formatter:function(p){return p.value+'x'}}
+    }]
+  };
+
+  myChart.setOption(option);
+  window.addEventListener('resize',function(){myChart.resize()});
+}
+</script>
+</body>
+</html>

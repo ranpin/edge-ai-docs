@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>通用机器人 — 面试指南 — Edge AI Docs</title>
+<style>
+:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-h:52px}
+[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+.top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;z-index:1000}
+.top-nav .logo{font-weight:700;font-size:15px;color:var(--accent);margin-right:24px;text-decoration:none}
+.top-nav .links{display:flex;gap:2px;flex-wrap:wrap}
+.top-nav .links a{padding:4px 10px;border-radius:5px;text-decoration:none;color:var(--text2);font-size:12px;font-weight:500}
+.top-nav .links a:hover{background:var(--accentL);color:var(--accent)}
+.top-nav .links a.active{background:var(--accent);color:#fff}
+.top-nav .right{margin-left:auto}
+.theme-btn{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--text)}
+.sidebar{position:fixed;top:var(--nav-h);left:0;bottom:0;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;z-index:900}
+.sidebar a{display:block;padding:4px 16px 4px 20px;text-decoration:none;color:var(--text2);font-size:12px;border-left:3px solid transparent}
+.sidebar a:hover{color:var(--accent);background:var(--accentL)}
+.sidebar a.active{color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.main{margin-left:var(--sidebar-w);margin-top:var(--nav-h);padding:28px 40px 60px;max-width:900px}
+h1{font-size:26px;font-weight:800;margin-bottom:6px}
+.subtitle{font-size:14px;color:var(--muted);margin-bottom:28px}
+h2{font-size:20px;font-weight:700;margin:36px 0 14px;padding-bottom:6px;border-bottom:2px solid var(--accentL)}
+h3{font-size:16px;font-weight:600;margin:20px 0 10px}
+p{margin-bottom:10px;color:var(--text2)}
+strong{color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
+th{background:var(--accentL);color:var(--accentD);font-weight:600}
+tr:nth-child(even){background:var(--bg2)}
+pre{background:var(--bg3);border-radius:7px;padding:14px;overflow-x:auto;font-size:13px;margin:10px 0}
+code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
+:not(pre)>code{background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--accent)}
+.q-card{margin:14px 0;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.q-header{padding:10px 14px;background:var(--bg2);cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:14px}
+.q-header:hover{background:var(--bg3)}
+.q-header .diff{font-size:11px;padding:2px 8px;border-radius:4px;font-weight:700}
+.diff-easy{background:#d4edda;color:#155724}.diff-mid{background:#fff3cd;color:#856404}.diff-hard{background:#f8d7da;color:#721c24}
+.q-body{padding:14px;display:none}
+.q-card.open .q-body{display:block}
+.q-card.open .q-header::after{content:'▲';font-size:11px}
+.q-card:not(.open) .q-header::after{content:'▼';font-size:11px}
+.key{display:inline-block;background:var(--accentL);color:var(--accent);padding:1px 6px;border-radius:3px;font-size:12px;font-weight:600;margin:0 2px}
+@media(max-width:900px){.sidebar{display:none}.main{margin-left:0;padding:20px 16px 60px}}
+@media print{.top-nav,.sidebar,.theme-btn{display:none!important}.main{margin:0;padding:16px;max-width:100%}}
+</style>
+</head>
+<body>
+
+<!-- ===== Top Navigation ===== -->
+<nav class="top-nav">
+  <a href="index.html" class="logo">Edge AI Docs</a>
+  <div class="links">
+    <a href="cockpit-hardware.html">A.硬件</a>
+    <a href="cockpit-training.html">B.训练</a>
+    <a href="cockpit-deploy.html">C.部署</a>
+    <a href="cockpit-agent.html">D.Agent</a>
+    <a href="cockpit-debug.html">E.调试</a>
+    <a href="robot-learning.html">机器人学习</a>
+    <a href="robot-interview.html" class="active">机器人面试</a>
+    <a href="ad-learning.html">AD学习</a>
+    <a href="ad-interview.html">AD面试</a>
+  </div>
+  <div class="right">
+    <button class="theme-btn" id="themeBtn">&#9790; / &#9788;</button>
+  </div>
+</nav>
+
+<!-- ===== Sidebar TOC ===== -->
+<aside class="sidebar">
+  <a href="#s1">1. 平台选型与基础</a>
+  <a href="#s2">2. 算法与训练</a>
+  <a href="#s3">3. 部署与实时控制</a>
+  <a href="#s4">4. Agent 与大模型</a>
+  <a href="#s5">5. 系统设计题</a>
+</aside>
+
+<!-- ===== Main Content ===== -->
+<main class="main">
+
+<h1>通用机器人 — 面试指南</h1>
+<p class="subtitle">29 道精选面试题 — 覆盖平台选型、算法训练、部署控制、Agent 大模型与系统设计</p>
+
+<!-- ==================== Section 1 ==================== -->
+<h2 id="s1">一、平台选型与基础</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q1: Jetson Orin vs Qualcomm QRB5165 vs RK3588 选型决策</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>三款芯片定位不同，需要根据场景综合决策。<span class="key">Jetson Orin</span> 拥有最高 275 TOPS（Orin NX 为 100 TOPS）的 INT8 算力，搭配 NVIDIA GPU 生态和 <span class="key">TensorRT</span>、CUDA 完整工具链，适合需要大模型推理和复杂视觉任务的高端机器人场景，但功耗较高（15-60W），成本在 $300-$800 之间。<span class="key">Qualcomm QRB5165</span> 基于 Snapdragon 865 平台，AI 算力约 15 TOPS（DSP+GPU），其优势在于出色的 ISP 图像处理能力、低功耗（<15W）以及完善的安卓生态和连接能力（5G/WiFi6），适合需要相机密集和通信能力的移动服务机器人。<span class="key">RK3588</span> 提供 6 TOPS NPU 算力，价格最低（$40-$70 模组），功耗约 5-8W，搭配 <span class="key">RKNN</span> 推理框架，适合成本敏感的消费级机器人和教育机器人。选型时需综合评估：推理算力需求（模型复杂度）、功耗预算（电池供电时长）、软件生态成熟度（开发效率）、量产成本和供应链稳定性。一般而言，人形机器人和工业机械臂优先选 Orin，服务机器人和配送机器人可选 QRB5165，扫地机器人和教育产品适合 RK3588。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q2: TOPS 标称值 vs 实际推理性能差距原因</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>TOPS（Tera Operations Per Second）是芯片厂商在理想条件下的峰值算力标称值，实际推理性能往往只能达到标称值的 <span class="key">10%-40%</span>，主要原因如下。第一，<span class="key">算子利用率</span>不足：标称 TOPS 假设所有计算单元 100% 满负荷运行乘加运算，但实际模型中包含大量 Softmax、LayerNorm、Resize 等非密集计算算子，这些算子无法充分利用 NPU/GPU 的矩阵计算单元。第二，<span class="key">内存带宽瓶颈</span>：现代神经网络的实际瓶颈往往是访存而非计算，尤其是 depthwise conv、attention 等算子的计算-访存比（Arithmetic Intensity）较低，导致计算单元等待数据。第三，<span class="key">量化精度差异</span>：标称 TOPS 通常以 INT8 甚至 INT4 计算，但实际模型可能需要部分层使用 FP16 保精度，混合精度会降低有效算力。第四，数据搬运开销：CPU-NPU 之间的数据传输、多核调度、前后处理均会引入额外延迟。因此评估平台时应以目标模型的实测 FPS 和延迟为准，而非比较 TOPS 数字。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q3: TensorRT vs RKNN vs TFLite 框架选择</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>三大推理框架与各自硬件深度绑定，选择框架本质上是选择硬件生态。<span class="key">TensorRT</span> 是 NVIDIA 官方推理优化引擎，支持 FP16/INT8 量化、layer fusion、kernel auto-tuning，在 Jetson 平台上性能最优，支持动态 batch 和 dynamic shape，且有丰富的 plugin 机制可自定义算子，缺点是只能运行在 NVIDIA GPU 上，模型转换调试门槛较高。<span class="key">RKNN</span>（Rockchip Neural Network）是瑞芯微 NPU 的专用框架，通过 RKNN-Toolkit2 从 ONNX/PyTorch 转换模型，支持 INT8/FP16 量化和异构计算（NPU+CPU+GPU），工具链对常见视觉模型支持较好，但对 Transformer 类模型和自定义算子支持较弱，社区资源相比 NVIDIA 生态较少。<span class="key">TFLite</span>（TensorFlow Lite）是 Google 推出的跨平台轻量推理框架，支持 CPU/GPU/DSP/NPU 多后端委托（Delegate），最大优势是跨平台兼容性好、模型格式统一，适合需要多平台部署的场景，但性能通常低于各平台的原生框架，且 delegate 的质量取决于各硬件厂商的适配程度。总结：性能优先选 TensorRT + Jetson，成本优先选 RKNN + RK3588，跨平台兼容优先选 TFLite。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q4: ROS2 零拷贝通信实现原理</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">ROS2 零拷贝</span>（Zero-Copy）通信旨在避免进程间传输大数据（如图像、点云）时的内存拷贝开销。其核心原理基于 <span class="key">共享内存</span>（Shared Memory）传输：发布者将消息数据写入共享内存区域，订阅者直接从同一内存区域读取，全程无需序列化/反序列化和跨进程内存拷贝。在实现层面，ROS2 通过 DDS 中间件的共享内存传输插件实现，如 <span class="key">Eclipse Cyclone DDS</span> 的 iceoryx 集成（又称 iox）和 <span class="key">Fast DDS</span> 的 SHM Transport。使用 iceoryx 时，系统会预先分配一块共享内存池（通过 RouDi 守护进程管理），发布者从池中获取内存块写入数据，然后仅通过共享内存传递一个指针/引用给订阅者。要启用零拷贝，需要使用 <code>rclcpp::LoanedMessage</code> API，通过 <code>publisher->borrow_loaned_message()</code> 获取预分配的内存，填充数据后调用 <code>publisher->publish(std::move(loaned_msg))</code>。零拷贝通信对于传输大于 64KB 的消息（如 640x480 图像约 900KB）能显著降低延迟，典型场景下可将图像传输延迟从毫秒级降至微秒级。需要注意的是，零拷贝要求消息类型是固定大小（fixed-size）的 POD 类型，对于变长消息需要额外处理。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q5: DDS QoS 配置对 AI 推理节点的影响</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">DDS QoS</span>（Quality of Service）配置直接影响 AI 推理节点的数据接收行为和系统稳定性。关键 QoS 策略包括：<span class="key">Reliability</span> — 对于推理节点通常选择 BEST_EFFORT 而非 RELIABLE，因为丢失一帧图像比等待重传导致的延迟更可接受；<span class="key">History</span> — 推理节点应设为 KEEP_LAST(1)，只保留最新一帧，避免处理过时数据导致延迟累积；<span class="key">Durability</span> — 设为 VOLATILE，推理节点不需要接收启动前的历史消息；<span class="key">Deadline</span> — 可设置期望的数据到达周期（如 33ms 对应 30fps），超时触发告警以检测传感器故障；<span class="key">Liveliness</span> — 用于检测上游传感器节点是否存活，推理节点可据此切换降级模式。一个常见错误是将推理节点的输入设为 RELIABLE + KEEP_ALL，这会导致推理较慢时消息队列不断堆积，最终内存溢出或延迟暴增。正确的实践是输入端使用 BEST_EFFORT + KEEP_LAST(1) 保证实时性，输出端根据下游需求选择 RELIABLE 或 BEST_EFFORT。此外，当推理节点和传感器节点的 QoS 不兼容时（如 Reliability 不匹配），ROS2 会静默拒绝连接，需要通过 <code>ros2 doctor</code> 排查。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q6: ROS2 节点生命周期管理</span><span class="diff diff-easy">初级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>ROS2 提供了 <span class="key">Managed Node</span>（也称 Lifecycle Node）机制，通过定义明确的状态机来规范节点的启动、运行和关闭过程。生命周期节点包含四个主要状态：<span class="key">Unconfigured</span>（创建后的初始状态）、<span class="key">Inactive</span>（已配置但不处理数据）、<span class="key">Active</span>（正常运行处理数据）、<span class="key">Finalized</span>（终止状态）。状态间通过 Transition 触发切换：configure（配置资源）、activate（开始处理）、deactivate（暂停处理）、cleanup（释放资源）、shutdown（关闭节点）。每个 Transition 对应两个回调函数 on_xxx 和 on_error，开发者在回调中实现具体逻辑，如 on_configure 中加载模型和参数，on_activate 中启动传感器订阅，on_deactivate 中停止推理线程。生命周期管理的核心价值在于：确保节点按正确顺序启动（如先启动传感器驱动再启动推理节点）、支持运行时动态启停（如切换工作模式时 deactivate 旧节点 activate 新节点）、以及优雅的错误恢复（error 状态可尝试恢复到 Unconfigured）。在机器人系统中，通常使用 <code>launch</code> 文件配合 <code>lifecycle_manager</code> 统一管理多个生命周期节点的启动顺序和依赖关系。</p>
+  </div>
+</div>
+
+<!-- ==================== Section 2 ==================== -->
+<h2 id="s2">二、算法与训练</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q7: Sim2Real gap 如何缩小</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">Sim2Real gap</span> 是指在仿真环境中训练的模型迁移到真实物理环境时性能下降的问题，主要来源于视觉外观差异、物理动力学差异和传感器噪声差异。缩小这一差距的核心策略有以下几类。<span class="key">Domain Randomization</span>：在仿真中随机化纹理、光照、相机参数、物理属性（摩擦系数、质量、关节阻尼等），使模型学到对这些变化鲁棒的特征，NVIDIA Isaac Sim 和 MuJoCo 等仿真器都原生支持此功能。<span class="key">Domain Adaptation</span>：使用 GAN（如 CycleGAN）或风格迁移将仿真图像转换为类真实图像，或通过对抗训练学习域不变特征。<span class="key">System Identification</span>：精确标定仿真环境中的物理参数（如机械臂的摩擦力、减速比），使仿真动力学尽可能贴近真实系统。<span class="key">Progressive Transfer</span>：先在仿真中预训练，再用少量真实数据 fine-tune，逐步适应真实环境。<span class="key">Teacher-Student Framework</span>：在仿真中训练有特权信息（如精确物体位姿）的 teacher 策略，再通过蒸馏训练只依赖真实传感器输入的 student 策略。实践中通常组合使用多种方法：先用大规模 Domain Randomization 预训练获得基础泛化能力，再用 10-100 个真实数据样本微调，可将仿真策略的成功率从 30-50% 提升到 80-90%。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q8: VLA 模型如何裁剪到端侧 (&lt;50M params)</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">VLA</span>（Vision-Language-Action）模型如 RT-2、Octo 等原始参数量通常在数十亿级别，裁剪到端侧 50M 以下需要多层次的压缩策略。首先是<span class="key">架构精简</span>：将视觉编码器从 ViT-Large 替换为 EfficientNet-B0 或 MobileNetV3（约 3-5M 参数），语言编码器从完整 LLM 替换为 distilled TinyBERT 或直接使用预编码的文本 embedding lookup table，Action head 使用轻量 MLP 或 diffusion policy 的小型 U-Net。其次是<span class="key">知识蒸馏</span>：用完整的云端 VLA 大模型作为 teacher，指导小模型学习中间特征和输出动作分布，关键是设计好蒸馏损失——既要匹配最终 action 输出，也要匹配中间层的视觉-语言对齐特征。第三是<span class="key">模态解耦</span>：不在端侧做完整的视觉-语言推理，而是将语言理解部分离线处理，将指令编码为固定维度的 task embedding 缓存在端侧，运行时只需视觉编码器 + task embedding + action decoder，大幅减少参数量。第四是<span class="key">量化与剪枝</span>：对裁剪后的模型进一步做 INT8 量化（参数量不变但推理加速）和结构化剪枝（如移除 attention heads）。典型的端侧 VLA 可压缩到 20-40M 参数，在 Jetson Orin NX 上以 10-20 Hz 运行。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q9: 小样本学习在机器人新物体识别中的应用</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>机器人在实际部署中经常需要识别训练集中未见过的新物体，<span class="key">小样本学习</span>（Few-Shot Learning）使机器人只需 1-5 张样本图片即可学会识别新类别。主流方法分三类：<span class="key">基于度量学习</span>的方法（如 Prototypical Networks、Siamese Networks）学习一个通用的特征嵌入空间，新物体的少量样本计算出原型向量（prototype），推理时通过余弦相似度或欧式距离匹配，这类方法推理速度快、适合端侧部署；<span class="key">基于预训练视觉模型</span>的方法利用 CLIP、DINOv2 等大模型提取的强表征能力，直接用预训练特征 + 最近邻分类器即可在零/少样本下识别新物体，是目前效果最好的方案；<span class="key">基于元学习</span>的方法（如 MAML）学习一个好的模型初始化，使模型能通过少量梯度步快速适应新任务。在机器人实际应用中，推荐使用 CLIP/DINOv2 + Prototypical Networks 的组合方案：用预训练视觉模型提取特征，用原型网络做分类，用户只需用手机拍摄 3-5 张新物体照片即可完成注册。端侧部署时，视觉特征提取器固定不变，仅需存储和更新各类别的原型向量，内存开销极小。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q10: Domain Randomization 原理与关键参数</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">Domain Randomization</span>（DR）的核心思想是：如果模型在足够多样的仿真环境变体中都能成功完成任务，那么真实环境只是所有变体中的一个特例，模型自然能泛化。DR 随机化的参数主要分为三类：<span class="key">视觉参数</span>包括纹理（随机颜色/图案/贴图）、光照（方向、强度、色温、阴影）、相机（位姿、视场角、畸变、噪声），以及干扰物（随机放置无关物体）；<span class="key">物理参数</span>包括物体质量（0.5x-2x 范围）、摩擦系数（0.1-1.0）、关节阻尼和刚度、接触参数（弹性恢复系数）；<span class="key">动力学参数</span>包括控制延迟（0-50ms）、执行器噪声（高斯噪声叠加）、传感器噪声模型。关键实践经验：随机化范围不是越大越好，过大会使训练不收敛，需要渐进式增加随机化范围（curriculum）；对任务影响最大的参数应优先随机化，如抓取任务中摩擦系数比光照更重要；视觉 DR 可用 <span class="key">Structured Domain Randomization</span> 替代完全随机，即保持场景语义合理性（如地面纹理只在合理范围内变化），效果通常优于纯随机。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q11: LoRA 在机器人视觉模型上的应用场景</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">LoRA</span>（Low-Rank Adaptation）通过在预训练模型的注意力层旁注入低秩矩阵（rank 通常为 4-16），仅训练不到 1% 的参数即可高效微调模型，特别适合机器人领域的以下场景。<span class="key">场景适配</span>：将通用视觉模型（如 DINOv2、CLIP）适配到特定机器人工作环境，例如仓库、厨房、医院等不同场景，每个场景训练一个 LoRA adapter（约 1-5MB），运行时按场景加载，避免为每个场景训练完整模型。<span class="key">任务特化</span>：同一个视觉 backbone 通过不同 LoRA adapter 支持检测、分割、姿态估计等不同任务，共享 backbone 权重节省端侧存储。<span class="key">持续学习</span>：机器人部署后遇到新物体或新场景时，只需用少量新数据训练一个新的 LoRA adapter，不影响原始模型权重，有效避免灾难性遗忘。<span class="key">个性化定制</span>：不同用户/客户的机器人可以有不同的 LoRA adapter，实现个性化行为定制。在端侧部署时，LoRA 权重可以在推理前与原始权重合并（W' = W + BA），不增加推理开销；也可以保持分离，支持运行时动态切换 adapter。需要注意 LoRA 的秩（rank）选择：rank 过小欠拟合，rank 过大失去效率优势，机器人视觉任务中 rank=8 通常是好的起点。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q12: 在线学习的风险控制 (灾难性遗忘)</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>机器人在线学习（Online Learning）指在部署过程中持续从新数据中学习以提升性能，但核心风险是<span class="key">灾难性遗忘</span>（Catastrophic Forgetting）——学习新知识时丢失已有能力。控制策略分为以下几类。<span class="key">正则化方法</span>：如 EWC（Elastic Weight Consolidation）通过 Fisher 信息矩阵识别对旧任务重要的权重并限制其变化幅度；SI（Synaptic Intelligence）在线估计参数重要性；这类方法实现简单但效果有限。<span class="key">经验回放</span>（Experience Replay）：维护一个有限大小的缓冲区存储旧数据样本，每次训练时混合新旧数据，是实践中最有效的方法，关键是缓冲区的数据选择策略（随机采样、基于不确定性采样、基于多样性采样）。<span class="key">架构隔离</span>：为新任务分配独立的网络分支（如 Progressive Neural Networks），或使用上述 LoRA 为新知识分配独立的适配器，物理上隔离新旧知识。<span class="key">安全验证</span>：在线学习后不直接部署，而是在验证集上测试关键能力指标，只有不低于基线时才接受更新。在机器人系统中推荐的组合策略是：LoRA adapter 隔离 + 小型 replay buffer + 能力验证门控，即用 LoRA 学新知识、用 replay 防遗忘、用验证确保安全。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q13: 联邦学习在多机器人场景的价值</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">联邦学习</span>（Federated Learning, FL）允许多台机器人在不共享原始数据的前提下协作训练共享模型，对机器人场景有独特价值。核心流程是：各机器人在本地数据上训练模型更新（梯度或权重差值），将更新上传到聚合服务器，服务器通过 <span class="key">FedAvg</span> 等算法汇总后下发全局模型。这解决了三个关键问题：<span class="key">数据隐私</span>——家庭服务机器人、医院机器人采集的数据含敏感信息，不宜集中存储；<span class="key">通信带宽</span>——原始传感器数据（图像、点云）体量巨大，传输模型更新（MB 级）远小于传输原始数据（GB 级）；<span class="key">数据多样性</span>——不同环境中的机器人遇到的场景各异，联邦聚合能获得比单机器人更丰富的训练信号。然而机器人场景存在特殊挑战：<span class="key">Non-IID 数据</span>严重（不同机器人的环境差异导致数据分布极不均匀），可用 FedProx 或 SCAFFOLD 等算法缓解；<span class="key">异构硬件</span>导致训练速度差异大，需要异步聚合策略；<span class="key">网络不稳定</span>，机器人可能长时间离线，需要支持部分参与的聚合。适用场景包括多台配送机器人共同学习导航策略、多台工业机器人共同提升质检模型等。</p>
+  </div>
+</div>
+
+<!-- ==================== Section 3 ==================== -->
+<h2 id="s3">三、部署与实时控制</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q14: TensorRT 优化全流程</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">TensorRT</span> 模型优化的完整流程包含以下步骤。第一步<span class="key">模型导出</span>：将 PyTorch 模型通过 <code>torch.onnx.export()</code> 导出为 ONNX 格式，需要注意设置正确的 opset_version（推荐 17+）、dynamic_axes（动态维度）、以及确保所有算子可导出。第二步<span class="key">ONNX 优化</span>：使用 <code>onnx-simplifier</code> 简化计算图（合并常量、消除冗余节点），用 <code>polygraphy</code> 检查模型正确性。第三步<span class="key">TensorRT 构建</span>：使用 <code>trtexec</code> 或 Python API 构建引擎，关键参数包括精度模式（<code>--fp16</code> 或 <code>--int8</code>）、workspace 大小（<code>--workspace=4096</code>）、优化配置文件（用于 dynamic shape）。第四步<span class="key">INT8 量化</span>：准备 500-1000 张校准数据集，实现 <code>IInt8EntropyCalibrator2</code> 接口进行 PTQ 校准，生成量化参数缓存文件。第五步<span class="key">精度验证</span>：使用 <code>polygraphy run</code> 对比 ONNX 和 TensorRT 输出的精度差异，逐层定位精度损失大的层并将其回退到 FP16。第六步<span class="key">性能调优</span>：通过 <code>trtexec --dumpProfile</code> 分析各层耗时，针对瓶颈层编写 TensorRT Plugin 自定义实现，或调整网络结构使其更 TensorRT-friendly。最终生成的 <code>.engine</code> 文件与具体 GPU 型号和 TensorRT 版本绑定，不同设备需要重新构建。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q15: Dynamic shape 的处理策略</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">Dynamic Shape</span> 是指模型输入尺寸在推理时可能变化的情况，如不同分辨率的图像输入或可变长度的序列。TensorRT 通过 <span class="key">Optimization Profile</span> 机制支持动态形状：为每个动态维度定义 MIN、OPT、MAX 三个值，TensorRT 会为 OPT 形状生成最优 kernel，同时保证 MIN 到 MAX 范围内都能正确运行。处理策略有以下几种。<span class="key">分桶策略</span>（Bucketing）：将可能的输入尺寸离散化为几个固定桶（如 320x320、640x640、1280x1280），每个桶创建一个 Profile，运行时选择最匹配的桶，padding 到桶尺寸。这样每个桶都有最优性能，代价是需要更多显存存储多个 Profile 的 kernel。<span class="key">Padding 策略</span>：定义一个覆盖所有情况的 MAX shape，所有输入 padding 到 MAX shape，简单但浪费计算。<span class="key">多引擎策略</span>：为每个常用尺寸构建独立的 engine 文件，运行时根据输入动态加载，性能最优但管理复杂。对于机器人视觉场景，推荐使用分桶策略，通常 2-3 个桶即可覆盖大部分场景，在灵活性和性能间取得平衡。注意 dynamic shape 会禁用部分优化（如某些 layer fusion），因此固定 shape 的性能通常比 dynamic shape 好 10-20%。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q16: 多模型共享 GPU 显存的调度方法</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>机器人系统通常需要同时运行多个 AI 模型（检测、分割、姿态估计等），而端侧 GPU 显存有限（如 Jetson Orin NX 仅 8-16GB 共享内存），需要精心调度。<span class="key">时分复用</span>（Time-Sharing）：使用 NVIDIA <span class="key">MPS</span>（Multi-Process Service）或 CUDA Stream 实现多模型在同一 GPU 上并发执行，MPS 允许多个进程共享 GPU 上下文，减少上下文切换开销；通过 CUDA Stream 可以实现模型 A 的计算与模型 B 的数据传输重叠（pipeline 并行）。<span class="key">显存复用</span>：对于非同时运行的模型（如检测和精细识别是串行的），可以让它们共享同一块显存区域，通过 <code>cudaMallocAsync</code> 和显存池管理器实现动态分配和释放。<span class="key">模型优先级调度</span>：为安全关键模型（如避障检测）分配高优先级 CUDA Stream，保证其延迟不受其他模型影响；低优先级模型（如场景理解）在空闲时执行。<span class="key">Backbone 共享</span>：多个任务共用一个视觉 backbone（如 ResNet-50），各任务只保留独立的 task head，显著减少总显存占用和计算量。在 Jetson 平台上还可使用 <span class="key">DLA</span>（Deep Learning Accelerator）将部分模型卸载到独立的推理加速器上，与 GPU 并行执行。实践中推荐 backbone 共享 + MPS 并发 + 优先级调度的组合方案。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q17: 实时控制延迟预算如何分配</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>机器人实时控制的端到端延迟需要严格控制在一个闭环周期内，<span class="key">延迟预算</span>（Latency Budget）分配是系统设计的关键。以一个典型的 100Hz（10ms 周期）机械臂控制回路为例，延迟预算通常这样分配：<span class="key">传感器采集与传输</span> 1-2ms（包括相机曝光、图像读取、DMA 传输）；<span class="key">数据预处理</span> 0.5-1ms（图像缩放、归一化、格式转换）；<span class="key">AI 推理</span> 3-5ms（目标检测/姿态估计等）；<span class="key">决策规划</span> 1-2ms（路径规划、轨迹生成）；<span class="key">控制指令生成与下发</span> 0.5-1ms（逆运动学、PID 计算、CAN/EtherCAT 通信）；需要预留 <span class="key">1-2ms 的安全余量</span>应对抖动（jitter）。分配原则：首先确定闭环频率（由任务动态特性决定，如抓取 30Hz、平衡 500Hz），然后从两端向中间分配——传感器和执行器延迟由硬件决定相对固定，安全余量不可压缩，剩余时间分配给 AI 推理和决策。当 AI 推理无法在预算内完成时，有三种处理策略：<span class="key">异步推理</span>（AI 以较低频率运行，控制器用上一帧结果插值）、<span class="key">模型简化</span>（换用更小模型）、<span class="key">分层控制</span>（高频内环用简单控制器，低频外环用 AI 决策）。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q18: RT-PREEMPT vs Xenomai 选择</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>两者都是 Linux 实时化方案，用于满足机器人控制的硬实时需求。<span class="key">RT-PREEMPT</span>（PREEMPT_RT 补丁）将 Linux 内核改造为完全可抢占的，关键修改包括：将 spinlock 替换为可睡眠的 rt_mutex、将中断处理线程化（threaded IRQ）、引入优先级继承解决优先级反转。其优势是与标准 Linux 完全兼容，应用开发无需修改，生态丰富（ROS2 官方支持），典型最坏延迟在 <span class="key">50-100 微秒</span>级别。<span class="key">Xenomai</span> 采用双内核架构（Cobalt 实时微内核 + Linux 内核），实时任务运行在 Cobalt 上优先级高于所有 Linux 任务，典型最坏延迟可达 <span class="key">10-30 微秒</span>。但 Xenomai 需要使用专用 API（Alchemy/POSIX skin）开发实时任务，与标准 Linux 应用不完全兼容，驱动也需要适配，开发门槛较高。选择建议：如果控制频率在 1kHz 以下（如移动机器人导航、服务机器人），RT-PREEMPT 足够且开发更简便；如果需要 1kHz 以上的控制频率（如力控机械臂、双足平衡），或对延迟抖动要求极严格（< 20us），选择 Xenomai。近年来 RT-PREEMPT 已被合并进 Linux 主线内核（6.x），成熟度大幅提升，在大多数机器人场景中已成为首选。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q19: 传感器时间同步方案设计</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>多传感器融合的前提是各传感器数据在时间上精确对齐，<span class="key">时间同步</span>方案设计是机器人系统的基础架构问题。同步分为两个层面：<span class="key">硬件同步</span>和<span class="key">软件同步</span>。硬件同步通过物理信号实现：使用 <span class="key">PTP</span>（IEEE 1588 精确时间协议）或 <span class="key">gPTP</span>（802.1AS）在以太网连接的设备间同步时钟，精度可达亚微秒级；对于相机和 LiDAR，使用 <span class="key">硬件触发</span>（Trigger）信号同步采集时刻，由主控板生成统一的触发脉冲（如 GPS PPS 信号），确保各传感器在同一物理时刻采集数据。软件同步在数据到达主控后处理：ROS2 提供 <code>message_filters::ApproximateTimeSynchronizer</code> 对不同 topic 的消息按时间戳配对，允许一定的时间容差（如 20ms）；对于帧率不同的传感器（如相机 30fps + IMU 200Hz），使用<span class="key">插值对齐</span>：以低频传感器时间为基准，对高频传感器数据进行线性插值。时间戳策略也很重要：应使用传感器硬件时间戳（采集时刻）而非接收时间戳（到达主控时刻），两者可能相差数毫秒。典型设计方案是：PTP 统一所有设备时钟 → 硬件触发同步关键传感器 → 软件 ApproximateSync 处理剩余对齐 → 异常检测（时间跳变、丢帧）。</p>
+  </div>
+</div>
+
+<!-- ==================== Section 4 ==================== -->
+<h2 id="s4">四、Agent 与大模型</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q20: Embodied Agent 与传统状态机架构的对比</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>传统机器人控制采用<span class="key">有限状态机</span>（FSM）或<span class="key">行为树</span>（Behavior Tree）架构：开发者预先定义所有状态和转移条件，系统按固定规则运行。这种架构优势是确定性强、可验证、延迟低，但劣势是无法处理开发者未预见的情况，扩展新任务需要修改代码，不支持自然语言指令。<span class="key">Embodied Agent</span> 架构以大语言模型为核心推理引擎，接收多模态感知输入和自然语言指令，通过思维链推理生成行动计划，调用各种技能原语（如 pick、place、navigate）执行任务。其核心优势是：<span class="key">开放性</span>——通过自然语言理解和常识推理处理未见场景；<span class="key">泛化性</span>——同一架构可执行多种任务而无需重新编程；<span class="key">交互性</span>——支持人类用自然语言下达指令和纠正。但挑战也明显：LLM 推理延迟高（端侧 1-5 秒）不适合快速反应场景、输出不确定可能产生不安全行为、计算资源需求大。实际系统中推荐<span class="key">混合架构</span>：底层安全控制和高频运动控制使用传统状态机保证实时性和安全性，高层任务规划和异常处理使用 Agent 架构提供灵活性。Agent 负责 "做什么"，状态机负责 "怎么做"。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q21: 端侧 Function Calling 安全性设计</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>端侧 LLM Agent 的 <span class="key">Function Calling</span> 直接控制物理执行器，安全风险远高于纯软件 Agent，需要多层安全机制。<span class="key">权限分级</span>：将所有可调用函数分为安全级别——L1 信息查询类（无副作用，如获取传感器数据）可直接执行；L2 可逆操作类（如移动到指定位置）需确认；L3 不可逆操作类（如抓取、释放、切割）需二次确认或人类授权。<span class="key">参数校验</span>：对每个函数的输入参数设置物理安全约束——速度上限、力矩上限、工作空间边界、关节角度限位，任何超限参数直接拒绝并返回错误。<span class="key">执行沙箱</span>：LLM 输出的函数调用先在仿真环境中试运行（digital twin），检查是否会导致碰撞、自碰撞或不稳定状态，通过后再执行到真实硬件。<span class="key">输出过滤</span>：对 LLM 生成的函数调用序列进行规则校验——禁止同时调用冲突函数、检查调用频率限制、验证调用顺序合法性（如必须先打开夹爪才能抓取）。<span class="key">紧急中断</span>：在任何函数执行期间，物理安全系统（力/扭矩传感器、碰撞检测）始终保持最高优先级，一旦触发立即终止所有运动。推荐实现一个 <span class="key">Safety Guard</span> 中间件层，拦截所有 LLM 到执行器的调用，统一执行上述安全检查。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q22: 视觉-语言接地 (Grounding) 的技术挑战</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">视觉-语言接地</span>（Visual-Language Grounding）是指将自然语言描述中的实体准确映射到图像或 3D 场景中的具体物体/区域，是 Embodied Agent 理解指令的关键能力。核心技术挑战包括：<span class="key">指称歧义</span>——"拿那个红色的杯子" 场景中可能有多个红色杯子，需要结合上下文（对话历史、手势方向、用户注视点）消歧；<span class="key">空间关系理解</span>——"放在书的右边" 需要模型同时理解目标物体检测和物体间的空间关系，这要求模型具备 3D 空间推理能力而不仅是 2D 图像识别；<span class="key">开放词汇</span>——用户可能用任意自然语言描述物体（"那个像小猫的玩具"），需要模型具有开放词汇的检测和分割能力，如 <span class="key">Grounding DINO</span> + <span class="key">SAM</span> 的组合方案。<span class="key">3D 接地</span>也是核心难题：2D 图像中的检测框需要投影到 3D 空间获得物体的 6DoF 姿态，才能指导机械臂抓取，这涉及深度估计、坐标变换和姿态估计等复杂流程。端侧部署的额外挑战是 Grounding 模型（如 Grounding DINO）参数量大（约 170M），需要量化或蒸馏后才能在边缘设备上实时运行。当前的解决趋势是用 VLM（如 Qwen3-Omni-4B）直接输出目标坐标，将语言理解和视觉定位统一在一个模型中。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q23: 端侧向量数据库选型 (FAISS-lite vs Hnswlib)</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>端侧 Agent 需要向量数据库支持语义检索（如从记忆库中检索相关经验、物体特征匹配），主流轻量方案是 <span class="key">FAISS</span>（CPU 版本）和 <span class="key">Hnswlib</span>。FAISS 由 Meta 开发，支持多种索引类型：<code>IndexFlatL2</code>（精确搜索，适合小数据集 <10K）、<code>IndexIVFFlat</code>（倒排索引，适合 10K-1M）、<code>IndexIVFPQ</code>（乘积量化，内存极优，适合 >1M），其优势是索引类型丰富、支持 GPU 加速（端侧可用 CUDA）、社区活跃，但库体积较大（约 30MB）。Hnswlib 实现了 <span class="key">HNSW</span>（Hierarchical Navigable Small World）算法，只提供一种索引但在中等规模（1K-100K）的 recall-speed 平衡上表现优异，库体积极小（<1MB header-only），API 简洁，内存占用可预测。选型建议：如果向量数量 <span class="key"><10K</span>（如机器人记忆库），两者性能差异不大，Hnswlib 集成更简单；如果向量数量 <span class="key">10K-100K</span>（如大型物体特征库），Hnswlib 的 HNSW 索引在 recall>95% 时速度优于 FAISS 的 IVF 索引；如果需要 <span class="key">极致内存压缩</span>（如 ARM 设备内存受限），FAISS 的 PQ 量化可将每个向量压缩到 8-32 字节。端侧额外考虑：需要支持增量添加向量（在线学习场景）、持久化到 Flash 存储、以及 ARM NEON 指令集加速。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q24: KV Cache 管理策略对比</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">KV Cache</span> 是 LLM 自回归推理的核心优化：缓存已计算 token 的 Key-Value 向量，避免重复计算，但显存占用随序列长度线性增长。端侧设备显存有限，KV Cache 管理策略直接决定可支持的上下文长度。<span class="key">静态预分配</span>：预先分配最大序列长度的 KV Cache 空间，简单但浪费——如果最大支持 2048 tokens 但平均只用 200 tokens，90% 的显存被浪费。<span class="key">PagedAttention</span>（来自 vLLM）：将 KV Cache 分成固定大小的 Page（如 16 tokens），按需动态分配和回收，类似操作系统虚拟内存管理，显存利用率可提升 2-4 倍，但实现复杂度高，需要维护 page table 和 block allocator。<span class="key">滑动窗口</span>（Sliding Window）：只保留最近 N 个 token 的 KV Cache（如 Mistral 的 4096 窗口），超出窗口的旧 token 被丢弃，显存恒定但丢失长距离依赖。<span class="key">Token 淘汰</span>（如 H2O、StreamingLLM）：基于 attention score 保留 "重要" token 的 KV Cache（如 attention sink tokens + 最近 tokens），在固定预算内尽量保留关键信息。<span class="key">KV Cache 量化</span>：将 KV Cache 从 FP16 量化到 INT8 甚至 INT4，显存直接减半或更多，精度损失通常可接受。端侧推荐组合策略：滑动窗口 + Token 淘汰 + INT8 量化，在 8GB 显存设备上可支持 4K+ 上下文长度的 3B 参数模型。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q25: Speculative Decoding 在端侧的可行性</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">Speculative Decoding</span>（推测解码）使用一个小型 draft 模型快速生成多个候选 token，再用大模型一次性并行验证，被接受的 token 无需大模型逐个生成，从而在不损失输出质量的前提下加速解码。在端侧的可行性分析：<span class="key">优势</span>——端侧 LLM（如 3B 参数）的解码速度通常只有 5-15 tokens/s，是用户体验的主要瓶颈，Speculative Decoding 理论上可加速 2-3 倍；draft 模型可以是同架构的更小版本（如 0.5B），甚至是 n-gram 模型或检索模型，开销很低。<span class="key">挑战</span>——端侧显存需要同时容纳 draft 模型和目标模型的参数及 KV Cache，在 8GB 设备上需要精心管理；draft 模型的 <span class="key">接受率</span>（acceptance rate）是关键指标，如果接受率低于 50%，加速效果有限甚至可能因额外开销变慢；端侧 GPU 的并行验证效率不如云端 GPU（受限于算力和内存带宽），批量验证 token 的加速比可能不理想。<span class="key">实际建议</span>：端侧更适合使用轻量化的推测策略——如 <span class="key">Medusa</span>（在目标模型上添加多个轻量 head 并行预测后续 token，不需要独立 draft 模型）或 <span class="key">Lookahead Decoding</span>（利用 Jacobi 迭代并行生成 token），这些方法不需要额外模型，显存开销小，在端侧更实用。评估可行性时需要在目标硬件上实测：如果端到端延迟降低 30% 以上则值得采用。</p>
+  </div>
+</div>
+
+<!-- ==================== Section 5 ==================== -->
+<h2 id="s5">五、系统设计题</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q26: 设计人形机器人的端到端感知-决策-执行系统</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>人形机器人系统需要处理高维感知输入并输出全身运动控制，是最复杂的机器人系统设计之一。<span class="key">感知层</span>设计：采用多模态传感器融合——头部双目 RGB 相机（立体视觉 + 目标检测/分割）、头部深度相机（近场物体三维感知）、IMU（姿态估计）、关节编码器（本体感知）、力/扭矩传感器（接触力感知）、可选 LiDAR（远场环境建图）。感知处理流水线：双目图像 → ViT backbone → 多任务头（检测、分割、深度估计）→ BEV 鸟瞰图特征；IMU + 关节编码器 → 状态估计器 → 机器人本体状态。<span class="key">决策层</span>设计：分为两级——高层任务规划使用 LLM Agent 接收自然语言指令，将复杂任务分解为技能序列（如 "拿桌上的水杯" → navigate_to(table) → detect(cup) → grasp(cup)）；低层运动规划使用 <span class="key">Whole-Body Controller</span>（全身控制器）将技能指令转化为关节轨迹，需要同时满足平衡约束（ZMP/DCM）、避障约束和任务约束。<span class="key">执行层</span>设计：关节控制器运行在 RT-PREEMPT 实时内核上，1kHz 控制频率，使用阻抗/力位混合控制策略；下肢步态使用 <span class="key">MPC</span>（模型预测控制）或 RL 策略生成步态；上肢操作使用逆运动学求解 + 力控。全系统使用 ROS2 作为通信中间件，感知和高层决策以 10-30Hz 运行，底层控制以 500-1000Hz 运行，通过异步解耦保证各层独立运行。安全机制包括：关节软硬限位、跌倒检测与恢复策略、紧急停止回路。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q27: 设计机械臂的自主抓取系统 (含 VLM 理解)</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>基于 VLM 的机械臂自主抓取系统需要融合视觉语言理解和精确运动控制。<span class="key">感知模块</span>：手眼相机（eye-in-hand）+ 场景相机（eye-to-hand）双视角配置，场景相机获取全局视野用于物体定位和场景理解，手眼相机在接近阶段提供精确位姿估计。视觉处理流水线：RGB 图像 → <span class="key">Grounding DINO</span>（开放词汇检测） → <span class="key">SAM</span>（精确分割） → 深度图 + 相机内参 → 3D 点云 → <span class="key">AnyGrasp/GraspNet</span>（抓取位姿生成）。<span class="key">VLM 理解模块</span>：接收用户自然语言指令（如 "把最大的红色积木放到蓝色盒子里"），VLM（如端侧的 Qwen3-Omni-4B-INT4，约 2.5GB 显存）解析指令：识别目标物体（最大的红色积木）、放置位置（蓝色盒子里）、操作类型（pick-and-place），生成结构化的任务描述传给执行模块。<span class="key">抓取规划模块</span>：从候选抓取位姿中选择最优解——考虑抓取稳定性（force closure）、可达性（逆运动学可解）、无碰撞（运动规划可行）、以及任务约束（如杯子要竖直抓取）。<span class="key">运动执行模块</span>：使用 MoveIt2 进行运动规划，分为 approach → grasp → lift → transport → place 五个阶段，每个阶段有独立的速度和力控参数。关键设计要点：抓取检测与执行的闭环——如果首次抓取失败（力传感器反馈未抓住），自动重新感知和规划；VLM 理解的缓存——对同一场景的重复查询做结果缓存避免重复推理。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q28: 设计多机器人协作清洁系统的 Agent 架构</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>多机器人协作清洁系统需要解决任务分配、区域协调和异常处理问题。<span class="key">整体架构</span>采用分层的 Multi-Agent 系统：中央 Coordinator Agent（可运行在边缘服务器或最强算力的机器人上）+ 各机器人本地 Executor Agent。<span class="key">Coordinator Agent</span> 负责：接收清洁任务指令（如 "清洁三楼所有会议室"）→ 获取环境地图和机器人状态 → 使用 LLM 进行任务分解和分配（考虑各机器人位置、电量、清洁能力） → 生成分区计划（如基于 Voronoi 划分减少重叠）→ 监控全局进度和处理冲突。<span class="key">Executor Agent</span> 运行在每台机器人端侧，负责：接收分配的子区域 → 局部路径规划（覆盖式路径 + 动态避障）→ 清洁执行 → 异常检测和上报（如遇到无法清洁的污渍、路径被阻断）→ 状态心跳上报。<span class="key">通信机制</span>：使用 ROS2 DDS 的多机通信能力，定义标准消息接口（TaskAssignment、StatusReport、ConflictResolution），支持机器人间直接通信（如两台机器人在走廊相遇时协商避让）。<span class="key">冲突解决</span>：区域边界冲突（两台机器人接近同一区域）通过优先级 + 实时重规划解决；资源冲突（如充电桩竞争）通过 Coordinator 统一调度队列管理。<span class="key">容错设计</span>：单台机器人故障时，Coordinator 自动将其未完成区域重新分配给最近的可用机器人；Coordinator 自身故障时，各 Executor 切换为独立工作模式，按预设规则继续清洁。系统使用 <span class="key">共享地图</span>（Occupancy Grid + 清洁状态标注）作为全局状态，各机器人实时更新已清洁区域。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q29: 设计服务机器人的长期记忆系统</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>服务机器人需要记忆用户偏好、环境变化和历史交互，<span class="key">长期记忆系统</span>是实现个性化服务的基础。<span class="key">记忆分层架构</span>：参考人类记忆模型设计三层——<span class="key">工作记忆</span>（当前对话上下文 + 实时感知信息，存储在内存中，容量受限，会话结束后通过摘要写入长期记忆）；<span class="key">情景记忆</span>（具体事件记录，如 "2024-01-15 用户张三要求把空调调到 25 度"，以结构化 JSON + 向量嵌入存储在 SQLite + 向量数据库中）；<span class="key">语义记忆</span>（抽象化的知识和偏好，如 "用户张三偏好室温 24-26 度"，由多次情景记忆归纳提炼而来）。<span class="key">记忆写入</span>：每次交互结束后，使用端侧 LLM 从对话中提取关键信息（人物、事件、偏好、时间），生成情景记忆条目并向量化存储；定期（如每天夜间）对累积的情景记忆进行归纳总结，更新语义记忆。<span class="key">记忆检索</span>：当新交互发生时，根据当前上下文（用户身份、场景、指令）从记忆库中检索相关记忆——向量相似度检索 + 时间衰减加权 + 元数据过滤（如只检索该用户的记忆），将检索到的记忆注入 LLM prompt 的上下文中。<span class="key">记忆管理</span>：实现遗忘机制防止记忆无限增长——基于访问频率和时间衰减的重要性评分，定期清理低重要性的情景记忆；隐私保护方面，敏感信息（如健康数据）加密存储，用户可随时要求删除其所有记忆数据。<span class="key">端侧实现</span>：SQLite 存储结构化记忆（<100MB），Hnswlib 存储向量索引（<50MB），总计端侧存储开销 <200MB，完全可以在嵌入式设备上运行。</p>
+  </div>
+</div>
+
+</main>
+
+<script>
+var b=document.getElementById('themeBtn');b.onclick=function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('theme',h.dataset.theme)}catch(e){}};
+try{var s=localStorage.getItem('theme');if(s)document.documentElement.dataset.theme=s}catch(e){}
+var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.remove('active')});var l=document.querySelector('.sidebar a[href="#'+e.target.id+'"]');if(l)l.classList.add('active')}})},{rootMargin:'-60px 0px -70% 0px'});
+document.querySelectorAll('h2[id]').forEach(function(h){obs.observe(h)});
+</script>
+</body>
+</html>

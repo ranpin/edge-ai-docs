@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Part E1: aadkcore 核心框架 — Edge AI Docs</title>
+<style>
+:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-h:52px}
+[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+.top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;z-index:1000}
+.top-nav .logo{font-weight:700;font-size:15px;color:var(--accent);margin-right:24px;text-decoration:none}
+.top-nav .links{display:flex;gap:2px;flex-wrap:wrap}
+.top-nav .links a{padding:4px 10px;border-radius:5px;text-decoration:none;color:var(--text2);font-size:12px;font-weight:500}
+.top-nav .links a:hover{background:var(--accentL);color:var(--accent)}
+.top-nav .links a.active{background:var(--accent);color:#fff}
+.top-nav .right{margin-left:auto}
+.theme-btn{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--text)}
+.sidebar{position:fixed;top:var(--nav-h);left:0;bottom:0;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;z-index:900}
+.sidebar a{display:block;padding:4px 16px 4px 20px;text-decoration:none;color:var(--text2);font-size:12px;border-left:3px solid transparent}
+.sidebar a:hover{color:var(--accent);background:var(--accentL)}
+.sidebar a.active{color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.sidebar .toc-part{padding:8px 20px 4px;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px}
+.main{margin-left:var(--sidebar-w);margin-top:var(--nav-h);padding:28px 40px 60px;max-width:900px}
+h1{font-size:26px;font-weight:800;margin-bottom:6px}
+.subtitle{font-size:14px;color:var(--muted);margin-bottom:28px}
+h2{font-size:20px;font-weight:700;margin:36px 0 14px;padding-bottom:6px;border-bottom:2px solid var(--accentL)}
+h3{font-size:16px;font-weight:600;margin:20px 0 10px}
+p{margin-bottom:10px;color:var(--text2)}
+strong{color:var(--text)}
+.info-box{padding:14px 16px;border-radius:7px;margin:14px 0;border-left:4px solid var(--info);background:var(--bg2);font-size:14px}
+.info-box.warn{border-left-color:var(--warning)}
+.info-box.ok{border-left-color:var(--success)}
+.info-box.err{border-left-color:var(--danger)}
+.info-box .title{font-weight:700;font-size:13px;margin-bottom:4px}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
+th{background:var(--accentL);color:var(--accentD);font-weight:600}
+tr:nth-child(even){background:var(--bg2)}
+.mermaid-wrap{margin:16px 0;padding:16px;background:var(--bg2);border-radius:7px;overflow-x:auto}
+.chart-wrap{margin:16px 0;background:var(--bg2);border-radius:7px;padding:12px}
+.chart-box{width:100%;height:360px}
+pre{background:var(--bg3);border-radius:7px;padding:14px;overflow-x:auto;font-size:13px;margin:10px 0}
+code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
+:not(pre)>code{background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--accent)}
+ol.steps{margin:10px 0 10px 20px;color:var(--text2)}
+ol.steps li{margin-bottom:6px}
+ol.steps code{font-size:12px}
+@media(max-width:900px){.sidebar{display:none}.main{margin-left:0;padding:20px 16px 60px}}
+@media print{.top-nav,.sidebar,.theme-btn{display:none!important}.main{margin:0;padding:16px;max-width:100%}}
+</style>
+</head>
+<body>
+
+<!-- ===== Top Navigation ===== -->
+<nav class="top-nav">
+  <a href="index.html" class="logo">Edge AI Docs</a>
+  <div class="links">
+    <a href="cockpit-hardware.html">A.硬件</a>
+    <a href="cockpit-training.html">B.训练</a>
+    <a href="cockpit-infer.html">C.推理优化</a>
+    <a href="cockpit-deploy.html">D.部署</a>
+    <a href="cockpit-agent-core.html" class="active">E1.核心框架</a>
+    <a href="cockpit-agent-group.html">E2.场景Agent</a>
+    <a href="cockpit-debug.html">F.调试</a>
+    <a href="cockpit-interview.html">面试</a>
+  </div>
+  <div class="right">
+    <button class="theme-btn" id="themeBtn">&#9790; / &#9788;</button>
+  </div>
+</nav>
+
+<!-- ===== Sidebar TOC ===== -->
+<aside class="sidebar">
+  <div class="toc-part">Part E1: aadkcore 核心框架</div>
+  <a href="#ch1">1. 架构总览</a>
+  <a href="#sec-layer">1.1 分层架构</a>
+  <a href="#sec-dir">1.2 目录结构</a>
+  <a href="#sec-platform">1.3 平台支持矩阵</a>
+  <a href="#ch2">2. ModelInstance</a>
+  <a href="#sec-mi-api">2.1 核心 API</a>
+  <a href="#sec-mi-content">2.2 多模态消息</a>
+  <a href="#sec-mi-config">2.3 ModelConfig</a>
+  <a href="#sec-mi-example">2.4 代码示例</a>
+  <a href="#ch3">3. ModelScheduler</a>
+  <a href="#sec-ms-arch">3.1 调度架构</a>
+  <a href="#sec-ms-task">3.2 任务与优先级</a>
+  <a href="#sec-ms-preempt">3.3 抢占机制</a>
+  <a href="#ch4">4. ChatHistory</a>
+  <a href="#sec-ch-zone">4.1 多音区</a>
+  <a href="#sec-ch-user">4.2 关键人物</a>
+  <a href="#sec-ch-query">4.3 历史获取</a>
+  <a href="#ch5">5. RAG 知识增强</a>
+  <a href="#ch6">6. MCP 工具协议</a>
+  <a href="#ch7">7. A2A 协议</a>
+  <a href="#ch8">8. 运行时与插件</a>
+  <a href="#sec-rt-plugin">8.1 插件接口</a>
+  <a href="#sec-rt-load">8.2 动态加载</a>
+  <a href="#ch9">9. LLM Flow 与 Tool</a>
+  <a href="#sec-flow-pipe">9.1 流水线</a>
+  <a href="#sec-flow-tool">9.2 工具系统</a>
+  <a href="#sec-flow-e2e">9.3 端到端链路</a>
+  <a href="#ch10">10. 端云协同架构</a>
+  <a href="#ch11">11. 安全沙箱机制</a>
+</aside>
+
+<!-- ===== Main Content ===== -->
+<main class="main">
+
+<h1>Part E1: aadkcore 核心框架</h1>
+<p class="subtitle">Chapters 1-9 — 架构总览、统一模型接口、模型调度、对话管理、RAG、MCP、A2A、运行时与插件、LLM Flow</p>
+
+<!-- ============================================================ -->
+<!-- Chapter 1 -->
+<!-- ============================================================ -->
+<h2 id="ch1">1. aadkcore 架构总览</h2>
+
+<p><strong>aadkcore</strong> 是自研的端侧多平台 AI Agent 核心引擎，采用 C++17 编写，编译产物为 <code>libaadkcore.so</code>。框架的核心目标是：<strong>一套代码，屏蔽底层推理后端差异，统一 Agent 开发范式</strong>，支持 x86 云端、Jetson Orin、高通 SA8397P 等多种平台。</p>
+
+<h3 id="sec-layer">1.1 分层架构</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph TD
+    subgraph APP["应用层 (agent_group / examples)"]
+        A1["车控 Agent"]
+        A2["闲聊 Agent"]
+        A3["主动语音 Agent"]
+        A4["视觉问答 Agent"]
+    end
+
+    subgraph API["API 层 (aadkapi/)"]
+        B1["ModelInstance"]
+        B2["ChatHistory"]
+        B3["RagInstance"]
+        B4["McpServer"]
+        B5["A2AServer"]
+        B6["ModelRunner"]
+    end
+
+    subgraph CORE["内部实现层 (include/ + src/)"]
+        C1["BaseAgent / LlmAgent"]
+        C2["BaseLlmFlow / SingleFlow"]
+        C3["ModelScheduler"]
+        C4["AgentRuntime / SystemRuntime"]
+        C5["BaseTool / BaseToolset"]
+    end
+
+    subgraph PLATFORM["平台适配层"]
+        D1["Lape — Jetson Orin"]
+        D2["QNN — SA8397P"]
+        D3["Bailian — Cloud x86"]
+    end
+
+    APP --> API
+    API --> CORE
+    CORE --> PLATFORM
+
+    style APP fill:#4361ee,color:#fff
+    style API fill:#7b8cff,color:#fff
+    style CORE fill:#f39c12,color:#fff
+    style PLATFORM fill:#2ecc71,color:#fff
+</div></div>
+
+<h3 id="sec-dir">1.2 代码目录结构</h3>
+
+<table>
+<thead>
+<tr><th>目录</th><th>职责</th></tr>
+</thead>
+<tbody>
+<tr><td><code>aadkapi/</code></td><td>公共 API 头文件：ModelInstance、ChatHistory、RagInstance、McpServer、A2AServer、content、model_config 等</td></tr>
+<tr><td><code>include/agent/</code></td><td>Agent 基类：BaseAgent、LlmAgent、InvocationContext、RunConfig</td></tr>
+<tr><td><code>include/flow/</code></td><td>LLM 推理流水线：BaseLlmFlow、SingleFlow、BaseLlmProcessor、Instructions</td></tr>
+<tr><td><code>include/models/</code></td><td>模型配置与注册（LlmRegistry、BaseLlm）</td></tr>
+<tr><td><code>include/rag/</code></td><td>RAG 知识增强：RagServiceBase 抽象基类</td></tr>
+<tr><td><code>include/memory/</code></td><td>对话记忆管理</td></tr>
+<tr><td><code>include/tools/</code></td><td>Tool 系统：BaseTool、BaseToolset、MCP 客户端/服务端、ToolContext</td></tr>
+<tr><td><code>include/runtime/</code></td><td>运行时：AgentRuntime、SystemRuntime、AgentPlugin、ModelScheduler、ConstantIDs</td></tr>
+<tr><td><code>src/</code></td><td>所有模块的实现代码（agent、flow、models、rag、runner、runtime、tools 等子目录）</td></tr>
+<tr><td><code>examples/</code></td><td>使用示例</td></tr>
+</tbody>
+</table>
+
+<h3 id="sec-platform">1.3 平台支持矩阵</h3>
+
+<table>
+<thead>
+<tr><th>平台</th><th>芯片</th><th>推理后端</th><th>构建脚本</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>x86_64</strong></td><td>Intel / AMD</td><td>Bailian（云端）</td><td><code>build.sh</code></td></tr>
+<tr><td><strong>aarch64 Orin</strong></td><td>Jetson Orin</td><td>Lape（本地）</td><td><code>build_orin.sh</code> / <code>build_cross_for_orin.sh</code></td></tr>
+<tr><td><strong>aarch64 SA8397P</strong></td><td>SA8397P</td><td>QNN（本地）</td><td><code>build_8397_linux.sh</code> / <code>build_8397_android.sh</code></td></tr>
+<tr><td><strong>aarch64 SA8295</strong></td><td>SA8295</td><td>QNN（本地）</td><td><code>build_8295_android.sh</code></td></tr>
+<tr><td><strong>aarch64 SA9075</strong></td><td>SA9075P</td><td>QNN（本地）</td><td><code>build_9075_linux.sh</code></td></tr>
+</tbody>
+</table>
+
+<div class="info-box ok">
+<div class="title">设计原则</div>
+<p>上层 Agent 代码通过 <code>aadkapi/</code> 中的统一接口（ModelInstance、ChatHistory 等）开发，无需感知底层推理后端差异。切换平台只需更换构建脚本和模型文件，Agent 业务逻辑代码零修改。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 2 -->
+<!-- ============================================================ -->
+<h2 id="ch2">2. 统一模型接口 — ModelInstance</h2>
+
+<p><code>ModelInstance</code>（定义于 <code>aadkapi/model_instance.hpp</code>）是面向 Agent 开发者的核心模型交互类。它封装了单个 LLM 模型实例，提供流式/非流式生成、多模态输入、LoRA 热加载等能力，屏蔽 Lape / QNN / Bailian 后端差异。</p>
+
+<h3 id="sec-mi-api">2.1 核心 API</h3>
+
+<table>
+<thead>
+<tr><th>API</th><th>返回类型</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>streamGenerate(messages, history, callback, ...)</code></td><td><code>ModelResponse</code></td><td>流式生成，通过 <code>StreamCallback</code> 逐 token 回调，支持指定 lora_id、InferParams</td></tr>
+<tr><td><code>generate(messages, callback, ...)</code></td><td><code>ModelResponse</code></td><td>非流式一次性生成，通过 <code>CompletionCallback</code> 返回完整结果</td></tr>
+<tr><td><code>preprocessImage(image)</code></td><td><code>optional&lt;shared_ptr&lt;vector&lt;float&gt;&gt;&gt;</code></td><td>图像预处理为 embedding，支持 ImageBlob 和 ImageUrlContent 两种输入</td></tr>
+<tr><td><code>preprocessAudio(audio)</code></td><td><code>optional&lt;shared_ptr&lt;vector&lt;float&gt;&gt;&gt;</code></td><td>音频预处理为 embedding，输入 AudioBlob</td></tr>
+<tr><td><code>addLora(lora_paths)</code></td><td><code>vector&lt;int&gt;</code></td><td>热加载 LoRA 适配器，返回 lora_id 列表，后续推理可指定 lora_id</td></tr>
+<tr><td><code>suspend(deinit) / resume()</code></td><td><code>void</code></td><td>暂停/恢复模型推理；suspend 时可选择是否卸载底层资源释放内存</td></tr>
+<tr><td><code>stopGenerate()</code></td><td><code>bool</code></td><td>中断当前正在进行的生成任务</td></tr>
+<tr><td><code>setConfig(config) / getConfig()</code></td><td><code>void / optional&lt;ModelConfig&gt;</code></td><td>设置/获取模型配置参数</td></tr>
+<tr><td><code>is_ready()</code></td><td><code>bool</code></td><td>查询模型是否已就绪</td></tr>
+</tbody>
+</table>
+
+<div class="info-box">
+<div class="title">回调函数类型</div>
+<p><code>StreamCallback = function&lt;void(const string&amp; content, bool is_finished, void* user_data)&gt;</code> — 流式回调，每生成一个 token 调用一次，<code>is_finished</code> 为 true 表示生成结束。<br/>
+<code>CompletionCallback = function&lt;void(const string&amp; content, void* user_data)&gt;</code> — 非流式回调，生成完成后一次性返回。</p>
+</div>
+
+<h3 id="sec-mi-content">2.2 多模态消息类型系统</h3>
+
+<p>消息类型定义于 <code>aadkapi/content.hpp</code>，采用 <code>std::variant</code> 实现多模态内容的类型安全表示。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+classDiagram
+    class Message {
+        +Role role
+        +vector~ContentType~ content
+        +createSystemMessage(text)
+        +createUserMessage(text)
+        +addTextContent(text)
+        +addImageUrlContent(url)
+        +addImageBlob(blob)
+        +addAudioBlob(blob)
+        +addImageEmbedding(emb)
+        +addAudioEmbedding(emb)
+    }
+
+    class Role {
+        &lt;&lt;enumeration&gt;&gt;
+        SYSTEM
+        USER
+        ASSISTANT
+    }
+
+    class ContentType {
+        &lt;&lt;variant&gt;&gt;
+        TextContent
+        ImageUrlContent
+        ImageBlob
+        AudioBlob
+        ImageEmbedding
+        AudioEmbedding
+        FunctionCall
+        FunctionResponse
+    }
+
+    Message --> Role
+    Message --> ContentType
+</div></div>
+
+<table>
+<thead>
+<tr><th>ContentType</th><th>字段</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>TextContent</code></td><td><code>text: string</code></td><td>文本内容</td></tr>
+<tr><td><code>ImageUrlContent</code></td><td><code>url: ImageSource</code></td><td>图像 URL 或 Base64 Data URI</td></tr>
+<tr><td><code>ImageBlob</code></td><td><code>data, width, height, channels, mimetype</code></td><td>图像原始二进制数据</td></tr>
+<tr><td><code>AudioBlob</code></td><td><code>data: vector&lt;int16_t&gt;, size, mimetype</code></td><td>音频原始二进制数据</td></tr>
+<tr><td><code>ImageEmbedding</code></td><td><code>data: shared_ptr&lt;vector&lt;float&gt;&gt;, shape</code></td><td>图像 embedding（preprocessImage 输出）</td></tr>
+<tr><td><code>AudioEmbedding</code></td><td><code>data: shared_ptr&lt;vector&lt;float&gt;&gt;, shape</code></td><td>音频 embedding（preprocessAudio 输出）</td></tr>
+<tr><td><code>FunctionCall</code></td><td><code>name, arguments, index, id, type</code></td><td>LLM 发起的函数调用</td></tr>
+<tr><td><code>FunctionResponse</code></td><td><code>tool_call_id, name, content</code></td><td>工具调用返回结果</td></tr>
+</tbody>
+</table>
+
+<h3 id="sec-mi-config">2.3 ModelConfig 参数</h3>
+
+<p>模型推理参数定义于 <code>aadkapi/model_config.hpp</code>，包含 <code>ModelConfig</code>（全局配置）和 <code>InferParams</code>（单次推理覆写）两个层级。</p>
+
+<table>
+<thead>
+<tr><th>参数</th><th>类型</th><th>默认值</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>temperature</code></td><td><code>double</code></td><td>0.0</td><td>生成温度，越高越随机</td></tr>
+<tr><td><code>top_p</code></td><td><code>double</code></td><td>1.0</td><td>核采样概率</td></tr>
+<tr><td><code>top_k</code></td><td><code>int</code></td><td>1</td><td>Top-K 采样</td></tr>
+<tr><td><code>max_output_tokens</code></td><td><code>int</code></td><td>1024</td><td>最大输出 token 数</td></tr>
+<tr><td><code>seed</code></td><td><code>int</code></td><td>42</td><td>随机种子</td></tr>
+<tr><td><code>greedy</code></td><td><code>bool</code></td><td>true</td><td>是否贪心解码</td></tr>
+<tr><td><code>repetition_penalty</code></td><td><code>int</code></td><td>1</td><td>重复惩罚因子</td></tr>
+<tr><td><code>ebnf_path</code></td><td><code>string</code></td><td>""</td><td>EBNF 语法文件路径，用于约束解码</td></tr>
+<tr><td><code>pruned_vocabulary</code></td><td><code>string</code></td><td>""</td><td>裁剪词表，减少解码搜索空间</td></tr>
+<tr><td><code>enable_jump_forward</code></td><td><code>bool</code></td><td>false</td><td>约束解码跳跃前进优化</td></tr>
+<tr><td><code>config_file_path</code></td><td><code>string</code></td><td>""</td><td>模型特定配置文件路径</td></tr>
+</tbody>
+</table>
+
+<h3 id="sec-mi-example">2.4 流式多模态推理代码示例</h3>
+
+<pre><code>// 1. 创建模型实例
+ModelInstance model("qwen-vl-max");
+
+// 2. 设置配置
+ModelConfig config;
+config.temperature = 0.7;
+config.max_output_tokens = 512;
+model.setConfig(config);
+
+// 3. 构造多模态消息
+auto user_msg = message::Message::createUserMessage();
+user_msg.addTextContent("描述这张图片中的内容");
+user_msg.addImageUrlContent(
+    message::ImageUrlContent::createFromBase64(base64_data, "jpeg"));
+
+message::MessageList messages = {
+    message::Message::createSystemMessage("你是一个车载智能助手。"),
+    user_msg
+};
+message::MessageList history; // 历史对话
+
+// 4. 流式生成
+model.streamGenerate(
+    messages, history,
+    [](const std::string&amp; token, bool is_finished, void* ud) {
+        std::cout &lt;&lt; token &lt;&lt; std::flush;
+        if (is_finished) std::cout &lt;&lt; std::endl;
+    },
+    nullptr  // user_data
+);</code></pre>
+
+<!-- ============================================================ -->
+<!-- Chapter 3 -->
+<!-- ============================================================ -->
+<h2 id="ch3">3. 模型调度器 — ModelScheduler</h2>
+
+<p>端侧场景下，多个 Agent（车控、闲聊、主动语音等）可能并发请求同一个 LLM 模型。<code>ModelScheduler</code>（定义于 <code>include/runtime/model_scheduler.h</code>）提供基于优先级的任务队列和抢占调度，确保高优先级任务及时响应。</p>
+
+<h3 id="sec-ms-arch">3.1 调度架构</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+flowchart LR
+    A1["Agent 1<br/>车控"] -->|SubmitTask| Q["Priority Queue<br/>综合评分排序"]
+    A2["Agent 2<br/>闲聊"] -->|SubmitTask| Q
+    A3["Agent 3<br/>主动语音"] -->|PreemptAndSubmit| Q
+
+    Q --> W["Worker Thread<br/>SchedulerLoop"]
+    W --> M["ModelInstance<br/>Execute"]
+    M --> CB["StreamCallback /<br/>CompletionCallback"]
+
+    style Q fill:#f39c12,color:#fff
+    style W fill:#4361ee,color:#fff
+    style M fill:#2ecc71,color:#fff
+</div></div>
+
+<h3 id="sec-ms-task">3.2 任务类型与优先级</h3>
+
+<p><strong>四种任务类型</strong>（<code>TaskType</code> 枚举）：</p>
+<table>
+<thead>
+<tr><th>TaskType</th><th>值</th><th>说明</th><th>典型场景</th></tr>
+</thead>
+<tbody>
+<tr><td><code>LLM_STREAM</code></td><td>0</td><td>流式文本生成</td><td>语音助手实时对话</td></tr>
+<tr><td><code>LLM_NON_STREAM</code></td><td>1</td><td>非流式生成</td><td>意图分类、Slot 填充</td></tr>
+<tr><td><code>VISION_DECODE</code></td><td>2</td><td>视觉模型推理</td><td>图像理解、物体检测</td></tr>
+<tr><td><code>AUDIO_DECODE</code></td><td>3</td><td>音频模型推理</td><td>语音编码、ASR</td></tr>
+</tbody>
+</table>
+
+<p><strong>四种优先级</strong>（<code>PriorityBase</code> 枚举）：</p>
+<table>
+<thead>
+<tr><th>优先级</th><th>数值</th><th>适用场景</th></tr>
+</thead>
+<tbody>
+<tr><td><code>LOW</code></td><td>10</td><td>后台摘要、日志分析</td></tr>
+<tr><td><code>NORMAL</code></td><td>20</td><td>闲聊对话</td></tr>
+<tr><td><code>HIGH</code></td><td>30</td><td>车控指令</td></tr>
+<tr><td><code>CRITICAL</code></td><td>40</td><td>紧急安全指令</td></tr>
+</tbody>
+</table>
+
+<p><strong>综合评分公式</strong>：调度器使用 <code>CompareTask</code> 比较器，基于优先级和等待时间计算综合评分：</p>
+
+<pre><code>score = priority * weight_priority + wait_time_ms * weight_wait * 0.001
+
+// 默认权重：weight_priority = 2.0, weight_wait = 0.5
+// 等待越久，score 越高，避免低优先级任务饥饿</code></pre>
+
+<h3 id="sec-ms-preempt">3.3 抢占机制与 ModelRunner</h3>
+
+<table>
+<thead>
+<tr><th>调度操作</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>SubmitTask(task)</code></td><td>提交任务到优先级队列，按评分排序等待执行</td></tr>
+<tr><td><code>PreemptAndSubmit(task)</code></td><td>中断当前正在执行的任务，立即执行高优先级任务</td></tr>
+<tr><td><code>BoostPriority(task_id, delta)</code></td><td>动态提升指定任务的优先级</td></tr>
+<tr><td><code>StopTask(task_id, scenario_id)</code></td><td>停止指定任务</td></tr>
+<tr><td><code>ListAllTasks()</code></td><td>列出所有任务及其状态</td></tr>
+</tbody>
+</table>
+
+<p><strong>ModelRunner 单例</strong>（<code>aadkapi/model_runner.h</code>）是调度器的上层封装：</p>
+<ul>
+<li><code>getInstance()</code> 全局单例，所有 Agent 共享</li>
+<li><code>scene_model_details_</code>：<code>scene_id → ModelDetails</code> 映射，管理各场景的模型实例与 LoRA 配置</li>
+<li><code>schedule_run_sync()</code>：提交调度任务并同步等待结果，支持指定 LoRA 名称路由到不同适配器</li>
+<li><code>preprocessImage() / preprocessAudio()</code>：多模态预处理，基于 <code>DataMessage</code> 中的媒体数据</li>
+</ul>
+
+<div class="info-box">
+<div class="title">TaskResponse 结构</div>
+<p>每个任务完成后返回 <code>TaskResponse</code>，包含：<code>task_id</code>（任务ID）、<code>status</code>（error_code 枚举）、<code>ttft</code>（首 token 延迟 ms）、<code>input_tokens</code>、<code>output_tokens</code>、<code>tokens_per_second</code>（吞吐量），可用于性能监控和调优。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 4 -->
+<!-- ============================================================ -->
+<h2 id="ch4">4. 多音区对话管理 — ChatHistory</h2>
+
+<p>车载座舱场景下，不同座位的乘员可能同时与 AI 助手对话。<code>ChatHistory</code>（定义于 <code>aadkapi/chat_history.hpp</code>）实现了按音区隔离的对话历史管理，支持关键人物识别与指代消歧。</p>
+
+<h3 id="sec-ch-zone">4.1 音区枚举 AudioZone</h3>
+
+<table>
+<thead>
+<tr><th>枚举值</th><th>zone_id</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>InvalidZone</code></td><td>0</td><td>无效音区</td></tr>
+<tr><td><code>FrontLeftZone</code></td><td>1</td><td>主驾（FrontZone 别名）</td></tr>
+<tr><td><code>FrontRightZone</code></td><td>2</td><td>副驾</td></tr>
+<tr><td><code>MiddleLeftZone</code></td><td>4</td><td>左后排</td></tr>
+<tr><td><code>MiddleRightZone</code></td><td>8</td><td>右后排</td></tr>
+<tr><td><code>BackLeftZone</code></td><td>16</td><td>BackLeftZone（扩展）</td></tr>
+<tr><td><code>BackRightZone</code></td><td>32</td><td>BackRightZone（扩展）</td></tr>
+<tr><td><code>AllZone</code></td><td>0xFF</td><td>所有音区</td></tr>
+</tbody>
+</table>
+
+<p><strong>ChatMessage 三种类型</strong>：</p>
+<table>
+<thead>
+<tr><th>类型</th><th>工厂方法</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>query</code></td><td><code>ChatMessage::query(content, zone, call_id, ts)</code></td><td>用户语音输入</td></tr>
+<tr><td><code>response</code></td><td><code>ChatMessage::response(content, zone, call_id, ts)</code></td><td>模型回复</td></tr>
+<tr><td><code>info</code></td><td><code>ChatMessage::info(content, call_id, ts, zone)</code></td><td>Agent 执行过程中需要加入上下文的系统信息</td></tr>
+</tbody>
+</table>
+
+<h3 id="sec-ch-user">4.2 关键人物系统 — UserInfo</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+flowchart LR
+    Q["用户说: '我叫张三'"] --> D["detectUserInfo()"]
+    D --> U["UserInfo{alias='张三',<br/>zone=主驾}"]
+    U --> A["addUserinfo()"]
+    A --> H["后续对话中<br/>'我'→'张三'<br/>指代消歧"]
+
+    style Q fill:#4361ee,color:#fff
+    style U fill:#f39c12,color:#fff
+    style H fill:#2ecc71,color:#fff
+</div></div>
+
+<p><strong>UserInfo</strong> 结构体包含：</p>
+<ul>
+<li><code>audio_zone</code>：关键人物所在的座位音区</li>
+<li><code>alias</code>：识别到的人名别名</li>
+<li><code>attributes</code>：模型识别的关键人物特征（外貌、神态等）</li>
+<li><code>summarize</code>：该人物的历史对话总结</li>
+<li><code>timestamp</code>：UserInfo 创建时间</li>
+</ul>
+
+<p>核心方法 <code>detectUserInfo(message)</code> 从用户 query 中检测是否包含人物信息；<code>addQuery()</code> 在添加 query 时可自动触发关键人物识别，并返回识别结果和历史对话。</p>
+
+<h3 id="sec-ch-query">4.3 历史获取策略</h3>
+
+<table>
+<thead>
+<tr><th>方法</th><th>参数</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>getHistoryByNum(rounds)</code></td><td><code>size_t rounds</code></td><td>获取最近 N 轮对话（含 query/response/info）</td></tr>
+<tr><td><code>getHistoryByPeriod(start, end)</code></td><td><code>int64_t start_time, end_time</code></td><td>获取指定时间段的对话；-1 表示不限；可用 alias 替代音区名</td></tr>
+<tr><td><code>getHistoryByTokenLimit(limit, counter)</code></td><td><code>size_t limit, optional&lt;function&gt;</code></td><td>获取不超过 token 限制的对话；支持自定义 token 计数器</td></tr>
+<tr><td><code>getHistoryByUserinfo(alias, start, end)</code></td><td><code>string alias, int64_t</code></td><td>获取特定关键人物所在音区的对话历史</td></tr>
+<tr><td><code>removeHistoryByAudioZone(zone, start, end)</code></td><td><code>int zone, int64_t</code></td><td>删除指定音区的对话记录</td></tr>
+<tr><td><code>removeUserinfoByAlias(alias, remove_history)</code></td><td><code>string, bool</code></td><td>删除关键人物，可选同时删除其对话记录</td></tr>
+<tr><td><code>clear()</code></td><td>-</td><td>清空所有历史记录和 UserInfo</td></tr>
+</tbody>
+</table>
+
+<div class="info-box warn">
+<div class="title">默认 Token 估算规则</div>
+<p><code>getHistoryByTokenLimit</code> 在不传入自定义 token_counter 时，使用默认估算：中文字符 1:1（一个中文字 = 1 token），英文 1.3:1。如需精确计数，可传入与实际 tokenizer 对齐的计数函数。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 5 -->
+<!-- ============================================================ -->
+<h2 id="ch5">5. RAG 知识增强</h2>
+
+<p><code>RagInstance</code>（定义于 <code>aadkapi/rag_instance.hpp</code>）为 Agent 提供可插拔的 RAG（Retrieval-Augmented Generation）能力。通过构造时指定 <code>service_name</code>，内部路由到对应的 <code>RagServiceBase</code> 实现。</p>
+
+<table>
+<thead>
+<tr><th>API</th><th>返回类型</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>RagInstance(service_name)</code></td><td>-</td><td>构造函数，根据服务名获取对应 RAG 实现</td></tr>
+<tr><td><code>init(config_path)</code></td><td><code>bool</code></td><td>初始化 RAG 服务，加载索引和配置</td></tr>
+<tr><td><code>query(query_str)</code></td><td><code>vector&lt;string&gt;</code></td><td>检索与查询相关的知识片段列表</td></tr>
+<tr><td><code>isReady()</code></td><td><code>bool</code></td><td>检查 RAG 服务是否就绪</td></tr>
+</tbody>
+</table>
+
+<div class="mermaid-wrap"><div class="mermaid">
+flowchart LR
+    U["用户: '空调太冷了'"] --> K["关键词提取"]
+    K --> R["RagInstance::query()"]
+    R --> D["知识片段:<br/>- 空调温度范围 16-32°C<br/>- 当前温度 18°C<br/>- 风量 1-7 级"]
+    D --> P["注入 system_prompt"]
+    P --> L["LLM 推理"]
+    L --> A["助手: '已将空调温度<br/>调高到 22°C'"]
+
+    style U fill:#4361ee,color:#fff
+    style R fill:#f39c12,color:#fff
+    style L fill:#2ecc71,color:#fff
+</div></div>
+
+<p><strong>可插拔架构</strong>：<code>RagServiceBase</code> 是抽象基类，不同场景可实现不同的 RAG 服务（如车控知识库、用户手册知识库等），通过 <code>service_name</code> 注册和路由。</p>
+
+<pre><code>// 车控 RAG 使用示例
+RagInstance rag("carcontrol_rag");
+rag.init("/path/to/rag_config.json");
+
+if (rag.isReady()) {
+    auto results = rag.query("空调温度调节");
+    // results: ["空调温度范围16-32°C", "当前温度18°C", ...]
+    // 将 results 拼接到 system_prompt 中供 LLM 参考
+}</code></pre>
+
+<!-- ============================================================ -->
+<!-- Chapter 6 -->
+<!-- ============================================================ -->
+<h2 id="ch6">6. MCP 工具协议</h2>
+
+<p>MCP（Model Context Protocol）是 LLM 与外部工具的标准通信协议。<code>McpServer</code>（定义于 <code>aadkapi/tools/mcp/mcp_server.hpp</code>）实现了 MCP 服务端，支持将车辆控制 API、导航 API 等外部能力暴露为 LLM 可调用的 Tool。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+flowchart LR
+    LLM["LLM 推理引擎"] <-->|"FunctionCall /<br/>FunctionResponse"| MC["MCP Client"]
+    MC <-->|"JSON-RPC"| MS["McpServer"]
+    MS --> T1["车控 API"]
+    MS --> T2["导航 API"]
+    MS --> T3["多媒体 API"]
+    MS --> T4["车辆状态查询"]
+
+    style LLM fill:#4361ee,color:#fff
+    style MS fill:#f39c12,color:#fff
+</div></div>
+
+<h3>6.1 四种传输类型</h3>
+
+<table>
+<thead>
+<tr><th>枚举值</th><th>传输类型</th><th>说明</th><th>适用场景</th></tr>
+</thead>
+<tbody>
+<tr><td><code>MCP_TRANSPORT_STDIO</code></td><td>STDIO</td><td>标准输入/输出通信</td><td>本地进程间通信</td></tr>
+<tr><td><code>MCP_TRANSPORT_SSE</code></td><td>SSE</td><td>Server-Sent Events</td><td>Web 单向推送</td></tr>
+<tr><td><code>MCP_TRANSPORT_HTTP</code></td><td>HTTP</td><td>HTTP 请求/响应</td><td>RESTful 调用</td></tr>
+<tr><td><code>MCP_TRANSPORT_FUSION</code></td><td>Fusion</td><td>自定义融合协议</td><td>车载系统内部通信</td></tr>
+</tbody>
+</table>
+
+<h3>6.2 核心 API</h3>
+
+<table>
+<thead>
+<tr><th>API</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>McpServer(name, version)</code></td><td>构造 MCP 服务实例，指定服务名称和版本</td></tr>
+<tr><td><code>AddTool(param, callback)</code></td><td>注册工具，param 为 JSON 描述（名称/描述/参数 Schema），callback 处理调用</td></tr>
+<tr><td><code>AddPrompt(param, callback)</code></td><td>注册 Prompt 模板</td></tr>
+<tr><td><code>AddResource(param, callback)</code></td><td>注册数据资源（URI + 描述）</td></tr>
+<tr><td><code>AddResourceTemplate(param, callback)</code></td><td>注册资源模板</td></tr>
+<tr><td><code>Start(transport_type, param)</code></td><td>启动 MCP 服务，指定传输类型和参数</td></tr>
+<tr><td><code>AddServer(server, path)</code> (static)</td><td>注册 MCP 服务器实例到指定路径</td></tr>
+<tr><td><code>StartServers(config, transport, addr, port)</code> (static)</td><td>批量启动所有已注册的 MCP 服务器</td></tr>
+</tbody>
+</table>
+
+<h3>6.3 注册工具代码示例</h3>
+
+<pre><code>// 创建 MCP Server
+auto mcp_server = std::make_shared&lt;McpServer&gt;("car_control", "1.0.0");
+
+// 注册"设置空调温度"工具
+nlohmann::json tool_param = {
+    {"name", "set_ac_temperature"},
+    {"description", "设置车内空调温度"},
+    {"inputSchema", {
+        {"type", "object"},
+        {"properties", {
+            {"temperature", {{"type", "number"}, {"description", "目标温度(°C)"}}},
+            {"zone", {{"type", "string"}, {"description", "音区: 主驾/副驾/全车"}}}
+        }},
+        {"required", {"temperature"}}
+    }}
+};
+
+mcp_server-&gt;AddTool(tool_param,
+    [](uintptr_t session, nlohmann::json&amp; req) -&gt; nlohmann::json {
+        double temp = req["temperature"];
+        // 调用车控底层 API 设置温度...
+        return {{"status", "success"}, {"temperature", temp}};
+    });
+
+// 启动服务
+mcp_server-&gt;Start(McpServer::MCP_TRANSPORT_FUSION, "car_mcp");</code></pre>
+
+<!-- ============================================================ -->
+<!-- Chapter 7 -->
+<!-- ============================================================ -->
+<h2 id="ch7">7. A2A 协议</h2>
+
+<p>A2A（Agent-to-Agent）是多 Agent 间通信标准，遵循 <a href="https://a2a-protocol.org" style="color:var(--accent)">a2a-protocol.org</a> 规范。<code>A2AServer</code>（定义于 <code>aadkapi/a2a/a2a_server.h</code>）实现了 A2A 服务端，支持 Agent 间的任务委托、状态同步和结果传递。</p>
+
+<h3>7.1 任务状态机</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+stateDiagram-v2
+    [*] --> submitted
+    submitted --> working : Agent 开始处理
+    working --> completed : 任务成功
+    working --> failed : 任务失败
+    working --> canceled : 任务取消
+    working --> input_required : 需要额外输入
+    input_required --> working : 收到输入
+    submitted --> rejected : Agent 拒绝
+    submitted --> auth_required : 需要认证
+
+    completed --> [*]
+    failed --> [*]
+    canceled --> [*]
+    rejected --> [*]
+</div></div>
+
+<h3>7.2 A2AServer API</h3>
+
+<table>
+<thead>
+<tr><th>API</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>A2AServer(agent_config, cb, task_cb, userdata)</code></td><td>创建 A2A 服务，配置 Agent Card（名称/描述/能力），设置消息回调和任务回调</td></tr>
+<tr><td><code>Start(host, port)</code></td><td>启动 A2A HTTP 服务，默认使用 config 中的地址</td></tr>
+<tr><td><code>Stop()</code></td><td>停止 A2A 服务</td></tr>
+<tr><td><code>Append(other)</code></td><td>将其他 A2A Agent 共享同一个 HTTP 服务</td></tr>
+</tbody>
+</table>
+
+<h3>7.3 A2ATaskHandler</h3>
+
+<table>
+<thead>
+<tr><th>API</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>UpdateTaskState(taskId, state, message)</code></td><td>更新任务状态（submitted/working/completed/failed 等）</td></tr>
+<tr><td><code>AddArtifact(taskId, artifact, isFinal, isAppend)</code></td><td>添加产出物（文本/文件），支持标记是否为最终产出</td></tr>
+<tr><td><code>GetTask(taskId)</code></td><td>查询任务详细信息（JSON 格式）</td></tr>
+</tbody>
+</table>
+
+<h3>7.4 多 Agent 协作场景</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+sequenceDiagram
+    participant U as 用户
+    participant SA as SystemAgent
+    participant CA as 车控 Agent
+    participant NA as 导航 Agent
+
+    U->>SA: "导航到公司，并把空调调到 24 度"
+    SA->>SA: 意图拆分为两个子任务
+
+    par 并行执行
+        SA->>CA: A2A: 设置空调温度 24°C
+        CA->>CA: 调用车控 API
+        CA-->>SA: completed + artifact
+    and
+        SA->>NA: A2A: 导航到"公司"
+        NA->>NA: 调用导航 API
+        NA-->>SA: completed + artifact
+    end
+
+    SA-->>U: "空调已设置为 24°C，导航已开始"
+</div></div>
+
+<!-- ============================================================ -->
+<!-- Chapter 8 -->
+<!-- ============================================================ -->
+<h2 id="ch8">8. Agent 运行时与插件机制</h2>
+
+<p>aadkcore 的运行时分为两层：<code>SystemRuntime</code> 负责消息接收与路由；<code>AgentRuntime</code> 负责 Agent 生命周期管理。业务 Agent 通过插件机制（<code>AgentPlugin</code>）以动态库形式加载。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+flowchart TD
+    MSG["外部消息<br/>(语音/触控/系统事件)"] --> SR["SystemRuntime"]
+    SR -->|"scenario_id 路由"| AR["AgentRuntime"]
+    AR --> D["BaseMsgDeliver<br/>Dispatcher"]
+    D --> P1["AgentPlugin<br/>车控 Agent"]
+    D --> P2["AgentPlugin<br/>闲聊 Agent"]
+    D --> P3["AgentPlugin<br/>视觉 Agent"]
+    P1 & P2 & P3 --> RES["结果回传"]
+
+    style SR fill:#4361ee,color:#fff
+    style AR fill:#7b8cff,color:#fff
+    style D fill:#f39c12,color:#fff
+</div></div>
+
+<h3 id="sec-rt-plugin">8.1 AgentPlugin 插件接口</h3>
+
+<p>定义于 <code>include/runtime/agent_plugin.h</code>，是所有业务 Agent 必须实现的抽象接口：</p>
+
+<table>
+<thead>
+<tr><th>方法</th><th>返回类型</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>deliver_msg(message)</code></td><td><code>bool</code></td><td>接收并处理 <code>DataMessage</code>，Agent 的核心入口</td></tr>
+<tr><td><code>scenario_id()</code></td><td><code>int</code></td><td>返回 Agent 负责的场景 ID（对应 <code>constant_ids.h</code>）</td></tr>
+<tr><td><code>clear_memory()</code></td><td><code>bool</code></td><td>清除对话历史</td></tr>
+<tr><td><code>set_data_dump_flag(flag)</code></td><td><code>void</code></td><td>设置数据录制标志（默认空实现）</td></tr>
+</tbody>
+</table>
+
+<p><strong>场景 ID 常量</strong>（<code>constant_ids.h</code>）：</p>
+<table>
+<thead>
+<tr><th>常量</th><th>ID</th><th>场景</th></tr>
+</thead>
+<tbody>
+<tr><td><code>SYSTEM_AGENT_SCENARIO_ID</code></td><td>1001</td><td>系统总控 Agent</td></tr>
+<tr><td><code>CAR_CONTROL_SCENARIO_ID</code></td><td>1002</td><td>车控 Agent</td></tr>
+<tr><td><code>CHITCHAT_SCENARIO_ID</code></td><td>1003</td><td>闲聊 Agent</td></tr>
+<tr><td><code>VIDEOCHAT_SCENARIO_ID</code></td><td>100</td><td>视频对话</td></tr>
+<tr><td><code>PROACTIVE_SPEECH_SCENARIO_ID</code></td><td>200</td><td>主动语音</td></tr>
+<tr><td><code>ACTIVE_VISION_SCENARIO_ID</code></td><td>300</td><td>主动视觉</td></tr>
+<tr><td><code>WELCOME_MODE_SCENARIO_ID</code></td><td>700</td><td>迎宾模式</td></tr>
+<tr><td><code>BROADCAST_SCENARIO_ID</code></td><td>65535</td><td>广播消息</td></tr>
+</tbody>
+</table>
+
+<h3 id="sec-rt-load">8.2 动态加载机制</h3>
+
+<p><code>libaadkcore.so</code> 运行时通过 <code>dlopen</code> 加载业务 Agent 动态库（如 <code>libagent_group.so</code>），通过约定的 <code>extern "C"</code> 工厂函数获取 Agent 列表并创建实例。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+sequenceDiagram
+    participant SR as SystemRuntime
+    participant DL as dlopen
+    participant AG as libagent_group.so
+    participant AR as AgentRuntime
+
+    SR->>SR: init()
+    SR->>DL: dlopen("libagent_group.so")
+    DL-->>SR: handle
+
+    SR->>AG: get_supported_agents(plugin_list)
+    AG-->>SR: [{id:1001,name:"system"}, {id:1002,name:"car_ctrl"}, ...]
+
+    loop 遍历每个 plugin
+        SR->>AG: create_dispatcher(scenario_id, data_path, plugin)
+        AG-->>SR: unique_ptr&lt;AgentPlugin&gt;
+        SR->>AR: 注册到 AgentRuntime
+    end
+
+    Note over SR,AR: 消息按 scenario_id 路由到对应 AgentPlugin
+</div></div>
+
+<p><strong>工厂函数签名</strong>：</p>
+<pre><code>// 获取支持的 Agent 列表
+extern "C" void get_supported_agents(std::vector&lt;PluginInfo&gt;&amp; plugins);
+
+// 创建指定场景的 Agent 实例
+extern "C" void create_dispatcher(int scenario_id, const char* data_path,
+                                  std::unique_ptr&lt;AgentPlugin&gt;&amp; plugin);
+
+// 销毁 Agent 实例
+extern "C" void destroy_dispatcher(std::unique_ptr&lt;AgentPlugin&gt; plugin);</code></pre>
+
+<!-- ============================================================ -->
+<!-- Chapter 9 -->
+<!-- ============================================================ -->
+<h2 id="ch9">9. LLM Flow 与 Tool 系统</h2>
+
+<p><code>BaseLlmFlow</code>（定义于 <code>include/flow/base_llm_flow.hpp</code>）实现了 LLM 推理流水线的标准模式，负责预处理、调用模型、后处理和 Tool 调用循环。<code>BaseTool</code>（定义于 <code>include/tools/base_tool.hpp</code>）定义了工具的统一抽象接口。</p>
+
+<h3 id="sec-flow-pipe">9.1 BaseLlmFlow 流水线</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+flowchart TD
+    START["run_async(context)"] --> PRE["_preprocess_async<br/>请求处理器链"]
+    PRE --> BM["_handle_before_model_callback"]
+    BM --> CALL["_call_llm_async<br/>调用模型推理"]
+    CALL --> AM["_handle_after_model_callback"]
+    AM --> POST["_postprocess_async<br/>响应处理器链"]
+    POST --> FC{"存在 FunctionCall?"}
+    FC -->|"是"| HANDLE["_postprocess_handle_function_calls_sync<br/>执行工具调用"]
+    HANDLE --> PRE
+    FC -->|"否"| FIN["_finalize_model_response_event<br/>返回最终结果"]
+
+    style START fill:#4361ee,color:#fff
+    style CALL fill:#f39c12,color:#fff
+    style HANDLE fill:#e74c3c,color:#fff
+    style FIN fill:#2ecc71,color:#fff
+</div></div>
+
+<p><strong>SingleFlow</strong> 是 <code>BaseLlmFlow</code> 的标准实现，预注册了两个请求处理器：</p>
+<ul>
+<li><code>basic::request_processor</code> — 基础请求构建</li>
+<li><code>instructions::request_processor</code> — 将 Agent 的 instructions 注入到请求中</li>
+</ul>
+
+<h3 id="sec-flow-tool">9.2 BaseTool 工具基类</h3>
+
+<table>
+<thead>
+<tr><th>属性/方法</th><th>返回类型</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>name()</code></td><td><code>const string&amp;</code></td><td>工具名称</td></tr>
+<tr><td><code>description()</code></td><td><code>const string&amp;</code></td><td>工具描述</td></tr>
+<tr><td><code>is_long_running()</code></td><td><code>bool</code></td><td>是否长时间运行（如导航规划）</td></tr>
+<tr><td><code>get_declaration()</code></td><td><code>optional&lt;ToolDefinition&gt;</code></td><td>返回 JSON Schema 格式的工具声明</td></tr>
+<tr><td><code>run_async(args, context)</code></td><td><code>Task&lt;bool&gt;</code></td><td>异步执行工具，参数为 <code>map&lt;string, any&gt;</code></td></tr>
+<tr><td><code>process_llm_request(context)</code></td><td><code>Task&lt;tuple&gt;</code></td><td>处理 LLM 请求，返回描述文本和 ToolDefinition</td></tr>
+</tbody>
+</table>
+
+<p><strong>ToolDefinition 结构</strong>（定义于 <code>content.hpp</code>）：</p>
+<pre><code>struct ToolDefinition {
+    std::string name;         // 工具名称，如 "set_ac_temperature"
+    std::string description;  // 工具描述
+    ToolParameters parameters; // 输入参数 Schema
+    ToolParameters responses;  // 输出结构 Schema
+};
+
+struct ToolParameters {
+    std::string type;  // "object"
+    std::map&lt;std::string, ParamInfo&gt; properties; // 参数名 → {type, description}
+};</code></pre>
+
+<p>LLM 根据所有注册 Tool 的 <code>ToolDefinition</code> 生成结构化的 <code>FunctionCall</code>，Flow 引擎解析后调用对应 Tool 的 <code>run_async()</code>，结果通过 <code>FunctionResponse</code> 回传给 LLM 继续推理。</p>
+
+<h3 id="sec-flow-e2e">9.3 端到端调用链</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+sequenceDiagram
+    participant U as 用户
+    participant AR as AgentRuntime
+    participant AP as AgentPlugin
+    participant FL as BaseLlmFlow
+    participant MR as ModelRunner
+    participant MS as ModelScheduler
+    participant LLM as LLM 模型
+    participant TL as BaseTool
+
+    U->>AR: 语音输入 "把空调调到 24 度"
+    AR->>AP: deliver_msg(DataMessage)
+    AP->>FL: run_async(InvocationContext)
+
+    FL->>FL: _preprocess_async (构建 LlmRequest)
+    FL->>MR: schedule_run_sync(system_prompt, user_prompt, history)
+    MR->>MS: SubmitTask(CommonSchedulerTask)
+    MS->>LLM: onProcessing → streamGenerate
+    LLM-->>MS: FunctionCall: set_ac_temperature(24)
+    MS-->>MR: ModelResponse
+    MR-->>FL: 返回推理结果
+
+    FL->>FL: _postprocess_async (检测到 FunctionCall)
+    FL->>TL: run_async({temperature: 24})
+    TL-->>FL: FunctionResponse: {status: success}
+
+    FL->>MR: 再次推理（含 FunctionResponse）
+    MR->>MS: SubmitTask
+    MS->>LLM: streamGenerate
+    LLM-->>FL: "已将空调温度设置为 24°C"
+
+    FL-->>AP: 最终响应
+    AP-->>AR: 回传结果
+    AR-->>U: TTS 播报
+</div></div>
+
+<div class="info-box ok">
+<div class="title">框架核心价值</div>
+<p>aadkcore 将 Agent 开发中的共性能力（模型调度、对话管理、Tool 调用、RAG、A2A 协作）下沉到框架层，业务 Agent 开发者只需关注：(1) 编写 <code>AgentPlugin</code> 实现业务逻辑；(2) 注册 <code>BaseTool</code> 连接外部能力；(3) 编写 <code>instructions</code> 定义 Agent 行为。框架负责调度、流水线、协议对接等基础设施工作。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 10: 端云协同架构 -->
+<!-- ============================================================ -->
+<h2 id="ch10">10. 端云协同架构</h2>
+
+<p>纯端侧 Agent 受限于模型能力和知识范围，纯云端 Agent 受限于延迟和离线可用性。端云协同是座舱 Agent 的最优架构——端侧处理低延迟、高隐私的请求，云端处理复杂推理和知识密集型任务。</p>
+
+<h3>10.1 端云分工策略</h3>
+
+<table>
+<thead>
+<tr><th>请求类型</th><th>处理方</th><th>原因</th><th>示例</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>车辆控制</strong></td><td>端侧</td><td>低延迟（&lt; 2s）+ 离线可用 + 安全关键</td><td>"打开空调" "调到22度" "打开车窗"</td></tr>
+<tr><td><strong>简单问答</strong></td><td>端侧</td><td>端侧模型可胜任 + 零网络延迟</td><td>"现在几点" "电量还有多少" "今天限号吗"</td></tr>
+<tr><td><strong>复杂推理</strong></td><td>云端</td><td>需要大模型能力（72B+）</td><td>"帮我规划三天旅行行程" "分析这份报告"</td></tr>
+<tr><td><strong>知识密集型</strong></td><td>云端</td><td>需要实时联网搜索</td><td>"最近有什么好看的电影" "XX 餐厅评价怎么样"</td></tr>
+<tr><td><strong>多模态理解</strong></td><td>端侧优先，云端增强</td><td>端侧快速响应 + 云端精准分析</td><td>DMS 疲劳检测（端侧）+ 复杂场景分析（云端）</td></tr>
+</tbody>
+</table>
+
+<h3>10.2 协同架构设计</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+flowchart TB
+    U["用户请求"] --> R["端侧路由器<br/>(意图分类)"]
+    R -->|"车控/简单"| E["端侧 LLM<br/>Qwen3-Omni-4B"]
+    R -->|"复杂/知识密集"| C["云端 LLM<br/>Qwen3-72B / GPT-4"]
+    R -->|"不确定"| E
+    E --> D{"端侧置信度<br/>足够?"}
+    D -->|"是"| RES["直接返回结果"]
+    D -->|"否"| C
+    C --> RES
+
+    style R fill:#f39c12,color:#fff
+    style E fill:#4361ee,color:#fff
+    style C fill:#e74c3c,color:#fff
+    style RES fill:#2ecc71,color:#fff
+</div></div>
+
+<table>
+<thead>
+<tr><th>协同模式</th><th>工作方式</th><th>延迟</th><th>适用场景</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>端侧优先 (Edge-First)</strong></td><td>端侧先处理，置信度不足时转云端</td><td>低（端侧成功时 &lt; 1s）</td><td>默认模式，大部分座舱交互</td></tr>
+<tr><td><strong>端云并行 (Parallel)</strong></td><td>同时发给端侧和云端，取先到或更优结果</td><td>低（取较快者）</td><td>对质量和延迟都有要求时</td></tr>
+<tr><td><strong>端侧草稿 (Draft-Refine)</strong></td><td>端侧快速生成初稿，云端校验/润色</td><td>中（端侧先显示，云端更新）</td><td>长文本生成、复杂回答</td></tr>
+<tr><td><strong>云端主导 (Cloud-Primary)</strong></td><td>直接转云端处理</td><td>高（依赖网络）</td><td>明确需要大模型或联网的请求</td></tr>
+</tbody>
+</table>
+
+<h3>10.3 离线降级与缓存</h3>
+
+<p>当网络不可用时（隧道、地下车库、偏远地区），端云协同需要优雅降级：</p>
+
+<table>
+<thead>
+<tr><th>降级策略</th><th>实现方式</th><th>用户体验</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>功能降级</strong></td><td>需要云端的功能（搜索、在线导航）提示"当前离线，部分功能不可用"</td><td>明确告知，不假装可用</td></tr>
+<tr><td><strong>缓存命中</strong></td><td>热门问题（天气、限行）在有网时预缓存到本地 RAG</td><td>离线也能回答常见问题</td></tr>
+<tr><td><strong>云端结果缓存</strong></td><td>云端返回的结果（路线规划、POI 信息）缓存到本地</td><td>重复查询直接本地返回</td></tr>
+<tr><td><strong>网络恢复后同步</strong></td><td>离线期间的日志和请求在恢复后批量上传</td><td>不丢失数据</td></tr>
+</tbody>
+</table>
+
+<div class="info-box">
+<div class="title">端云协同与 aadkcore 的集成</div>
+<p>在 aadkcore 框架中，端云协同可以通过 <strong>A2A 协议</strong> 实现：端侧 Agent 作为 A2A Client 向云端 Agent（A2A Server）发送子任务。SystemRuntime 的 HTTP Server 模式可以接收云端的回调结果。路由决策可以在 <code>BaseLlmFlow</code> 的 pipeline 中实现——在 Prefill 之前通过轻量意图分类（Qwen3-1.7B 或规则引擎）决定请求走向。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 11: 安全沙箱机制 -->
+<!-- ============================================================ -->
+<h2 id="ch11">11. 安全沙箱机制</h2>
+
+<p>座舱 Agent 的 Tool 调用直接控制车辆硬件（空调、车窗、车门、车灯），安全沙箱是防止 LLM 幻觉或 Prompt 注入导致危险操作的最后防线。</p>
+
+<h3>11.1 三级安全分级</h3>
+
+<table>
+<thead>
+<tr><th>安全等级</th><th>操作类型</th><th>确认要求</th><th>示例工具</th><th>实现方式</th></tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>L1 只读</strong></td>
+<td>查询类，无副作用</td>
+<td>无需确认，直接执行</td>
+<td>查天气、查电量、查导航 ETA</td>
+<td>Tool 标记 <code>safety_level: L1</code></td>
+</tr>
+<tr>
+<td><strong>L2 可逆</strong></td>
+<td>可逆操作，影响车辆状态</td>
+<td>语音确认（"好的，帮您调到22度"）</td>
+<td>调空调、开车窗、调音量、切歌</td>
+<td>Tool 执行前插入确认回复，等待用户未反对后执行</td>
+</tr>
+<tr>
+<td><strong>L3 不可逆/高危</strong></td>
+<td>不可逆或涉及安全</td>
+<td>二次确认 + 条件检查（车速、档位）</td>
+<td>打开车门、发送消息、支付</td>
+<td>强制二次确认 + 车辆状态安全检查 + 必要时生物认证</td>
+</tr>
+</tbody>
+</table>
+
+<h3>11.2 安全检查流水线</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+flowchart LR
+    A["LLM 输出<br/>Tool Call"] --> B["Schema 校验<br/>参数类型与范围"]
+    B --> C["安全等级判定<br/>L1 / L2 / L3"]
+    C --> D{"车辆状态检查"}
+    D -->|"安全"| E["执行 Tool"]
+    D -->|"危险"| F["拒绝执行<br/>返回安全提示"]
+    E --> G["结果校验<br/>执行是否成功"]
+    G --> H["返回给 LLM"]
+    F --> H
+
+    style B fill:#3498db,color:#fff
+    style D fill:#f39c12,color:#fff
+    style F fill:#e74c3c,color:#fff
+</div></div>
+
+<p>安全检查流水线中的各环节：</p>
+
+<table>
+<thead>
+<tr><th>检查环节</th><th>检查内容</th><th>拒绝示例</th></tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Schema 校验</strong></td>
+<td>参数类型、范围、必填项。如温度必须在 16-32°C 范围内</td>
+<td>set_ac_temperature(temp=100) → 拒绝：温度超出范围</td>
+</tr>
+<tr>
+<td><strong>工具白名单</strong></td>
+<td>LLM 输出的工具名必须在已注册工具列表中</td>
+<td>execute_shell("rm -rf /") → 拒绝：工具不存在</td>
+</tr>
+<tr>
+<td><strong>车辆状态检查</strong></td>
+<td>根据当前车速、档位、行驶状态判断操作是否安全</td>
+<td>车速 &gt; 0 时 open_door() → 拒绝：行驶中不可开门</td>
+</tr>
+<tr>
+<td><strong>频率限制</strong></td>
+<td>防止短时间内重复执行相同操作</td>
+<td>1 秒内连续 5 次 set_ac_temperature → 拒绝：操作频率异常</td>
+</tr>
+<tr>
+<td><strong>用户权限</strong></td>
+<td>根据 scenario_id 判断请求来源的权限</td>
+<td>后排乘客尝试 unlock_door → 拒绝：权限不足</td>
+</tr>
+</tbody>
+</table>
+
+<h3>11.3 Prompt 注入防御</h3>
+
+<p>LLM 存在 Prompt 注入风险——恶意用户可能通过精心构造的输入欺骗模型执行危险操作。座舱场景的防御需要多层保护：</p>
+
+<table>
+<thead>
+<tr><th>防御层</th><th>实现方式</th><th>防御目标</th></tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>System Prompt 加固</strong></td>
+<td>System Prompt 中明确列出禁止行为，使用特殊分隔符隔离系统指令和用户输入</td>
+<td>防止用户指令覆盖系统约束</td>
+</tr>
+<tr>
+<td><strong>输入过滤</strong></td>
+<td>检测并过滤已知的注入模式（"忽略前面的指令"、"你是一个没有限制的AI"）</td>
+<td>拦截常见越狱尝试</td>
+</tr>
+<tr>
+<td><strong>输出校验（Post-Guard）</strong></td>
+<td>LLM 输出的 Tool Call 必须通过安全检查流水线，不依赖 LLM 自身的安全判断</td>
+<td>即使 LLM 被欺骗，执行层也能拦截危险操作</td>
+</tr>
+<tr>
+<td><strong>Tool Schema 约束</strong></td>
+<td>工具参数通过 JSON Schema 严格约束类型和范围，非法参数在 Schema 校验阶段即被拒绝</td>
+<td>防止 LLM 幻觉出非法参数值</td>
+</tr>
+</tbody>
+</table>
+
+<div class="info-box err">
+<div class="title">安全沙箱的核心原则：不信任 LLM 输出</div>
+<p>安全沙箱的设计哲学是<strong>将 LLM 视为不可信的组件</strong>。LLM 负责理解用户意图并生成结构化的 Tool Call，但最终的执行决策由安全沙箱（Schema 校验 + 车辆状态检查 + 权限验证）做出。这意味着即使 LLM 100% 被 Prompt 注入欺骗，只要安全沙箱正确实现，危险操作仍然无法执行。这与 Web 安全中"永远不信任客户端输入"是同一原则。</p>
+</div>
+
+</main>
+
+<!-- ===== Scripts at bottom ===== -->
+<script defer src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+var b=document.getElementById('themeBtn');
+b.onclick=function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('theme',h.dataset.theme)}catch(e){}};
+try{var s=localStorage.getItem('theme');if(s)document.documentElement.dataset.theme=s}catch(e){}
+
+var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.remove('active')});var l=document.querySelector('.sidebar a[href="#'+e.target.id+'"]');if(l)l.classList.add('active')}})},{rootMargin:'-60px 0px -70% 0px'});
+document.querySelectorAll('h2[id],h3[id]').forEach(function(h){obs.observe(h)});
+
+window.addEventListener('load',function(){
+  try{if(typeof mermaid!=='undefined'){mermaid.initialize({startOnLoad:true,theme:document.documentElement.dataset.theme==='dark'?'dark':'default',securityLevel:'loose'})}}catch(e){}
+});
+</script>
+</body>
+</html>

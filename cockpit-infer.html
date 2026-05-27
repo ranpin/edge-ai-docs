@@ -1,0 +1,1447 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Part C: 推理优化 — 端侧 AI 学习文档</title>
+<style>
+:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-h:52px}
+[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+.top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;z-index:1000}
+.top-nav .logo{font-weight:700;font-size:15px;color:var(--accent);margin-right:24px;text-decoration:none}
+.top-nav .links{display:flex;gap:2px;flex-wrap:wrap}
+.top-nav .links a{padding:4px 10px;border-radius:5px;text-decoration:none;color:var(--text2);font-size:12px;font-weight:500}
+.top-nav .links a:hover{background:var(--accentL);color:var(--accent)}
+.top-nav .links a.active{background:var(--accent);color:#fff}
+.top-nav .right{margin-left:auto}
+.theme-btn{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--text)}
+.sidebar{position:fixed;top:var(--nav-h);left:0;bottom:0;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;z-index:900}
+.sidebar a{display:block;padding:4px 16px 4px 20px;text-decoration:none;color:var(--text2);font-size:12px;border-left:3px solid transparent}
+.sidebar a:hover{color:var(--accent);background:var(--accentL)}
+.sidebar a.active{color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.sidebar .toc-part{padding:8px 20px 4px;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px}
+.main{margin-left:var(--sidebar-w);margin-top:var(--nav-h);padding:28px 40px 60px;max-width:900px}
+h1{font-size:26px;font-weight:800;margin-bottom:6px}
+.subtitle{font-size:14px;color:var(--muted);margin-bottom:28px}
+h2{font-size:20px;font-weight:700;margin:36px 0 14px;padding-bottom:6px;border-bottom:2px solid var(--accentL)}
+h3{font-size:16px;font-weight:600;margin:20px 0 10px}
+p{margin-bottom:10px;color:var(--text2)}
+strong{color:var(--text)}
+.info-box{padding:14px 16px;border-radius:7px;margin:14px 0;border-left:4px solid var(--info);background:var(--bg2);font-size:14px}
+.info-box.warn{border-left-color:var(--warning)}
+.info-box.ok{border-left-color:var(--success)}
+.info-box.err{border-left-color:var(--danger)}
+.info-box .title{font-weight:700;font-size:13px;margin-bottom:4px}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
+th{background:var(--accentL);color:var(--accentD);font-weight:600}
+tr:nth-child(even){background:var(--bg2)}
+.mermaid-wrap{margin:16px 0;padding:16px;background:var(--bg2);border-radius:7px;overflow-x:auto}
+.chart-wrap{margin:16px 0;background:var(--bg2);border-radius:7px;padding:12px}
+.chart-box{width:100%;height:360px}
+pre{background:var(--bg3);border-radius:7px;padding:14px;overflow-x:auto;font-size:13px;margin:10px 0}
+code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
+:not(pre)>code{background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--accent)}
+@media(max-width:900px){.sidebar{display:none}.main{margin-left:0;padding:20px 16px 60px}}
+@media print{.top-nav,.sidebar,.theme-btn{display:none!important}.main{margin:0;padding:16px;max-width:100%}}
+</style>
+</head>
+<body>
+
+<!-- ===== Top Navigation ===== -->
+<nav class="top-nav">
+  <a href="index.html" class="logo">Edge AI Docs</a>
+  <div class="links">
+    <a href="cockpit-hardware.html">A.硬件</a>
+    <a href="cockpit-training.html">B.训练</a>
+    <a href="cockpit-infer.html" class="active">C.推理优化</a>
+    <a href="cockpit-deploy.html">D.部署</a>
+    <a href="cockpit-agent-core.html">E1.核心框架</a>
+    <a href="cockpit-agent-group.html">E2.场景Agent</a>
+    <a href="cockpit-debug.html">F.调试</a>
+    <a href="cockpit-interview.html">面试</a>
+  </div>
+  <div class="right">
+    <button class="theme-btn" id="themeBtn">&#9790; / &#9788;</button>
+  </div>
+</nav>
+
+<!-- ===== Sidebar TOC ===== -->
+<aside class="sidebar">
+  <div class="toc-part">Part C: 推理优化</div>
+  <a href="#ch1" class="active">1. 模型量化基础</a>
+  <a href="#ch2">2. AIMET 量化工具</a>
+  <a href="#ch3">3. KV Cache 优化</a>
+  <a href="#ch4">4. 推理引擎对比</a>
+  <a href="#ch5">5. ViT+LLM 多核绑定</a>
+  <a href="#ch6">6. 前缀缓存</a>
+  <a href="#ch7">7. 投机采样</a>
+  <a href="#ch8">8. 约束解码</a>
+  <a href="#ch9">9. TTFT 端到端优化</a>
+  <a href="#ch10">10. 量化方案对比</a>
+  <a href="#ch11">11. Prefill/Decode 分析</a>
+  <a href="#ch12">12. Continuous Batching</a>
+  <a href="#ch13">13. FlashAttention 端侧适配</a>
+</aside>
+
+<!-- ===== Main Content ===== -->
+<main class="main">
+
+<h1>Part C: 推理优化</h1>
+<p class="subtitle">以 Qwen3-Omni-4B 为例 &nbsp;|&nbsp; 量化 &middot; AIMET &middot; KV Cache &middot; 多核绑定 &middot; 前缀缓存 &middot; 投机采样 &middot; 约束解码</p>
+
+<!-- ============================================================ -->
+<!-- Chapter 1: 模型量化基础 (migrated from cockpit-training.html Ch8) -->
+<!-- ============================================================ -->
+<h2 id="ch1">1. 模型量化基础</h2>
+
+<h3>1.1 PTQ 与 QAT 流程</h3>
+
+<p>模型量化是端侧部署的关键步骤，将 FP32 模型转换为低精度 (INT8/INT4) 以加速推理。两种主要方法是 <strong>训练后量化 (PTQ)</strong> 和 <strong>量化感知训练 (QAT)</strong>：</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+flowchart TB
+    subgraph PTQ["训练后量化 (PTQ)"]
+        direction LR
+        P1["FP32 模型"] --> P2["校准数据集<br/>(500~2000张)"]
+        P2 --> P3["统计激活值分布<br/>min/max/percentile"]
+        P3 --> P4["计算 scale/zero_point"]
+        P4 --> P5["INT8 模型"]
+    end
+
+    subgraph QAT["量化感知训练 (QAT)"]
+        direction LR
+        Q1["FP32 模型"] --> Q2["插入 FakeQuant 节点"]
+        Q2 --> Q3["正常训练<br/>+ STE 梯度估计"]
+        Q3 --> Q4["权重/激活值<br/>模拟量化噪声"]
+        Q4 --> Q5["INT8 模型"]
+    end
+
+    PTQ ~~~ QAT
+
+    style P1 fill:#3498db,color:#fff
+    style P5 fill:#2ecc71,color:#fff
+    style Q1 fill:#e74c3c,color:#fff
+    style Q5 fill:#2ecc71,color:#fff
+</div></div>
+
+<h3>1.2 PTQ 与 QAT 对比</h3>
+
+<table>
+<tr><th>维度</th><th>PTQ (训练后量化)</th><th>QAT (量化感知训练)</th></tr>
+<tr><td><strong>开发成本</strong></td><td>低，无需重新训练</td><td>高，需要完整训练流程</td></tr>
+<tr><td><strong>精度损失</strong></td><td>较大 (0.5~2.0%)</td><td>较小 (0.1~0.5%)</td></tr>
+<tr><td><strong>校准数据需求</strong></td><td>500~2000 张代表性数据</td><td>完整训练集</td></tr>
+<tr><td><strong>训练时间</strong></td><td>分钟级</td><td>小时~天级 (原始训练的 10~30%)</td></tr>
+<tr><td><strong>适用场景</strong></td><td>模型精度冗余大、对精度要求不高</td><td>精度敏感任务、安全关键应用</td></tr>
+<tr><td><strong>QNN 工具</strong></td><td>qnn-onnx-converter + 校准参数</td><td>AIMET (AI Model Efficiency Toolkit)</td></tr>
+<tr><td><strong>推荐优先级</strong></td><td>优先尝试，快速验证</td><td>PTQ 精度不达标时使用</td></tr>
+</table>
+
+<h3>1.3 混合精度策略</h3>
+
+<div class="info-box ok">
+  <div class="title">Best Practice: 混合精度量化策略</div>
+  <p>在实际部署中，模型不同层对量化的敏感度不同。推荐的混合精度策略：</p>
+  <table style="margin-top:8px">
+    <tr><th>模型组件</th><th>推荐精度</th><th>原因</th></tr>
+    <tr><td><strong>Backbone (骨干网络)</strong></td><td>INT8</td><td>特征提取层对量化鲁棒，且计算量最大，INT8 加速收益最高</td></tr>
+    <tr><td><strong>FPN (特征金字塔)</strong></td><td>INT8</td><td>多尺度融合层对量化相对鲁棒</td></tr>
+    <tr><td><strong>Detection Head (检测头)</strong></td><td>INT16</td><td>分类和回归输出对精度敏感，INT16 避免量化误差累积</td></tr>
+    <tr><td><strong>Keypoint Regression (关键点回归)</strong></td><td>INT16</td><td>亚像素级精度要求高，INT8 会导致关键点抖动</td></tr>
+  </table>
+  <p style="margin-top:8px">使用 QNN 的 <code>--input_list</code> 和 <code>--param_quantizer</code> 选项可以为不同算子指定不同的量化精度。AIMET 也支持通过敏感度分析自动推荐混合精度配置。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 2: AIMET 量化工具 (migrated from cockpit-deploy.html Ch12) -->
+<!-- ============================================================ -->
+<h2 id="ch2">2. AIMET 量化工具</h2>
+
+<h3>2.1 AIMET 概述</h3>
+
+<p><strong>AIMET (AI Model Efficiency Toolkit)</strong> 是高通创新中心 (Qualcomm Innovation Center) 开源的模型优化工具包，专注于<strong>模型量化与压缩</strong>。在端侧 AI 项目中，AIMET 是连接训练框架（PyTorch/TensorFlow）与 QNN 部署的关键桥梁——它提供了比通用量化工具更精细的量化控制能力，特别适合<strong>精度敏感的安全关键场景</strong>（如 DMS 疲劳检测）。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+flowchart LR
+    A["PyTorch 模型<br/>(FP32)"] --> B["AIMET<br/>模型优化"]
+    B --> C1["PTQ 增强<br/>CLE + AdaRound"]
+    B --> C2["QAT<br/>量化感知训练"]
+    B --> C3["模型压缩<br/>SVD / 剪枝"]
+    C1 --> D["QuantSim<br/>量化仿真验证"]
+    C2 --> D
+    C3 --> D
+    D --> E["导出 ONNX<br/>(带量化编码)"]
+    E --> F["QNN 部署<br/>Context Binary"]
+
+    style A fill:#4361ee,color:#fff
+    style B fill:#e74c3c,color:#fff
+    style D fill:#f39c12,color:#fff
+    style F fill:#2ecc71,color:#fff
+</div></div>
+
+<h3>2.2 AIMET 核心技术</h3>
+
+<table>
+<tr><th>技术</th><th>原理</th><th>适用场景</th><th>精度收益</th></tr>
+<tr>
+  <td><strong>CLE<br/>(Cross-Layer Equalization)</strong></td>
+  <td>利用 ReLU 的缩放不变性，均衡相邻层的权重范围，减少量化截断误差。无需训练数据，纯数学变换。</td>
+  <td>PTQ 前的预处理，对 MobileNet/EfficientNet 等 Depthwise Conv 结构效果显著</td>
+  <td>PTQ 精度提升 1~3%</td>
+</tr>
+<tr>
+  <td><strong>Bias Correction</strong></td>
+  <td>补偿量化引入的系统性偏差：计算 FP32 和量化输出的均值差异，修正 bias 参数</td>
+  <td>CLE 之后配合使用，进一步消除量化偏差</td>
+  <td>额外提升 0.3~0.8%</td>
+</tr>
+<tr>
+  <td><strong>AdaRound<br/>(Adaptive Rounding)</strong></td>
+  <td>传统量化使用最近邻取整 (round-to-nearest)，AdaRound 通过优化每个权重的取整方向，最小化量化后的输出误差</td>
+  <td>PTQ 场景下的精度恢复，需要少量校准数据 (200~1000 张)</td>
+  <td>接近 QAT 精度，但无需重训</td>
+</tr>
+<tr>
+  <td><strong>QuantSim<br/>(Quantization Simulation)</strong></td>
+  <td>在 FP32 环境中模拟量化行为，插入 FakeQuant 节点，允许在 GPU 上验证量化精度而无需真实硬件</td>
+  <td>快速验证量化方案可行性，调试量化敏感层</td>
+  <td>—（验证工具）</td>
+</tr>
+<tr>
+  <td><strong>Mixed Precision<br/>(自动混合精度)</strong></td>
+  <td>基于敏感度分析，自动为每一层选择最优量化位宽 (INT8/INT16/FP16)，在精度和性能之间取最优平衡</td>
+  <td>复杂模型中不同层量化敏感度差异大的场景</td>
+  <td>比均匀 INT8 精度提升 0.5~2%</td>
+</tr>
+<tr>
+  <td><strong>QAT (量化感知训练)</strong></td>
+  <td>在训练中插入 FakeQuant 节点，使用 STE (Straight-Through Estimator) 估计梯度，让模型学习适应量化噪声</td>
+  <td>PTQ 精度不达标时的最终手段，需要完整训练集和训练时间</td>
+  <td>精度损失通常 < 0.5%</td>
+</tr>
+<tr>
+  <td><strong>模型压缩<br/>(SVD / Channel Pruning)</strong></td>
+  <td>SVD 分解大权重矩阵为低秩近似；通道剪枝移除不重要的卷积通道</td>
+  <td>模型参数量过大，需要结构性压缩</td>
+  <td>压缩 2~4x，精度损失 0.5~1.5%</td>
+</tr>
+</table>
+
+<h3>2.3 AIMET 量化工作流</h3>
+
+<p>以 DMS 人脸关键点模型的 PTQ 优化为例，展示 AIMET 的典型工作流：</p>
+
+<pre><code class="language-python">import torch
+from aimet_torch.model_preparer import prepare_model
+from aimet_torch.cross_layer_equalization import equalize_model
+from aimet_torch.adaround.adaround_weight import Adaround, AdaroundParameters
+from aimet_torch.quantsim import QuantizationSimModel
+
+# 1. 加载 FP32 模型
+model = load_dms_model("mobilenetv3_face_landmarks.pth")
+model.eval()
+
+# 2. 准备模型 (自动替换不兼容层)
+model = prepare_model(model)
+
+# 3. Cross-Layer Equalization — 均衡权重范围
+equalize_model(model, input_shapes=(1, 3, 224, 224))
+
+# 4. AdaRound — 自适应取整优化
+params = AdaroundParameters(
+    data_loader=calib_loader,        # 校准数据 (500~1000 张)
+    num_batches=50,
+    default_num_iterations=10000,
+    default_reg_param=0.01
+)
+model = Adaround.apply_adaround(
+    model,
+    dummy_input=torch.randn(1, 3, 224, 224),
+    params=params,
+    path="./adaround_output",
+    filename_prefix="dms_model"
+)
+
+# 5. QuantSim — 量化仿真验证
+quantsim = QuantizationSimModel(
+    model,
+    dummy_input=torch.randn(1, 3, 224, 224),
+    quant_scheme='tf_enhanced',     # 高通推荐的量化方案
+    default_output_bw=8,            # 激活值 INT8
+    default_param_bw=8              # 权重 INT8
+)
+
+# 6. 在 QuantSim 上计算校准编码
+quantsim.compute_encodings(
+    forward_pass_callback=calibration_forward,
+    forward_pass_callback_args=calib_loader
+)
+
+# 7. 验证量化精度
+quant_accuracy = evaluate(quantsim.model, val_loader)
+print(f"FP32 精度: 95.2% → 量化后精度: {quant_accuracy:.1f}%")
+
+# 8. 导出量化模型 (ONNX + 量化编码)
+quantsim.export(
+    path="./export_output",
+    filename_prefix="dms_model_int8",
+    dummy_input=torch.randn(1, 3, 224, 224)
+)
+# 输出: dms_model_int8.onnx + dms_model_int8.encodings
+# → 下一步: qnn-onnx-converter 转换为 QNN 模型
+</code></pre>
+
+<h3>2.4 AIMET 敏感度分析与混合精度</h3>
+
+<p>AIMET 支持逐层敏感度分析，自动识别量化敏感层并推荐混合精度配置：</p>
+
+<pre><code class="language-python">from aimet_torch.quant_analyzer import QuantAnalyzer
+
+# 敏感度分析
+analyzer = QuantAnalyzer(model, dummy_input=torch.randn(1, 3, 224, 224))
+analyzer.enable_per_layer_mse_loss(
+    unlabeled_dataset_iterable=calib_loader,
+    num_batches=20
+)
+# 生成每层量化 MSE 分析报告
+analyzer.analyze(
+    quant_scheme='tf_enhanced',
+    default_param_bw=8,
+    default_output_bw=8,
+    config_file=None,
+    results_dir="./sensitivity_results"
+)
+# 输出: HTML 报告 + 每层 MSE 柱状图
+# → 高 MSE 的层建议保持 INT16/FP16
+</code></pre>
+
+<div class="info-box ok">
+  <div class="title">Best Practice: AIMET 在座舱量化项目中的推荐流程</div>
+  <p><strong>标准路径</strong>：CLE → Bias Correction → AdaRound → QuantSim 验证 → 导出 ONNX → QNN 转换。80% 的模型用这条 PTQ 增强路径即可达标，无需进入 QAT。</p>
+  <p style="margin-top:8px"><strong>关键经验</strong>：</p>
+  <ul style="margin:6px 0 0 20px;color:var(--text2)">
+    <li><strong>CLE 对 Depthwise Conv 效果最好</strong>：MobileNet 系列模型在 CLE 后 PTQ 精度通常可提升 1~3 个百分点</li>
+    <li><strong>AdaRound 校准数据不需要标注</strong>：只需代表性图片，500 张通常足够</li>
+    <li><strong>quant_scheme 选择</strong>：高通平台推荐 <code>tf_enhanced</code>（对称量化 + 分位数校准），比 <code>tf</code>（min-max）精度更好</li>
+    <li><strong>导出格式</strong>：AIMET 导出的 ONNX + .encodings 文件可被 <code>qnn-onnx-converter</code> 直接识别，量化参数无缝传递</li>
+    <li><strong>敏感度分析报告</strong>：对精度损失超过 0.5% 的层，优先尝试 INT16 而非 QAT，开发成本更低</li>
+  </ul>
+</div>
+
+<h3>2.5 AIMET vs 其他量化工具对比</h3>
+
+<table>
+<tr><th>维度</th><th>AIMET</th><th>QNN Converter 内置量化</th><th>PyTorch 原生量化</th><th>ONNX Runtime 量化</th></tr>
+<tr><td><strong>CLE / AdaRound</strong></td><td>内置</td><td>不支持</td><td>不支持</td><td>不支持</td></tr>
+<tr><td><strong>敏感度分析</strong></td><td>逐层 MSE 分析 + HTML 报告</td><td>不支持</td><td>不支持</td><td>不支持</td></tr>
+<tr><td><strong>QAT 支持</strong></td><td>完整 QAT + Range Learning</td><td>仅 PTQ</td><td>FakeQuant QAT</td><td>仅 PTQ</td></tr>
+<tr><td><strong>混合精度</strong></td><td>自动推荐 + 手动配置</td><td>手动指定</td><td>手动指定</td><td>不支持</td></tr>
+<tr><td><strong>QNN 集成</strong></td><td>导出 .encodings 无缝衔接</td><td>原生</td><td>需转 ONNX 再转 QNN</td><td>需再转 QNN</td></tr>
+<tr><td><strong>模型压缩</strong></td><td>SVD + Channel Pruning</td><td>不支持</td><td>Pruning API</td><td>不支持</td></tr>
+<tr><td><strong>推荐场景</strong></td><td>高通平台精度敏感的量化优化</td><td>快速 PTQ 验证</td><td>非高通平台 QAT</td><td>ONNX 模型快速量化</td></tr>
+</table>
+
+<div class="info-box warn">
+  <div class="title">AIMET 与 QNN 的配合关系</div>
+  <p>AIMET 和 QNN 不是竞争关系，而是上下游配合：</p>
+  <ul style="margin:8px 0 0 20px;color:var(--text2)">
+    <li><strong>AIMET</strong>：在训练侧（PyTorch/TF）做量化优化、精度调试、敏感度分析，输出量化编码后的 ONNX</li>
+    <li><strong>QNN Converter</strong>：接收 AIMET 的量化 ONNX，转换为 QNN 模型格式，编译为 Context Binary</li>
+    <li><strong>典型链路</strong>：PyTorch → AIMET (CLE+AdaRound) → ONNX+encodings → qnn-onnx-converter → Context Binary → HTP 推理</li>
+  </ul>
+  <p style="margin-top:8px">如果 QNN Converter 内置的 PTQ 精度已达标（精度损失 &lt; 1%），可以跳过 AIMET 直接部署。AIMET 是精度不够时的"精准手术刀"。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 3: KV Cache 优化 (migrated from cockpit-agent.html 15.1) -->
+<!-- ============================================================ -->
+<h2 id="ch3">3. KV Cache 优化</h2>
+
+<h3>3.1 KV Cache 优化策略</h3>
+
+<p>KV Cache 是 LLM 推理中内存占用的主要来源。标准 Transformer 每个 token 都需要保存 Key 和 Value 向量，内存随序列长度线性增长。以下是主要优化策略：</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+graph TB
+    subgraph Standard["标准 KV Cache"]
+        S1["所有 token 保留"]
+        S2["内存: O(seq_len x d_model x layers)"]
+        S3["4B 模型 2K 上下文 = 1.6GB"]
+    end
+
+    subgraph Optimized["优化 KV Cache"]
+        O1["Sliding Window<br/>仅保留最近 N 个 token<br/>内存固定 O(N x d)"]
+        O2["KV 量化 INT8<br/>KV 向量从 FP16 到 INT8<br/>内存减半，精度损失 &lt;1%"]
+        O3["GQA / MQA<br/>多 Query 共享 KV<br/>GQA: KV 减少 4-8x"]
+        O4["PagedAttention<br/>按页分配 KV 内存<br/>消除内存碎片"]
+    end
+
+    Standard -->|"优化方向"| Optimized
+</div></div>
+
+<table>
+<thead>
+<tr><th>优化方法</th><th>原理</th><th>内存节省</th><th>精度影响</th><th>适用场景</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Sliding Window</strong></td><td>只保留最近 W 个 token 的 KV，超出窗口的丢弃</td><td>固定上限，不随长度增长</td><td>长距离依赖丢失</td><td>单轮对话、实时车控指令</td></tr>
+<tr><td><strong>KV Quantization INT8</strong></td><td>KV 向量从 FP16 量化到 INT8 存储</td><td>减少约 50%</td><td>损失 &lt; 1%</td><td>多轮对话、内存受限场景</td></tr>
+<tr><td><strong>GQA / MQA</strong></td><td>多个 Query Head 共享一组 KV Head</td><td>GQA 减少 4-8 倍</td><td>几乎无损</td><td>新一代模型原生支持</td></tr>
+<tr><td><strong>PagedAttention</strong></td><td>按页（block）分配 KV 内存，类似操作系统虚拟内存</td><td>减少碎片，提高利用率</td><td>无损</td><td>多并发请求、长序列</td></tr>
+</tbody>
+</table>
+
+<h3>3.2 Qwen3-Omni-4B KV Cache 内存估算</h3>
+
+<p>以 Qwen3-Omni-4B 为例，KV Cache 内存随上下文长度的增长：</p>
+
+<table>
+<tr><th>上下文长度</th><th>FP16 KV Cache</th><th>INT8 KV Cache</th><th>GQA + INT8</th></tr>
+<tr><td>512 tokens</td><td>~400 MB</td><td>~200 MB</td><td>~50 MB</td></tr>
+<tr><td>1024 tokens</td><td>~800 MB</td><td>~400 MB</td><td>~100 MB</td></tr>
+<tr><td>2048 tokens</td><td>~1.6 GB</td><td>~800 MB</td><td>~200 MB</td></tr>
+<tr><td>4096 tokens</td><td>~3.2 GB</td><td>~1.6 GB</td><td>~400 MB</td></tr>
+</table>
+
+<div class="info-box ok">
+  <div class="title">端侧推荐配置</div>
+  <p>在 SA8397P 上部署 Qwen3-Omni-4B，推荐组合：<strong>GQA (原生支持) + KV INT8 量化 + Sliding Window (1024)</strong>。这套组合可以将 KV Cache 内存控制在 100~200 MB 以内，为模型权重和其他运行时数据留出充足内存空间。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 4: 推理引擎对比 (migrated from cockpit-agent.html 15.3) -->
+<!-- ============================================================ -->
+<h2 id="ch4">4. 推理引擎对比</h2>
+
+<h3>4.1 LLM 推理引擎性能对比</h3>
+
+<p>在端侧部署 Qwen3-Omni-4B INT4 模型时，不同推理引擎的性能差异显著：</p>
+
+<div class="chart-wrap"><div class="chart-box" id="chart-engine"></div></div>
+
+<table>
+<thead>
+<tr><th>推理引擎</th><th>生成速度 (tok/s)</th><th>TTFT (ms)</th><th>内存占用 (GB)</th><th>平台支持</th><th>特点</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>llama.cpp</strong></td><td>12</td><td>800</td><td>2.1</td><td>CPU/GPU/NPU（有限）</td><td>跨平台，社区活跃，INT4/INT8 支持好</td></tr>
+<tr><td><strong>MLC-LLM</strong></td><td>15</td><td>650</td><td>1.8</td><td>CPU/GPU/NPU</td><td>TVM 编译优化，自动算子调优</td></tr>
+<tr><td><strong>ExecuTorch</strong></td><td>11</td><td>900</td><td>2.3</td><td>CPU/GPU/XNNPACK</td><td>PyTorch 生态，移动端优先</td></tr>
+<tr><td><strong>QNN-LLM</strong></td><td>18</td><td>500</td><td>1.6</td><td>Hexagon NPU 原生</td><td>高通原生引擎，NPU 算子最优，TTFT 最低</td></tr>
+</tbody>
+</table>
+
+<div class="info-box ok">
+  <div class="title">选型建议</div>
+  <p>在 SA8397P 平台上，<strong>QNN-LLM</strong> 是性能最优选择：生成速度最快（18 tok/s）、TTFT 最低（500ms）、内存最省（1.6 GB）。其核心优势来自 Hexagon NPU 原生算子优化和 Context Binary 编译加速。如需跨平台兼容性，<strong>MLC-LLM</strong> 是次优选择。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 5: ViT+LLM 多核绑定 (NEW) -->
+<!-- ============================================================ -->
+<h2 id="ch5">5. ViT+LLM 多核绑定</h2>
+
+<h3>5.1 Qwen3-Omni 多模态架构</h3>
+
+<p>Qwen3-Omni-4B 是一个原生多模态模型，其架构包含 <strong>ViT 视觉编码器</strong>（Vision Transformer）和 <strong>LLM 语言解码器</strong> 两个主要计算模块。在标准部署中，两者共享同一个 HTP 核心，导致计算资源无法充分利用：</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+flowchart LR
+    A["摄像头图像<br/>640x480"] --> B["ViT 视觉编码器<br/>Patch Embedding + Transformer"]
+    B --> C["Projection Layer<br/>视觉特征→语言空间"]
+    C --> D["LLM 解码器<br/>Causal Transformer"]
+    D --> E["输出 Token<br/>Function Call / 文本"]
+
+    style A fill:#3498db,color:#fff
+    style B fill:#e74c3c,color:#fff
+    style C fill:#f39c12,color:#fff
+    style D fill:#4361ee,color:#fff
+    style E fill:#2ecc71,color:#fff
+</div></div>
+
+<h3>5.2 单核串行 vs 多核并行</h3>
+
+<p>在标准的单核串行执行中，ViT 编码和 LLM 解码必须依次完成，导致 HTP 利用率不足。通过将 ViT 和 LLM 分别绑定到不同的 HTP 核心，可以实现流水线并行执行：</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+gantt
+    title 单核串行 vs 多核并行执行时序
+    dateFormat X
+    axisFormat %Lms
+
+    section 单核串行 (HTP Core 0)
+    ViT 编码 Frame 1         :done, v1, 0, 8
+    LLM Prefill Frame 1      :active, l1, 8, 20
+    LLM Decode (Token 1-5)   :d1, 20, 30
+    ViT 编码 Frame 2         :v2, 30, 38
+
+    section 多核并行 Core 0 - ViT
+    ViT 编码 Frame 1         :done, mv1, 0, 8
+    ViT 编码 Frame 2         :active, mv2, 12, 20
+    ViT 编码 Frame 3         :mv3, 24, 32
+
+    section 多核并行 Core 1 - LLM
+    等待 ViT 结果             :crit, wait, 0, 8
+    LLM Prefill Frame 1      :active, ml1, 8, 20
+    LLM Decode (Token 1-5)   :md1, 20, 30
+</div></div>
+
+<h3>5.3 多核绑定实现</h3>
+
+<p>SA8397P 的 Hexagon NPU 包含多个 HTP 核心。通过 QNN 的 <code>core_affinity</code> 参数，可以将不同模型绑定到指定核心：</p>
+
+<pre><code class="language-c">// QNN 多核绑定配置示例
+#include "QnnContext.h"
+#include "QnnDevice.h"
+
+// 为 ViT 编码器创建 Context，绑定到 HTP Core 0
+QnnContext_Config_t vit_config;
+vit_config.option = QNN_CONTEXT_CONFIG_OPTION_CORE_AFFINITY;
+vit_config.coreAffinity = 0;  // HTP Core 0
+Qnn_ContextHandle_t vit_context;
+qnn_interface.contextCreate(backend, device, &vit_config, &vit_context);
+
+// 为 LLM 解码器创建 Context，绑定到 HTP Core 1
+QnnContext_Config_t llm_config;
+llm_config.option = QNN_CONTEXT_CONFIG_OPTION_CORE_AFFINITY;
+llm_config.coreAffinity = 1;  // HTP Core 1
+Qnn_ContextHandle_t llm_context;
+qnn_interface.contextCreate(backend, device, &llm_config, &llm_context);
+
+// 核间数据传递：使用共享 ION Buffer
+// ViT 输出 → ION Buffer → LLM 输入
+ion_alloc_data_t ion_buf;
+ion_buf.len = VIT_OUTPUT_SIZE;  // 视觉特征向量大小
+ion_buf.flags = ION_FLAG_CACHED;
+ioctl(ion_fd, ION_IOC_ALLOC, &ion_buf);
+</code></pre>
+
+<h3>5.4 流水线优化细节</h3>
+
+<p>多核绑定的核心收益在于 <strong>Prefill 阶段的重叠执行</strong>：当 LLM 在对第 N 帧的视觉 token 做 KV 计算时，ViT 可以同时预处理第 N+1 帧的图像。核间通信通过 <strong>共享 VTCM（Vector Tightly-Coupled Memory）或 ION Buffer</strong> 实现，延迟极低（< 0.1ms）。</p>
+
+<table>
+<tr><th>指标</th><th>单核串行</th><th>双核并行</th><th>提升</th></tr>
+<tr><td><strong>多模态 Prefill 延迟</strong></td><td>~1500 ms</td><td>~900 ms</td><td>约 40% 降低</td></tr>
+<tr><td><strong>连续帧处理吞吐</strong></td><td>~0.67 FPS</td><td>~1.1 FPS</td><td>约 60% 提升</td></tr>
+<tr><td><strong>HTP 利用率</strong></td><td>~50%</td><td>~85%</td><td>+35 百分点</td></tr>
+<tr><td><strong>ViT 编码延迟</strong></td><td>~800 ms (排队等待)</td><td>~400 ms (立即执行)</td><td>约 50% 降低</td></tr>
+<tr><td><strong>核间通信开销</strong></td><td>— (无需)</td><td>< 0.1 ms</td><td>可忽略</td></tr>
+</table>
+
+<div class="info-box">
+  <div class="title">注意事项</div>
+  <p>多核绑定需要确认目标平台的 HTP 核心数量。SA8397P 通常具备 2 个 HTP 核心，支持上述双核方案。部分低端平台可能仅有 1 个 HTP 核心，此时无法使用此优化。此外，两个模型同时运行会增加总内存占用和功耗，需根据散热预算评估可行性。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 6: 前缀缓存 (NEW) -->
+<!-- ============================================================ -->
+<h2 id="ch6">6. 前缀缓存 (Prefix Caching)</h2>
+
+<h3>6.1 问题背景</h3>
+
+<p>在座舱 Agent 场景中，每次用户请求都携带一段固定的 <strong>System Prompt</strong>（包含工具定义、人设描述、安全规则等），通常占 200~500 个 token。标准推理流程中，这段相同的前缀每次都要重新做 Prefill 计算 KV Cache，造成大量重复计算：</p>
+
+<pre><code class="language-text">[System Prompt: 200~500 tokens] + [用户输入: 20~100 tokens]
+         ↑                                ↑
+   每次都重新计算 KV Cache          真正变化的部分
+   = 浪费 60~80% 的 Prefill 时间
+</code></pre>
+
+<h3>6.2 前缀缓存原理</h3>
+
+<div class="mermaid-wrap"><div class="mermaid">
+flowchart TB
+    A["新请求到达"] --> B{"前缀 KV Cache<br/>是否命中?"}
+    B -->|"命中 (Cache Hit)"| C["直接加载已缓存的 KV<br/>仅对用户输入做 Prefill"]
+    B -->|"未命中 (Cache Miss)"| D["对完整 Prompt 做 Prefill<br/>计算所有 token 的 KV"]
+    D --> E["将前缀部分的 KV<br/>序列化到 ION Buffer"]
+    E --> F["写入缓存<br/>Key = hash(前缀 tokens)"]
+    C --> G["拼接: 缓存 KV + 新 KV"]
+    F --> G
+    G --> H["开始 Decode 生成"]
+
+    style B fill:#f39c12,color:#fff
+    style C fill:#2ecc71,color:#fff
+    style D fill:#e74c3c,color:#fff
+    style H fill:#4361ee,color:#fff
+</div></div>
+
+<h3>6.3 实现方案</h3>
+
+<pre><code class="language-python">import hashlib
+import numpy as np
+
+class PrefixKVCache:
+    """前缀 KV Cache 管理器"""
+    def __init__(self, max_entries=4, max_memory_mb=512):
+        self.cache = {}           # {hash -> kv_data}
+        self.lru_order = []       # LRU 淘汰队列
+        self.max_entries = max_entries
+        self.max_memory = max_memory_mb * 1024 * 1024
+
+    def compute_key(self, token_ids):
+        """根据 token 序列计算缓存 key"""
+        return hashlib.sha256(
+            np.array(token_ids, dtype=np.int32).tobytes()
+        ).hexdigest()[:16]
+
+    def get(self, prefix_tokens):
+        """查找前缀 KV Cache"""
+        key = self.compute_key(prefix_tokens)
+        if key in self.cache:
+            # 更新 LRU 顺序
+            self.lru_order.remove(key)
+            self.lru_order.append(key)
+            return self.cache[key]  # Cache Hit
+        return None  # Cache Miss
+
+    def put(self, prefix_tokens, kv_data):
+        """存入前缀 KV Cache"""
+        key = self.compute_key(prefix_tokens)
+        # LRU 淘汰
+        while len(self.cache) >= self.max_entries:
+            old_key = self.lru_order.pop(0)
+            del self.cache[old_key]
+        self.cache[key] = kv_data
+        self.lru_order.append(key)
+
+    def prefill_with_cache(self, model, full_prompt_tokens, prefix_len):
+        """带缓存的 Prefill"""
+        prefix = full_prompt_tokens[:prefix_len]
+        suffix = full_prompt_tokens[prefix_len:]
+
+        cached_kv = self.get(prefix)
+        if cached_kv is not None:
+            # Cache Hit: 仅对 suffix 做 Prefill
+            kv = model.prefill(suffix, past_kv=cached_kv)
+        else:
+            # Cache Miss: 完整 Prefill + 缓存前缀
+            kv = model.prefill(full_prompt_tokens)
+            prefix_kv = kv.slice(0, prefix_len)
+            self.put(prefix, prefix_kv)
+        return kv
+</code></pre>
+
+<h3>6.4 多轮对话的前缀缓存</h3>
+
+<p>前缀缓存不仅适用于 System Prompt，还可以扩展到多轮对话中——前几轮对话的 KV Cache 也可以缓存复用：</p>
+
+<table>
+<tr><th>缓存层级</th><th>缓存内容</th><th>缓存频率</th><th>TTFT 节省</th></tr>
+<tr><td><strong>L1: System Prompt</strong></td><td>工具定义 + 人设 + 安全规则 (200~500 tokens)</td><td>应用启动时预计算，常驻内存</td><td>60~80%</td></tr>
+<tr><td><strong>L2: 对话历史</strong></td><td>前 N 轮对话的 KV Cache</td><td>每轮对话结束后更新</td><td>30~50% (增量部分)</td></tr>
+<tr><td><strong>L3: 常用查询模板</strong></td><td>"导航到XX"、"调空调XX度" 等高频模式</td><td>统计频率后预计算</td><td>20~40%</td></tr>
+</table>
+
+<div class="info-box ok">
+  <div class="title">Best Practice: Prompt 模板设计</div>
+  <p>为了最大化前缀缓存命中率，Prompt 模板应遵循<strong>"静态在前，动态在后"</strong>的原则：</p>
+  <ul style="margin:6px 0 0 20px;color:var(--text2)">
+    <li><strong>前缀部分（固定）</strong>：System 人设 → 工具定义（JSON Schema）→ 安全规则 → 输出格式要求</li>
+    <li><strong>后缀部分（变化）</strong>：对话历史 → 当前车辆状态 → 用户最新输入</li>
+    <li>如果工具集合动态变化（如联网后新增云端工具），应将稳定的本地工具放在前面，动态工具放在后面</li>
+    <li>在 SA8397P 上，缓存 500 token 前缀的 KV Cache 约占用 50~80 MB 内存（INT8 量化 + GQA），可以常驻</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 7: 投机采样 (NEW) -->
+<!-- ============================================================ -->
+<h2 id="ch7">7. 投机采样 (Speculative Decoding)</h2>
+
+<h3>7.1 核心思想</h3>
+
+<p>标准自回归解码中，每个 token 必须等前一个 token 生成完毕才能开始——Decode 阶段是严格串行的，受限于内存带宽。<strong>投机采样</strong>利用一个小型"草稿模型"(Draft Model) 快速生成 K 个候选 token，然后由大型"目标模型"(Target Model) 在一次前向传播中并行验证这 K 个 token，从而将多步串行解码压缩为一步并行验证：</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+sequenceDiagram
+    participant Draft as 草稿模型<br/>Qwen3-1.7B (28 tok/s)
+    participant Target as 目标模型<br/>Qwen3-Omni-4B (10 tok/s)
+    participant Output as 最终输出
+
+    Note over Draft,Target: 投机采样一轮迭代 (K=4)
+
+    Draft->>Draft: 自回归生成 4 个候选 token
+    Note right of Draft: t1="已" t2="将" t3="空调" t4="调"
+
+    Draft->>Target: 发送 [t1, t2, t3, t4]
+    Target->>Target: 一次前向传播验证全部 4 个 token
+    Note right of Target: 对比每个位置的概率分布
+
+    Target->>Output: t1="已" (接受, p_draft ≤ p_target)
+    Target->>Output: t2="将" (接受)
+    Target->>Output: t3="空调" (接受)
+    Target->>Output: t4="设" (拒绝, 从 target 分布重采样)
+    Note right of Output: 本轮净产出: 3 个有效 token + 1 个重采样 token
+</div></div>
+
+<h3>7.2 验证与接受机制</h3>
+
+<p>投机采样的数学保证：最终输出的分布与直接使用目标模型采样完全一致（无损采样）。验证过程如下：</p>
+
+<p>对于草稿模型在位置 i 生成的 token <code>t_i</code>：</p>
+<ul style="margin:6px 0 0 20px;color:var(--text2)">
+  <li>计算接受概率 <code>min(1, p_target(t_i) / p_draft(t_i))</code></li>
+  <li>若随机数 &lt; 接受概率 → <strong>接受</strong>该 token，继续验证下一个</li>
+  <li>若随机数 &ge; 接受概率 → <strong>拒绝</strong>该 token，从修正分布 <code>max(0, p_target - p_draft)</code> 重新采样</li>
+  <li>拒绝后，后续草稿 token 全部丢弃</li>
+</ul>
+
+<h3>7.3 端侧配置方案</h3>
+
+<table>
+<tr><th>参数</th><th>端侧推荐 (SA8397P)</th><th>云端推荐</th><th>说明</th></tr>
+<tr><td><strong>草稿模型</strong></td><td>Qwen3-1.7B INT4</td><td>Qwen3-4B INT8</td><td>端侧选最小可用模型，降低内存压力</td></tr>
+<tr><td><strong>目标模型</strong></td><td>Qwen3-Omni-4B INT4</td><td>Qwen3-Omni-4B FP16</td><td>端侧用 INT4 量化版本</td></tr>
+<tr><td><strong>猜测长度 K</strong></td><td>3~5</td><td>8~16</td><td>端侧内存有限，K 不宜过大</td></tr>
+<tr><td><strong>草稿模型内存</strong></td><td>~1.2 GB</td><td>~4 GB</td><td>Qwen3-1.7B INT4 约 1.2 GB</td></tr>
+<tr><td><strong>目标模型内存</strong></td><td>~2.5 GB</td><td>~8 GB</td><td>Qwen3-Omni-4B INT4 约 2.5 GB</td></tr>
+<tr><td><strong>总内存</strong></td><td>~3.7 GB</td><td>~12 GB</td><td>SA8397P LPDDR5 可承载</td></tr>
+<tr><td><strong>典型接受率</strong></td><td>70~85%</td><td>75~90%</td><td>同族模型接受率更高</td></tr>
+</table>
+
+<h3>7.4 加速效果分析</h3>
+
+<p>理论加速比公式：<code>Speedup = K / (1 + K * (1 - alpha))</code>，其中 alpha 为接受率。实际加速效果受草稿模型推理速度、验证开销等因素影响：</p>
+
+<div class="chart-wrap"><div class="chart-box" id="chart-spec"></div></div>
+
+<h3>7.5 Token Tree Verification</h3>
+
+<p>进阶方案中，草稿模型不是生成单一序列，而是生成一棵 <strong>Token 树</strong>（Tree-structured Speculation）。每个位置扩展 2~3 个候选分支，目标模型通过一次前向传播验证整棵树，选取最长的有效路径。这种方法在同等接受率下，可以进一步提升每轮迭代的有效 token 产出。</p>
+
+<div class="info-box warn">
+  <div class="title">何时不适合使用投机采样</div>
+  <ul style="margin:6px 0 0 20px;color:var(--text2)">
+    <li><strong>输出很短时</strong>（如分类任务仅输出 1~3 个 token），投机采样的草稿生成和验证开销反而增加延迟</li>
+    <li><strong>内存极度紧张时</strong>，两个模型同时驻留可能挤占其他子系统（如 DMS 模型）的内存</li>
+    <li><strong>草稿-目标接受率过低时</strong>（&lt; 50%），频繁拒绝导致加速效果不明显甚至变慢</li>
+    <li><strong>高创造性任务时</strong>（高 temperature），草稿模型和目标模型的分布差异增大，接受率下降</li>
+  </ul>
+  <p style="margin-top:8px">座舱场景中，Function Calling 输出格式固定、可预测性强，接受率通常较高（>80%），非常适合投机采样。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 8: 约束解码 (NEW) -->
+<!-- ============================================================ -->
+<h2 id="ch8">8. 约束解码 (Constrained Decoding)</h2>
+
+<h3>8.1 问题背景</h3>
+
+<p>座舱 Agent 需要 LLM 输出结构化的 JSON 来调用 Function Calling API，例如：</p>
+
+<pre><code class="language-json">{"function": "set_ac_temperature", "arguments": {"temp": 24}}
+</code></pre>
+
+<p>然而 LLM 本质是基于概率的自由生成，可能产出格式错误的输出——缺少引号、括号不匹配、字段名拼写错误等。每次输出格式错误都意味着一次失败的交互和额外的重试成本（20~30% 的请求可能需要重试）。</p>
+
+<h3>8.2 约束解码原理</h3>
+
+<p>约束解码的核心思想：在每一步 token 生成时，根据已生成的内容和目标格式规则，<strong>遮蔽 (mask) 所有不合法的 token</strong>，只允许生成合法的 token。这确保了输出一定符合预定格式。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+stateDiagram-v2
+    [*] --> START
+    START --> IN_OBJECT: 生成 "{"
+    IN_OBJECT --> IN_KEY: 生成 引号
+    IN_KEY --> KEY_DONE: 生成 function/arguments
+    KEY_DONE --> COLON: 生成 ":"
+    COLON --> IN_VALUE: 生成 引号/数字/{
+    IN_VALUE --> VALUE_DONE: 值结束
+    VALUE_DONE --> COMMA: 生成 ","
+    VALUE_DONE --> END_OBJECT: 生成 "}"
+    COMMA --> IN_KEY: 生成 引号
+    END_OBJECT --> [*]
+
+    note right of IN_KEY: 仅允许预定义的 key 名称
+    note right of IN_VALUE: 值类型由 Schema 约束
+</div></div>
+
+<h3>8.3 三种主要方法</h3>
+
+<table>
+<tr><th>方法</th><th>原理</th><th>表达能力</th><th>性能开销</th><th>典型实现</th></tr>
+<tr>
+  <td><strong>JSON Schema 引导</strong></td>
+  <td>根据 JSON Schema 的类型、枚举、必选字段等规则，在每步生成时过滤不合法 token</td>
+  <td>中等，覆盖标准 JSON 格式</td>
+  <td>~5% 推理开销</td>
+  <td>vLLM structured output, Outlines</td>
+</tr>
+<tr>
+  <td><strong>有限状态机 (FSM)</strong></td>
+  <td>预定义状态转移图（如上图），跟踪当前解码位置处于哪个状态，仅允许合法转移对应的 token</td>
+  <td>中等，适合正则可描述的格式</td>
+  <td>~8% 推理开销</td>
+  <td>Outlines FSM, lm-format-enforcer</td>
+</tr>
+<tr>
+  <td><strong>上下文无关文法 (CFG)</strong></td>
+  <td>用 BNF/GBNF 定义完整语法规则，使用下推自动机跟踪解析栈，精确控制每一步可生成的 token</td>
+  <td>最强，支持递归嵌套结构</td>
+  <td>~10~15% 推理开销</td>
+  <td>llama.cpp GBNF, guidance</td>
+</tr>
+</table>
+
+<h3>8.4 座舱 Function Calling 约束示例</h3>
+
+<p>以下 GBNF 语法定义了座舱 Function Calling 的输出格式约束：</p>
+
+<pre><code class="language-text"># GBNF 语法: 座舱 Function Calling 输出约束
+root        ::= "{" ws "\"function\"" ws ":" ws func-name ws "," ws "\"arguments\"" ws ":" ws arguments ws "}"
+func-name   ::= "\"set_ac_temperature\"" | "\"navigate_to\"" | "\"play_music\"" | "\"window_control\"" | "\"seat_heater\"" | "\"set_volume\""
+arguments   ::= "{" ws arg-pair (ws "," ws arg-pair)* ws "}"
+arg-pair    ::= "\"" arg-key "\"" ws ":" ws arg-value
+arg-key     ::= [a-z_]+
+arg-value   ::= number | string | boolean
+number      ::= "-"? [0-9]+ ("." [0-9]+)?
+string      ::= "\"" [^"\\]* "\""
+boolean     ::= "true" | "false"
+ws          ::= [ \t\n]*
+</code></pre>
+
+<p>使用此语法约束后，LLM 在 <code>func-name</code> 位置只能生成预定义的 6 个函数名之一，杜绝了函数名拼错或幻觉生成不存在工具的问题。</p>
+
+<h3>8.5 约束解码效果评估</h3>
+
+<table>
+<tr><th>指标</th><th>无约束</th><th>JSON Schema 引导</th><th>FSM</th><th>GBNF 语法</th></tr>
+<tr><td><strong>格式有效率</strong></td><td>72~85%</td><td>99.5%</td><td>99.8%</td><td>100%</td></tr>
+<tr><td><strong>函数名准确率</strong></td><td>88%</td><td>95%</td><td>100%</td><td>100%</td></tr>
+<tr><td><strong>参数类型正确率</strong></td><td>90%</td><td>98%</td><td>99%</td><td>100%</td></tr>
+<tr><td><strong>推理速度开销</strong></td><td>基准</td><td>~5%</td><td>~8%</td><td>~12%</td></tr>
+<tr><td><strong>重试成本节省</strong></td><td>基准</td><td>~25%</td><td>~28%</td><td>~30%</td></tr>
+</table>
+
+<div class="info-box">
+  <div class="title">约束解码的权衡</div>
+  <p><strong>严格约束的好处</strong>：100% 格式正确，消除重试，降低端到端延迟；工具名枚举约束防止幻觉调用不存在的 API。</p>
+  <p style="margin-top:6px"><strong>严格约束的代价</strong>：对自由文本回复（如闲聊、解释说明）不适用——过度约束会降低回复的自然性和多样性。</p>
+  <p style="margin-top:6px"><strong>推荐策略</strong>：LLM 先生成一个 <code>action_type</code> token 判断是 "tool_call" 还是 "text_reply"。若为 tool_call，启用 GBNF 约束；若为 text_reply，关闭约束自由生成。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 9: TTFT 端到端优化 (NEW) -->
+<!-- ============================================================ -->
+<h2 id="ch9">9. TTFT 端到端优化</h2>
+
+<h3>9.1 TTFT 延迟分解</h3>
+
+<p>Time-To-First-Token (TTFT) 是用户感知延迟的核心指标。以 Qwen3-Omni-4B 在 SA8397P 上的多模态 Function Calling 场景为例，TTFT 可分解为以下阶段：</p>
+
+<table>
+<tr><th>阶段</th><th>基线延迟</th><th>说明</th></tr>
+<tr><td><strong>ViT 视觉编码</strong></td><td>~800 ms</td><td>图像 patch 化 + ViT Transformer 编码 + Projection</td></tr>
+<tr><td><strong>Prefill (KV 计算)</strong></td><td>~1500 ms</td><td>System Prompt + 对话历史 + 视觉 token 的 KV 计算</td></tr>
+<tr><td><strong>首 Token 解码</strong></td><td>~200 ms</td><td>第一个输出 token 的概率计算 + 采样</td></tr>
+<tr><td><strong>输出格式化</strong></td><td>~500 ms</td><td>生成结构化 JSON (Function Call) 的剩余 token</td></tr>
+<tr><td><strong>总计 (基线)</strong></td><td><strong>~3000 ms</strong></td><td>从输入到第一个有效输出</td></tr>
+</table>
+
+<h3>9.2 优化技术栈</h3>
+
+<p>前文介绍的各项优化技术，可以按层级组合形成完整的优化栈：</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+flowchart TB
+    A["模型量化 (Ch1-2)<br/>FP32 → INT4-AWQ<br/>计算量降低 4x"] --> B["多核绑定 (Ch5)<br/>ViT Core 0 + LLM Core 1<br/>Prefill 并行化"]
+    B --> C["前缀缓存 (Ch6)<br/>System Prompt KV 复用<br/>Prefill 减少 60-80%"]
+    C --> D["KV Cache 优化 (Ch3)<br/>GQA + INT8 量化<br/>内存减少 8x"]
+    D --> E["投机采样 (Ch7)<br/>Qwen3-1.7B 草稿<br/>Decode 加速 1.5-2x"]
+    E --> F["约束解码 (Ch8)<br/>GBNF 格式保证<br/>消除重试开销"]
+
+    style A fill:#3498db,color:#fff
+    style B fill:#e74c3c,color:#fff
+    style C fill:#f39c12,color:#fff
+    style D fill:#9b59b6,color:#fff
+    style E fill:#2ecc71,color:#fff
+    style F fill:#4361ee,color:#fff
+</div></div>
+
+<h3>9.3 优化前后 TTFT 对比</h3>
+
+<div class="chart-wrap"><div class="chart-box" id="chart-ttft"></div></div>
+
+<h3>9.4 优化路线图</h3>
+
+<table>
+<tr><th>优化阶段</th><th>技术</th><th>TTFT 效果</th><th>累计 TTFT</th><th>实施成本</th></tr>
+<tr><td><strong>阶段 0: 基线</strong></td><td>Qwen3-Omni-4B FP16, 无优化</td><td>3000 ms</td><td>3000 ms</td><td>—</td></tr>
+<tr><td><strong>阶段 1: 量化</strong></td><td>INT4-AWQ 量化</td><td>-1200 ms</td><td>1800 ms</td><td>低</td></tr>
+<tr><td><strong>阶段 2: 多核绑定</strong></td><td>ViT/LLM 分核并行</td><td>-400 ms</td><td>1400 ms</td><td>中</td></tr>
+<tr><td><strong>阶段 3: 前缀缓存</strong></td><td>System Prompt KV 常驻</td><td>-500 ms</td><td>900 ms</td><td>中</td></tr>
+<tr><td><strong>阶段 4: 投机采样</strong></td><td>Qwen3-1.7B 草稿模型</td><td>-200 ms</td><td>700 ms</td><td>高</td></tr>
+<tr><td><strong>阶段 5: 约束解码</strong></td><td>GBNF 格式保证 (消除重试)</td><td>-100 ms</td><td>600 ms</td><td>中</td></tr>
+</table>
+
+<div class="info-box ok">
+  <div class="title">实战部署建议</div>
+  <p>在 SA8397P 上部署 Qwen3-Omni-4B 的推荐优化组合（按性价比排序）：</p>
+  <ul style="margin:6px 0 0 20px;color:var(--text2)">
+    <li><strong>必做</strong>（阶段 1）：INT4 量化——成本最低、收益最大，TTFT 从 3000ms 降至 1800ms</li>
+    <li><strong>强烈推荐</strong>（阶段 2-3）：多核绑定 + 前缀缓存——配合 QNN Context Binary，TTFT 降至 ~900ms</li>
+    <li><strong>锦上添花</strong>（阶段 4-5）：投机采样 + 约束解码——适合有充足内存预算且对延迟极度敏感的场景</li>
+  </ul>
+  <p style="margin-top:8px"><strong>注意</strong>：以上 TTFT 数据为典型 Function Calling 场景估算值（System Prompt 300 tokens + 用户输入 50 tokens + 图像 1 帧）。实际数值因模型版本、Prompt 长度、硬件温度等因素有所浮动。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 10: 量化方案对比 (migrated ECharts from cockpit-training.html) -->
+<!-- ============================================================ -->
+<h2 id="ch10">10. 量化方案对比</h2>
+
+<h3>10.1 Qwen3-Omni-4B 量化精度-速度分布</h3>
+
+<p>不同量化精度方案在 SA8397P 平台上的推理性能与质量损失关系。选择量化方案时需要综合考虑生成速度、精度损失和内存占用三个维度。散点图中气泡大小表示推荐程度：</p>
+
+<div class="chart-wrap"><div class="chart-box" id="chart-quant"></div></div>
+
+<h3>10.2 量化方案选型指南</h3>
+
+<table>
+<tr><th>量化方案</th><th>生成速度</th><th>Perplexity 增幅</th><th>内存占用</th><th>推荐场景</th></tr>
+<tr><td><strong>FP16 (基准)</strong></td><td>~1.5 tok/s</td><td>0%</td><td>~8 GB</td><td>精度基准测试、开发调试</td></tr>
+<tr><td><strong>INT8 (W8A8)</strong></td><td>~3 tok/s</td><td>+0.2%</td><td>~4 GB</td><td>精度优先、内存充裕</td></tr>
+<tr><td><strong>INT8-W INT4-KV</strong></td><td>~6 tok/s</td><td>+0.8%</td><td>~3.5 GB</td><td>平衡速度与精度</td></tr>
+<tr><td><strong>INT4-AWQ</strong></td><td>~10 tok/s</td><td>+1.5%</td><td>~2.5 GB</td><td>端侧量产部署首选</td></tr>
+<tr><td><strong>INT4-GPTQ</strong></td><td>~14 tok/s</td><td>+2.2%</td><td>~2.5 GB</td><td>追求极致速度</td></tr>
+<tr><td><strong>INT3-GPTQ</strong></td><td>~18 tok/s</td><td>+5.0%</td><td>~1.8 GB</td><td>速度极致、精度可接受</td></tr>
+</table>
+
+<div class="info-box">
+  <div class="title">量化方案推荐</div>
+  <p>座舱 Function Calling 场景推荐 <strong>INT4-AWQ</strong>：生成速度 ~10 tok/s 满足实时交互需求（用户感知 &lt; 2 秒），Perplexity 增幅仅 1.5% 对工具调用准确率影响极小，内存占用 2.5 GB 在 SA8397P 上可承载。INT4-AWQ 相比 INT4-GPTQ 在质量上略优（AWQ 针对重要权重保留更多精度），是目前端侧 LLM 部署的最佳平衡点。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 11: Prefill/Decode 阶段分析 -->
+<!-- ============================================================ -->
+<h2 id="ch11">11. Prefill/Decode 阶段分析</h2>
+
+<h3>11.1 两阶段本质差异</h3>
+
+<p>LLM 自回归推理分为两个计算特性截然不同的阶段。理解这一区分是所有推理优化的基础：</p>
+
+<table>
+<thead>
+<tr><th>维度</th><th>Prefill（预填充）</th><th>Decode（解码）</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>处理方式</strong></td><td>并行处理 S 个输入 token</td><td>逐个生成 token（自回归）</td></tr>
+<tr><td><strong>每步计算量</strong></td><td>~2N × S FLOPs（N=参数量）</td><td>~2N FLOPs / token</td></tr>
+<tr><td><strong>权重读取</strong></td><td>读取全部权重 1 次，服务 S 个 token</td><td>每生成 1 个 token 需读取全部权重</td></tr>
+<tr><td><strong>算术强度（INT4）</strong></td><td>~4×S OPs/Byte</td><td>~4 OPs/Byte</td></tr>
+<tr><td><strong>瓶颈类型</strong></td><td>Compute-bound（S 足够大时）</td><td>Memory-bound（始终）</td></tr>
+<tr><td><strong>核心指标</strong></td><td>TTFT（Time To First Token）</td><td>TPOT（Time Per Output Token）</td></tr>
+<tr><td><strong>输出</strong></td><td>第一个输出 token + 完整 KV Cache</td><td>每步 1 个 token + 追加 KV Cache</td></tr>
+</tbody>
+</table>
+
+<p>其中 N 为模型参数量（Qwen3-Omni-4B 约 4×10⁹），S 为输入序列长度。<strong>算术强度</strong>（Arithmetic Intensity, AI = FLOPs ÷ Bytes）是判断瓶颈类型的关键量：</p>
+
+<pre><code>算术强度推导（以线性层 y = x·W 为例）:
+
+  FLOPs = 2 × batch × H_in × H_out
+  Bytes  ≈ H_in × H_out × bytes_per_weight  (权重访问占主导)
+  AI     = 2 × batch / bytes_per_weight
+
+对于 INT4 (0.5 Byte/参数):
+  Prefill: batch ≈ S (序列长度)  → AI = 4S
+  Decode:  batch = 1             → AI = 4</code></pre>
+
+<h3>11.2 Roofline 模型分析</h3>
+
+<p>Roofline 模型（Williams et al., 2009）将硬件的峰值算力和内存带宽统一在一张图上。通过对比任务的算术强度与硬件的 <strong>Knee Point</strong>（计算/带宽比），可判断任务是 Compute-bound 还是 Memory-bound。</p>
+
+<table>
+<thead>
+<tr><th>SA8397P HTP 参数</th><th>数值</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>峰值算力</strong></td><td>~70 TOPS (INT8)</td><td>Hexagon NPU 标称算力</td></tr>
+<tr><td><strong>DDR 峰值带宽</strong></td><td>~68 GB/s</td><td>LPDDR5x 四通道理论峰值</td></tr>
+<tr><td><strong>Knee Point</strong></td><td>~1029 OPs/Byte</td><td>70 TOPS ÷ 68 GB/s；AI 高于此值为 Compute-bound</td></tr>
+</tbody>
+</table>
+
+<div class="chart-wrap"><div class="chart-box" id="chart-roof"></div></div>
+
+<p><strong>核心结论</strong>：</p>
+<ul style="margin:6px 0 10px 20px;color:var(--text2)">
+<li><strong>Decode 永远是 Memory-bound</strong>：AI=4，远低于 Knee Point 1029，生成速度完全由 DDR 带宽决定</li>
+<li><strong>Prefill 在 S &gt; ~258 时转为 Compute-bound</strong>：4×258=1032 ≈ Knee Point</li>
+<li>座舱典型场景 System Prompt ~300 tokens + 用户输入 ~50 tokens → S≈350，Prefill 为 Compute-bound</li>
+<li>短 Prompt 场景（S &lt; 258）Prefill 也是 Memory-bound，此时前缀缓存的带宽节省更为关键</li>
+</ul>
+
+<h3>11.3 Decode 带宽瓶颈量化分析</h3>
+
+<p>Decode 阶段每生成一个 token 都必须读取全部模型权重，因此生成速度的理论上限可以精确推算：</p>
+
+<pre><code>Decode 理论上限 = DDR 有效带宽 ÷ 每 token 读取数据量
+
+每 token 读取数据量 (Qwen3-Omni-4B INT4):
+  ① 模型权重:  4B × 0.5 Byte/param        ≈ 2.0 GB
+  ② KV Cache:  每层 2 × n_kv_heads × head_dim × seq_len × dtype
+               ≈ 36层 × 2 × 4 × 128 × 512 × 1B (INT8 KV)
+               ≈ 19 MB  (seq_len=512 时)
+  ③ 激活值等:  ≈ 数 MB (相对可忽略)
+  总计 ≈ 2.02 GB/token
+
+理论推导:
+  理想上限:   68 GB/s ÷ 2.02 GB     ≈ 33.7 tok/s
+  内存效率:   × ~85%  (控制器效率)   ≈ 28.6 tok/s
+  带宽共享:   × ~70%  (ISP/GPU 共用)  ≈ 20.0 tok/s
+  调度开销:   × ~65%  (实测折扣)      ≈ 13.0 tok/s
+  实测范围:   10 ~ 14 tok/s</code></pre>
+
+<div class="info-box">
+<div class="title">为什么端侧 Decode 远慢于云端？</div>
+<p>根本原因是<strong>内存带宽差距</strong>。A100 GPU 拥有 ~2 TB/s HBM 带宽，是 SA8397P DDR 的约 30 倍。端侧优化的本质是<strong>减少每 token 读取的数据量</strong>——INT4 量化将权重减半、GQA 将 KV 头数从 28 减至 4（读取量降至 1/7）、KV Cache INT8 量化再减半。这些技术叠加后端侧 ~10 tok/s 的生成速度才成为可能。</p>
+</div>
+
+<h3>11.4 Prefill / Decode 分阶段优化策略</h3>
+
+<table>
+<thead>
+<tr><th>优化手段</th><th>Prefill 收益</th><th>Decode 收益</th><th>原理说明</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>INT4 量化</strong></td><td>中 — 减少权重加载</td><td>高 — 权重减半，带宽利用翻倍</td><td>每 token 读取字节数减半</td></tr>
+<tr><td><strong>GQA</strong></td><td>低 — Prefill 并行效率已高</td><td>高 — KV 头数 28→4</td><td>KV Cache 读写带宽大幅降低</td></tr>
+<tr><td><strong>FlashAttention</strong></td><td>高 — 避免 N²中间结果写 DDR</td><td>中 — Decode 时 N=1</td><td>利用 VTCM 分块计算 Attention</td></tr>
+<tr><td><strong>前缀缓存</strong></td><td>高 — 跳过公共 System Prompt</td><td>无</td><td>复用已缓存的 KV Cache</td></tr>
+<tr><td><strong>投机采样</strong></td><td>无</td><td>高 — 一次验证 K 个 token</td><td>小模型起草 + 大模型并行验证</td></tr>
+<tr><td><strong>Context Binary</strong></td><td>高 — 消除运行时图编译</td><td>无</td><td>离线完成图优化和内存规划</td></tr>
+<tr><td><strong>多核绑定</strong></td><td>高 — ViT/LLM 并行不抢占</td><td>中 — LLM 独占 NPU 核心</td><td>避免 ViT 和 LLM 争抢 HTP 资源</td></tr>
+</tbody>
+</table>
+
+<div class="info-box ok">
+<div class="title">面试高频考点</div>
+<p>"Prefill 是 Compute-bound，Decode 是 Memory-bound"几乎是 LLM 推理优化面试的必问题。回答时需要：(1) 从算术强度角度定量分析；(2) 结合具体硬件参数推算 Knee Point；(3) 说明不同优化技术分别解决哪个阶段的瓶颈。避免只说结论不给推导。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Chapter 12: Continuous Batching -->
+<!-- ============================================================ -->
+<h2 id="ch12">12. Continuous Batching</h2>
+
+<h3>12.1 静态批处理的局限</h3>
+
+<p>传统静态批处理（Static Batching）要求同一 batch 内所有请求同时开始、同时结束。由于 LLM 生成长度不固定，短请求必须等待最长请求完成才能释放资源：</p>
+
+<table>
+<thead>
+<tr><th>时刻</th><th>静态批处理行为</th><th>问题</th></tr>
+</thead>
+<tbody>
+<tr><td>t=0s</td><td>请求 A（导航，预计生成 50 tokens）进入 NPU</td><td>—</td></tr>
+<tr><td>t=0.5s</td><td>请求 B（播放音乐，仅需 10 tokens）到达</td><td>必须排队等待 A 完成</td></tr>
+<tr><td>t=2.0s</td><td>A 完成 Decode，释放 NPU</td><td>B 等待了 1.5s 才开始处理</td></tr>
+<tr><td>t=3.2s</td><td>B 完成</td><td>B 端到端延迟 2.7s（实际推理仅需 1.2s）</td></tr>
+</tbody>
+</table>
+
+<p>在座舱多音区场景中，驾驶员和副驾可能在不同时刻发起语音指令。静态批处理要么串行处理（延迟高），要么整 batch 等待（NPU 利用率低，短请求被拖慢）。</p>
+
+<h3>12.2 Continuous Batching 原理</h3>
+
+<p>Continuous Batching（Yu et al., 2022, Orca）将调度粒度从<strong>请求级别</strong>细化到<strong>迭代级别</strong>：每完成一次 Decode 迭代后重新调度——已完成的请求立即释放 KV Cache，新到达的请求可以插入当前 batch 执行 Prefill。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+flowchart TB
+    A["新请求到达"] --> B["加入等待队列"]
+    B --> C{"当前 Batch 有空位?"}
+    C -->|"有"| D["加入 Batch 执行 Prefill"]
+    C -->|"无"| E["继续等待"]
+    E --> C
+    D --> F["参与迭代 Decode"]
+    F --> G{"该请求生成完毕?"}
+    G -->|"是"| H["返回结果 释放 KV Cache"]
+    G -->|"否"| F
+    H --> C
+
+    style A fill:#4361ee,color:#fff
+    style H fill:#2ecc71,color:#fff
+    style E fill:#f39c12,color:#fff
+</div></div>
+
+<table>
+<thead>
+<tr><th>对比维度</th><th>静态批处理</th><th>Continuous Batching</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>调度粒度</strong></td><td>请求级（整 batch 同进同出）</td><td>迭代级（逐 token 调度）</td></tr>
+<tr><td><strong>新请求</strong></td><td>等当前 batch 全部完成</td><td>下一迭代即可加入</td></tr>
+<tr><td><strong>完成请求</strong></td><td>等最慢请求完成</td><td>立即释放 KV Cache</td></tr>
+<tr><td><strong>NPU 利用率</strong></td><td>低（padding 浪费 40-60%）</td><td>高（接近持续满载）</td></tr>
+<tr><td><strong>平均延迟</strong></td><td>短请求被长请求拖慢</td><td>各请求独立完成</td></tr>
+<tr><td><strong>实现复杂度</strong></td><td>低</td><td>高（需动态 KV Cache 管理）</td></tr>
+<tr><td><strong>适合场景</strong></td><td>离线 batch 推理</td><td>在线实时服务</td></tr>
+</tbody>
+</table>
+
+<h3>12.3 座舱多音区调度</h3>
+
+<p>在 aadkcore 框架中，<code>ModelScheduler</code> 负责多请求的调度。座舱场景的 Continuous Batching 有其特殊性：</p>
+
+<table>
+<thead>
+<tr><th>座舱特点</th><th>对调度的影响</th><th>应对策略</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>多音区并发</strong></td><td>驾驶员/副驾/后排可能同时说话</td><td>按 <code>scenario_id</code> 区分请求来源，支持同 batch 内多音区共存</td></tr>
+<tr><td><strong>优先级差异</strong></td><td>安全告警 &gt; 车控指令 &gt; 闲聊</td><td>四级优先级调度（HIGHEST/HIGH/NORMAL/LOW），高优先级可抢占</td></tr>
+<tr><td><strong>延迟敏感</strong></td><td>车控指令要求 &lt; 2s 端到端</td><td>高优先级请求跳过等待队列，立即加入 batch</td></tr>
+<tr><td><strong>KV Cache 受限</strong></td><td>端侧内存 ~16GB 需多模型共享</td><td>动态 KV Cache 分配 + 按优先级淘汰低优先级请求的缓存</td></tr>
+<tr><td><strong>请求长度差异大</strong></td><td>车控 ~20 tokens vs 闲聊 ~200 tokens</td><td>短请求快速释放，避免阻塞后续请求</td></tr>
+</tbody>
+</table>
+
+<div class="info-box">
+<div class="title">端侧 vs 云端 Batching 差异</div>
+<p>云端 vLLM 的 Continuous Batching 面对数百并发请求，重点是<strong>吞吐量最大化</strong>。端侧座舱通常同时只有 2-4 个请求，Continuous Batching 的核心价值不在吞吐量，而在<strong>降低短请求的排队延迟</strong>和<strong>支持优先级抢占</strong>。例如，副驾正在闲聊时驾驶员发出紧急车控指令，Continuous Batching 允许车控请求在下一迭代立即加入，而非等闲聊生成完毕。</p>
+</div>
+
+<h3>12.4 KV Cache 动态管理</h3>
+
+<p>Continuous Batching 的核心挑战是 KV Cache 的动态分配与回收。传统方式按最大序列长度预分配 KV Cache，导致严重的内存浪费。PagedAttention（Kwon et al., 2023, vLLM）将 KV Cache 按固定大小的<strong>页（Page）</strong>分配，类似操作系统的虚拟内存管理：</p>
+
+<table>
+<thead>
+<tr><th>KV Cache 管理方式</th><th>内存分配</th><th>内存利用率</th><th>适用场景</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>静态预分配</strong></td><td>按 max_seq_len 预留</td><td>低（~50%，大量 padding）</td><td>单请求、固定长度</td></tr>
+<tr><td><strong>动态连续分配</strong></td><td>按实际长度动态申请</td><td>中（碎片化问题）</td><td>请求数少的场景</td></tr>
+<tr><td><strong>PagedAttention</strong></td><td>按页（如 16 tokens/页）分配</td><td>高（&gt; 95%，页级管理）</td><td>高并发、变长序列</td></tr>
+</tbody>
+</table>
+
+<p>在端侧座舱场景中，由于并发请求数少（2-4 个），动态连续分配通常已能满足需求。但当引入前缀缓存（多请求共享 System Prompt 的 KV Cache）时，PagedAttention 的页级共享机制可以显著减少 KV Cache 的重复存储。</p>
+
+<!-- ============================================================ -->
+<!-- Chapter 13: FlashAttention 端侧适配 -->
+<!-- ============================================================ -->
+<h2 id="ch13">13. FlashAttention 端侧适配</h2>
+
+<h3>13.1 标准 Attention 的内存瓶颈</h3>
+
+<p>标准 Self-Attention 的计算公式为 <code>Attention(Q,K,V) = softmax(QK^T / √d) · V</code>。其中间结果 <code>QK^T</code> 是一个 <strong>N×N</strong> 的注意力得分矩阵（N=序列长度），必须完整存储后才能进行 softmax：</p>
+
+<table>
+<thead>
+<tr><th>序列长度 N</th><th>注意力矩阵大小（单头, FP16）</th><th>28 个 Q 头总量</th><th>能否放入 VTCM (~4MB)?</th></tr>
+</thead>
+<tbody>
+<tr><td>256</td><td>256×256×2 = 128 KB</td><td>3.5 MB</td><td>勉强</td></tr>
+<tr><td>512</td><td>512×512×2 = 512 KB</td><td>14 MB</td><td>不能</td></tr>
+<tr><td>1024</td><td>1024×1024×2 = 2 MB</td><td>56 MB</td><td>远不能</td></tr>
+<tr><td>2048</td><td>2048×2048×2 = 8 MB</td><td>224 MB</td><td>远不能</td></tr>
+</tbody>
+</table>
+
+<p>当 N×N 注意力矩阵无法放入片上高速缓存（VTCM）时，必须写回 DDR 再读回——Prefill 阶段的大量带宽被注意力矩阵的读写消耗，而非用于有效计算。这正是 FlashAttention 要解决的问题。</p>
+
+<h3>13.2 FlashAttention 分块计算原理</h3>
+
+<p>FlashAttention（Dao et al., 2022）的核心思想：将 Q、K、V 分块（tiling），每次只加载一小块到片上 SRAM（端侧即 VTCM），在片上完成 <code>QK^T → softmax → ×V</code> 的全流程，<strong>避免将 N×N 注意力矩阵写回 DDR</strong>。</p>
+
+<div class="mermaid-wrap"><div class="mermaid">
+flowchart TB
+    A["输入 Q K V 各 N×d"] --> B["分块: Q→Tr块 K,V→Tc块"]
+    B --> C["外循环 j=1..Tc:<br/>加载 K_j V_j 到 VTCM"]
+    C --> D["内循环 i=1..Tr:<br/>加载 Q_i 到 VTCM"]
+    D --> E["VTCM 内计算<br/>S_ij = Q_i · K_j^T"]
+    E --> F["Online Softmax<br/>增量更新 max 和 sum"]
+    F --> G["累加输出<br/>O_i += softmax · V_j"]
+    G --> D
+    D -->|"Q 块遍历完"| C
+    C -->|"KV 块遍历完"| H["最终输出 O (N×d)<br/>内存 O(N) 非 O(N²)"]
+
+    style E fill:#2ecc71,color:#fff
+    style F fill:#2ecc71,color:#fff
+    style G fill:#2ecc71,color:#fff
+    style H fill:#4361ee,color:#fff
+</div></div>
+
+<p><strong>Online Softmax</strong> 是 FlashAttention 的关键技术：标准 softmax 需要看到所有 N 个元素才能计算归一化分母，但通过维护 running max 和 running sum，可以在逐块处理时增量更新 softmax 结果，无需存储完整的 N×N 矩阵。</p>
+
+<h3>13.3 VTCM 分块大小计算</h3>
+
+<p>SA8397P Hexagon DSP 的 VTCM 约 4MB。FlashAttention 每次迭代需要在 VTCM 中同时存放以下数据（以 INT8 计算为例）：</p>
+
+<pre><code>每次迭代 VTCM 占用:
+  Q_block:   Br × d × 1B    (Br 行 Q 向量)
+  K_block:   Bc × d × 1B    (Bc 行 K 向量)
+  V_block:   Bc × d × 1B    (Bc 行 V 向量)
+  S_block:   Br × Bc × 1B   (注意力得分子矩阵)
+  O_block:   Br × d × 1B    (输出累加器)
+  m, l:      Br × 2 × 4B    (Online Softmax 状态, FP32)
+
+  总计 = Br×d + 2×Bc×d + Br×Bc + Br×d + 8×Br  (Bytes)
+
+以 d=128 (head_dim), Br=Bc=256 为例:
+  = 256×128 + 2×256×128 + 256×256 + 256×128 + 8×256
+  = 32768 + 65536 + 65536 + 32768 + 2048
+  ≈ 194 KB  (单次迭代)
+
+考虑双缓冲 (Double Buffering, 隐藏 DDR 加载延迟):
+  ≈ 388 KB
+
+4 个 KV 头并行处理:
+  ≈ 388 KB × 4 = 1.55 MB  ← 远小于 4MB VTCM</code></pre>
+
+<div class="info-box ok">
+<div class="title">VTCM 容量充裕</div>
+<p>上述计算表明，即使采用 Br=Bc=256 的较大分块 + 双缓冲 + 4 头并行，VTCM 占用仅 ~1.5MB，4MB VTCM 完全可以承载。实际实现中可以进一步增大分块尺寸以提高计算效率，或留出空间给 HVX 向量寄存器和临时变量。</p>
+</div>
+
+<h3>13.4 FlashAttention vs 标准 Attention 对比</h3>
+
+<table>
+<thead>
+<tr><th>维度</th><th>标准 Attention</th><th>FlashAttention</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>内存复杂度</strong></td><td>O(N²) — 存储完整注意力矩阵</td><td>O(N) — 只存当前分块</td></tr>
+<tr><td><strong>DDR 读写量</strong></td><td>高 — QK^T 和 softmax 结果反复读写 DDR</td><td>低 — 仅读入 Q/K/V 块，写出最终 O</td></tr>
+<tr><td><strong>VTCM 利用</strong></td><td>低 — 可能溢出到 DDR</td><td>高 — 分块大小适配 VTCM 容量</td></tr>
+<tr><td><strong>数值精度</strong></td><td>标准 softmax</td><td>Online Softmax（数值等价，无精度损失）</td></tr>
+<tr><td><strong>计算量</strong></td><td>相同</td><td>相同（额外 m/l 更新可忽略）</td></tr>
+<tr><td><strong>Prefill 加速比</strong></td><td>—</td><td>N=512 约 1.5-2x，N=2048 约 2-4x</td></tr>
+<tr><td><strong>实现复杂度</strong></td><td>低（标准矩阵乘法）</td><td>高（分块调度 + Online Softmax + 双缓冲）</td></tr>
+</tbody>
+</table>
+
+<h3>13.5 端侧实践</h3>
+
+<p>在 aadkcore 的 vllm_sdk 构建产物中，<code>libflash_attn.so</code>（约 31MB）即为 FlashAttention 的端侧实现库。该库针对 Hexagon HVX/HMX 指令集优化，在 HTP 上执行分块注意力计算。</p>
+
+<table>
+<thead>
+<tr><th>适用场景</th><th>FlashAttention 收益</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Prefill 长序列</strong></td><td>高 — 加速 1.5-4x</td><td>序列越长收益越大，N=2048 时最为显著</td></tr>
+<tr><td><strong>Prefill 短序列</strong></td><td>低 — 可能反而变慢</td><td>N &lt; 128 时分块调度开销大于收益</td></tr>
+<tr><td><strong>Decode</strong></td><td>中 — 减少 KV Cache 读写</td><td>Decode 时 Q 只有 1 行，分块意义有限</td></tr>
+<tr><td><strong>多模态 Prefill</strong></td><td>高 — 图像 token 数大</td><td>ViT 输出 576+ tokens + 文本 Prompt → 长序列</td></tr>
+</tbody>
+</table>
+
+<div class="info-box warn">
+<div class="title">端侧 FlashAttention 的权衡</div>
+<p>FlashAttention 在端侧并非"无条件优于"标准 Attention。当输入序列很短（如纯车控指令 &lt; 50 tokens 且无前缀缓存时），分块调度和 Online Softmax 的额外开销可能超过节省的 DDR 带宽。实际部署中通常设置一个<strong>序列长度阈值</strong>：短序列走标准 Attention，长序列走 FlashAttention。</p>
+</div>
+
+</main>
+
+<!-- ===== Scripts at bottom ===== -->
+<script defer src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
+<script defer src="https://unpkg.com/echarts@5/dist/echarts.min.js"></script>
+<script>
+var b=document.getElementById('themeBtn');
+b.onclick=function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('theme',h.dataset.theme)}catch(e){}};
+try{var s=localStorage.getItem('theme');if(s)document.documentElement.dataset.theme=s}catch(e){}
+
+var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.remove('active')});var l=document.querySelector('.sidebar a[href="#'+e.target.id+'"]');if(l)l.classList.add('active')}})},{rootMargin:'-60px 0px -70% 0px'});
+document.querySelectorAll('h2[id]').forEach(function(h){obs.observe(h)});
+
+window.addEventListener('load',function(){
+  try{if(typeof mermaid!=='undefined'){mermaid.initialize({startOnLoad:true,theme:document.documentElement.dataset.theme==='dark'?'dark':'default',securityLevel:'loose'})}}catch(e){}
+  try{initCharts()}catch(e){}
+});
+
+function initCharts(){
+  if(typeof echarts==='undefined')return;
+  var isDark=document.documentElement.dataset.theme==='dark';
+  var t={bg:isDark?'#1a1a2e':'#f8f9fa',text:isDark?'#e0e0e0':'#1a1a2e',sub:isDark?'#adb5bd':'#495057',line:isDark?'#2a2a3e':'#dee2e6'};
+
+  // Chart 1: 推理引擎对比 (migrated from cockpit-agent.html)
+  try{
+  var engineChart=echarts.init(document.getElementById('chart-engine'));
+  engineChart.setOption({
+    backgroundColor:t.bg,
+    title:{text:'Qwen3-Omni-4B INT4 推理引擎对比',left:'center',textStyle:{color:t.text,fontSize:14}},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'}},
+    legend:{data:['生成速度 (tok/s)','TTFT (ms/10)','内存占用 (GB*10)'],top:30,textStyle:{color:t.text,fontSize:11}},
+    grid:{left:'3%',right:'4%',bottom:'3%',containLabel:true},
+    xAxis:{type:'category',data:['llama.cpp','MLC-LLM','ExecuTorch','QNN-LLM'],axisLabel:{color:t.sub,fontSize:11},axisLine:{lineStyle:{color:t.line}}},
+    yAxis:{type:'value',axisLabel:{color:t.sub,fontSize:11},axisLine:{lineStyle:{color:t.line}},splitLine:{lineStyle:{color:t.line}}},
+    series:[
+      {name:'生成速度 (tok/s)',type:'bar',data:[12,15,11,18],itemStyle:{color:'#4361ee'},barGap:'15%'},
+      {name:'TTFT (ms/10)',type:'bar',data:[80,65,90,50],itemStyle:{color:'#f39c12'}},
+      {name:'内存占用 (GB*10)',type:'bar',data:[21,18,23,16],itemStyle:{color:'#2ecc71'}}
+    ]
+  });
+  }catch(e){}
+
+  // Chart 2: 投机采样加速效果 (NEW)
+  try{
+  var specChart=echarts.init(document.getElementById('chart-spec'));
+  specChart.setOption({
+    backgroundColor:t.bg,
+    title:{text:'投机采样加速比 (K=4, 不同接受率)',left:'center',textStyle:{color:t.text,fontSize:14}},
+    tooltip:{trigger:'axis',formatter:function(params){var p=params[0];return '接受率 '+p.name+'<br/>理论加速比: '+p.data.toFixed(2)+'x'}},
+    xAxis:{type:'category',data:['60%','65%','70%','75%','80%','85%','90%'],name:'接受率 (alpha)',nameLocation:'middle',nameGap:30,axisLabel:{color:t.sub},axisLine:{lineStyle:{color:t.line}}},
+    yAxis:{type:'value',name:'加速比 (x)',min:1,max:3.5,axisLabel:{color:t.sub,formatter:function(v){return v+'x'}},splitLine:{lineStyle:{color:t.line}},axisLine:{lineStyle:{color:t.line}}},
+    series:[
+      {
+        name:'理论加速比',
+        type:'bar',
+        data:[
+          {value:1.54,itemStyle:{color:'#e74c3c'}},
+          {value:1.74,itemStyle:{color:'#f39c12'}},
+          {value:1.90,itemStyle:{color:'#f39c12'}},
+          {value:2.11,itemStyle:{color:'#2ecc71'}},
+          {value:2.35,itemStyle:{color:'#2ecc71'}},
+          {value:2.67,itemStyle:{color:'#4361ee'}},
+          {value:3.08,itemStyle:{color:'#4361ee'}}
+        ],
+        barWidth:'50%',
+        label:{show:true,position:'top',color:t.text,formatter:function(p){return p.value.toFixed(2)+'x'},fontSize:12}
+      },
+      {
+        name:'端侧实测 (K=4)',
+        type:'line',
+        data:[1.35,1.50,1.65,1.80,2.00,2.25,2.55],
+        itemStyle:{color:'#e74c3c'},
+        symbol:'circle',
+        symbolSize:8,
+        lineStyle:{width:2,type:'dashed'},
+        label:{show:true,position:'bottom',color:'#e74c3c',formatter:function(p){return p.value+'x'},fontSize:10}
+      }
+    ],
+    legend:{data:['理论加速比','端侧实测 (K=4)'],bottom:0,textStyle:{color:t.sub}}
+  });
+  }catch(e){}
+
+  // Chart 3: TTFT 优化瀑布图 (NEW)
+  try{
+  var ttftChart=echarts.init(document.getElementById('chart-ttft'));
+  ttftChart.setOption({
+    backgroundColor:t.bg,
+    title:{text:'Qwen3-Omni-4B TTFT 优化瀑布 (SA8397P)',left:'center',textStyle:{color:t.text,fontSize:14}},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'},formatter:function(params){var base=params[0];var val=params[1];if(val&&val.value){return val.name+'<br/>TTFT: '+val.value+'ms'}return ''}},
+    xAxis:{type:'category',data:['基线\n(FP16)','INT4\n量化','多核\n绑定','前缀\n缓存','投机\n采样','约束解码\n(消除重试)','最终\n优化后'],axisLabel:{color:t.sub,fontSize:11,interval:0},axisLine:{lineStyle:{color:t.line}}},
+    yAxis:{type:'value',name:'TTFT (ms)',max:3500,axisLabel:{color:t.sub},splitLine:{lineStyle:{color:t.line}},axisLine:{lineStyle:{color:t.line}}},
+    series:[
+      {
+        name:'基底',
+        type:'bar',
+        stack:'total',
+        data:[0,0,0,0,0,0,0],
+        itemStyle:{color:'transparent'},
+        emphasis:{itemStyle:{color:'transparent'}}
+      },
+      {
+        name:'TTFT',
+        type:'bar',
+        stack:'total',
+        data:[
+          {value:3000,itemStyle:{color:'#e74c3c'}},
+          {value:1800,itemStyle:{color:'#f39c12'}},
+          {value:1400,itemStyle:{color:'#f39c12'}},
+          {value:900,itemStyle:{color:'#3498db'}},
+          {value:700,itemStyle:{color:'#3498db'}},
+          {value:600,itemStyle:{color:'#2ecc71'}},
+          {value:600,itemStyle:{color:'#2ecc71'}}
+        ],
+        label:{show:true,position:'top',color:t.text,formatter:function(p){return p.value+'ms'},fontSize:12,fontWeight:'bold'}
+      }
+    ]
+  });
+  }catch(e){}
+
+  // Chart 4: 量化方案散点图 (migrated from cockpit-training.html)
+  try{
+  var quantChart=echarts.init(document.getElementById('chart-quant'));
+  quantChart.setOption({
+    backgroundColor:t.bg,
+    title:{text:'Qwen3-Omni-4B 量化方案: 生成速度 vs 质量损失 (SA8397P)',left:'center',textStyle:{color:t.text,fontSize:14}},
+    tooltip:{trigger:'item',formatter:function(p){return p.data[3]+'<br/>生成速度: '+p.data[0]+' tok/s<br/>Perplexity 增幅: '+p.data[1]+'%<br/>内存占用: '+p.data[4]}},
+    xAxis:{type:'value',name:'Decode 生成速度 (tokens/s)',nameLocation:'middle',nameGap:30,min:0,max:20,axisLabel:{color:t.sub,formatter:function(v){return v}},splitLine:{lineStyle:{color:t.line}}},
+    yAxis:{type:'value',name:'Perplexity 增幅 (%)',nameLocation:'middle',nameGap:40,min:-0.5,max:6,axisLabel:{color:t.sub,formatter:function(v){return v+'%'}},splitLine:{lineStyle:{color:t.line}}},
+    series:[{
+      type:'scatter',
+      symbolSize:function(data){return data[2]*6},
+      data:[
+        [1.5,0,5,'FP16 (基准)','~8GB'],
+        [3,0.2,6,'INT8 (W8A8)','~4GB'],
+        [6,0.8,7,'INT8-W INT4-KV','~3.5GB'],
+        [10,1.5,9,'INT4-AWQ','~2.5GB'],
+        [14,2.2,8,'INT4-GPTQ','~2.5GB'],
+        [18,5.0,4,'INT3-GPTQ','~1.8GB']
+      ],
+      itemStyle:{color:function(p){var colors=['#868e96','#3498db','#2ecc71','#4361ee','#f39c12','#e74c3c'];return colors[p.dataIndex]}},
+      label:{show:true,position:'right',color:t.text,formatter:function(p){return p.data[3]},fontSize:11}
+    }]
+  });
+  }catch(e){}
+
+  // Chart 5: Roofline Model (SA8397P HTP)
+  try{
+  var roofChart=echarts.init(document.getElementById('chart-roof'));
+  roofChart.setOption({
+    backgroundColor:t.bg,
+    title:{text:'SA8397P HTP Roofline Model (Qwen3-Omni-4B INT4)',left:'center',textStyle:{color:t.text,fontSize:14}},
+    tooltip:{trigger:'item',formatter:function(p){if(p.seriesIndex===2){var labels=['Decode (B=1)\nAI=4, Memory-bound','Prefill (S=50)\nAI=200, Memory-bound','Prefill (S=350)\nAI=1400, Compute-bound'];return labels[p.dataIndex]}return p.seriesName}},
+    graphic:[
+      {type:'text',left:'18%',top:'40%',style:{text:'Memory-bound',fill:t.sub,fontSize:13,fontWeight:'bold',fontStyle:'italic'}},
+      {type:'text',left:'72%',top:'22%',style:{text:'Compute-bound',fill:t.sub,fontSize:13,fontWeight:'bold',fontStyle:'italic'}}
+    ],
+    xAxis:{type:'log',name:'Arithmetic Intensity (OPs/Byte)',nameLocation:'middle',nameGap:30,min:1,max:5000,axisLabel:{color:t.sub,fontSize:11},splitLine:{show:false},axisLine:{lineStyle:{color:t.line}}},
+    yAxis:{type:'log',name:'Attainable Performance (GOPS)',nameLocation:'middle',nameGap:50,min:50,max:200000,axisLabel:{color:t.sub,fontSize:11,formatter:function(v){if(v>=1000)return(v/1000)+'K';return v}},splitLine:{lineStyle:{color:t.line,type:'dashed'}},axisLine:{lineStyle:{color:t.line}}},
+    series:[
+      {
+        name:'DDR Bandwidth (68 GB/s)',
+        type:'line',
+        data:[[1,68],[10,680],[100,6800],[1029,69972]],
+        lineStyle:{color:'#e74c3c',width:3},
+        symbol:'none',
+        itemStyle:{color:'#e74c3c'}
+      },
+      {
+        name:'Peak Compute (70 TOPS)',
+        type:'line',
+        data:[[1029,70000],[5000,70000]],
+        lineStyle:{color:'#4361ee',width:3},
+        symbol:'none',
+        itemStyle:{color:'#4361ee'}
+      },
+      {
+        name:'Operating Points',
+        type:'scatter',
+        symbolSize:18,
+        data:[
+          {value:[4,272],itemStyle:{color:'#e74c3c'}},
+          {value:[200,13600],itemStyle:{color:'#f39c12'}},
+          {value:[1400,70000],itemStyle:{color:'#2ecc71'}}
+        ],
+        label:{show:true,position:'top',color:t.text,fontSize:11,formatter:function(p){return['Decode(B=1)','Prefill(S=50)','Prefill(S=350)'][p.dataIndex]}}
+      }
+    ],
+    legend:{data:['DDR Bandwidth (68 GB/s)','Peak Compute (70 TOPS)','Operating Points'],bottom:0,textStyle:{color:t.sub,fontSize:11}}
+  });
+  }catch(e){}
+
+  window.addEventListener('resize',function(){
+    try{engineChart.resize()}catch(e){}
+    try{specChart.resize()}catch(e){}
+    try{ttftChart.resize()}catch(e){}
+    try{quantChart.resize()}catch(e){}
+    try{roofChart.resize()}catch(e){}
+  });
+}
+</script>
+
+</body>
+</html>
