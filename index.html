@@ -33,108 +33,63 @@ header p{color:var(--muted);font-size:15px;max-width:640px;margin:0 auto}
 .tl-item.done::before{background:var(--accent)}
 .tl-item h4{font-size:13px;font-weight:600;margin-bottom:2px}
 .tl-item p{font-size:12px;color:var(--muted)}
-.sub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:12px}
-.sub-card{display:block;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;text-decoration:none;color:var(--text);font-size:13px;transition:all .2s}
-.sub-card:hover{border-color:var(--accent);background:var(--accentL)}
-.sub-card strong{display:block;margin-bottom:2px;font-size:14px}
 footer{text-align:center;margin-top:48px;padding:20px;color:var(--muted);font-size:12px}
 </style>
 </head>
 <body>
 <button class="theme-btn" id="themeBtn">Light / Dark</button>
 <div class="wrap">
-<header>
-  <h1>Edge AI Docs</h1>
-  <p>端侧 AI 学习文档与面试指南 -- 覆盖智能座舱、通用机器人、自动驾驶三大领域，贯穿算法训练、部署优化、Agent 框架三条主线</p>
-</header>
-
-<div class="sec">智能座舱 - 学习文档 (7 Part)</div>
-<div class="grid">
-  <a class="card" href="cockpit-hardware.html">
-    <span class="badge b-done">Part A</span>
-    <h3>硬件与系统底层</h3>
-    <p class="desc">SA8397P SoC 全景、Hexagon DSP 微架构、FastRPC 通信、Hypervisor 多域隔离、SSR 故障恢复</p>
-    <div class="tags"><span class="tag">SA8397P</span><span class="tag">DSP</span><span class="tag">FastRPC</span></div>
-  </a>
-  <a class="card" href="cockpit-training.html">
-    <span class="badge b-done">Part B</span>
-    <h3>模型训练与微调</h3>
-    <p class="desc">DMS/OMS 数据策略、知识蒸馏、LoRA 微调、SWIFT 训练框架</p>
-    <div class="tags"><span class="tag">LoRA</span><span class="tag">蒸馏</span><span class="tag">SWIFT</span></div>
-  </a>
-  <a class="card" href="cockpit-infer.html">
-    <span class="badge b-done">Part C</span>
-    <h3>推理优化</h3>
-    <p class="desc">量化 (PTQ/QAT/AIMET)、多核绑定、前缀缓存、投机采样、约束解码、KV Cache 优化</p>
-    <div class="tags"><span class="tag">量化</span><span class="tag">投机采样</span><span class="tag">约束解码</span></div>
-  </a>
-  <a class="card" href="cockpit-deploy.html">
-    <span class="badge b-done">Part D</span>
-    <h3>设备部署</h3>
-    <p class="desc">QNN 框架、ISP 数据流零拷贝、多模型调度策略、Context Binary</p>
-    <div class="tags"><span class="tag">QNN</span><span class="tag">ISP</span><span class="tag">零拷贝</span></div>
-  </a>
-  <a class="card" href="cockpit-agent-core.html">
-    <span class="badge b-done">Part E1</span>
-    <h3>aadkcore 核心框架</h3>
-    <p class="desc">统一模型接口、模型调度器、多音区对话管理、RAG、MCP 工具协议、A2A 协议、运行时与插件机制</p>
-    <div class="tags"><span class="tag">C++17</span><span class="tag">MCP</span><span class="tag">A2A</span><span class="tag">ModelScheduler</span></div>
-  </a>
-  <a class="card" href="cockpit-agent-group.html">
-    <span class="badge b-done">Part E2</span>
-    <h3>场景 Agent 应用</h3>
-    <p class="desc">车辆控制 Agent (30+ 技能)、主动视觉 Agent、闲聊 Agent、GUI Agent、Prompt 模板工程</p>
-    <div class="tags"><span class="tag">车控</span><span class="tag">主动视觉</span><span class="tag">GUI Agent</span></div>
-  </a>
-  <a class="card" href="cockpit-debug.html">
-    <span class="badge b-done">Part F</span>
-    <h3>调试与工具链</h3>
-    <p class="desc">mini-dm、Snapdragon Profiler、qnn-profile-viewer、排障决策树</p>
-    <div class="tags"><span class="tag">Profiler</span><span class="tag">排障</span></div>
-  </a>
-</div>
-
-<div class="sec">智能座舱 - 面试指南</div>
-<div class="grid">
-  <a class="card" href="cockpit-interview.html">
-    <span class="badge b-done">已完成</span>
-    <h3>智能座舱面试指南</h3>
-    <p class="desc">硬件系统、算法训练、部署优化、Agent 大模型、系统设计，38 题，难度分级</p>
-    <div class="tags"><span class="tag">面试</span><span class="tag">交互答题</span></div>
-  </a>
-</div>
-
-<div class="sec">通用机器人</div>
-<div class="grid">
-  <a class="card" href="robot-learning.html"><span class="badge b-done">已完成</span><h3>学习文档</h3><p class="desc">Jetson/RK3588 平台、VLA 模型、ROS2 集成、Embodied Agent，15 章 4 Part</p></a>
-  <a class="card" href="robot-interview.html"><span class="badge b-done">已完成</span><h3>面试指南</h3><p class="desc">平台选型、算法训练、部署实时控制、Agent 大模型、系统设计，29 题</p></a>
-</div>
-
-<div class="sec">自动驾驶</div>
-<div class="grid">
-  <a class="card" href="ad-learning.html"><span class="badge b-done">已完成</span><h3>学习文档</h3><p class="desc">BEV 感知、端到端模型、越野场景、数据飞轮、驾驶 Agent、功能安全，15 章 5 Part</p></a>
-  <a class="card" href="ad-interview.html"><span class="badge b-done">已完成</span><h3>面试指南</h3><p class="desc">BEV 算法、端到端模型、数据训练、部署优化、驾驶 Agent、系统设计，31 题</p></a>
-</div>
-
-<div class="roadmap">
-  <h2>迭代路线图</h2>
-  <div class="tl">
-    <div class="tl-item done"><h4>Iteration 1: 智能座舱学习文档 (7 Part)</h4><p>硬件底层 + 算法训练 + 推理优化 + 部署 + aadkcore 核心框架 + 场景 Agent + 调试工具</p></div>
-    <div class="tl-item done"><h4>Iteration 2: 智能座舱面试指南</h4><p>38 题, 覆盖硬件/算法/部署/Agent/系统设计</p></div>
-    <div class="tl-item done"><h4>Iteration 3: 通用机器人学习文档</h4><p>15 章 4 Part, 覆盖平台/训练/部署/Agent</p></div>
-    <div class="tl-item done"><h4>Iteration 4: 通用机器人面试指南</h4><p>29 题, 覆盖平台/算法/部署/Agent/系统设计</p></div>
-    <div class="tl-item done"><h4>Iteration 5: 自动驾驶学习文档</h4><p>15 章 5 Part, 覆盖算力/感知/部署/Agent/安全</p></div>
-    <div class="tl-item done"><h4>Iteration 6: 自动驾驶面试指南</h4><p>31 题, 覆盖BEV/端到端/部署/Agent/安全</p></div>
-    <div class="tl-item"><h4>Iteration 7: 打磨与集成</h4></div>
+  <header>
+    <h1 id="title">Edge AI Docs</h1>
+    <p id="subtitle"></p>
+  </header>
+  <main id="catalog"></main>
+  <div class="roadmap" id="roadmap" hidden>
+    <h2>迭代路线图</h2>
+    <div class="tl" id="tl"></div>
   </div>
-</div>
-
-<footer>Edge AI Docs -- 算法训练/微调 | 部署与优化 | Agent 框架</footer>
+  <footer>Edge AI Docs -- 算法训练/微调 | 部署与优化 | Agent 框架</footer>
 </div>
 <script>
+// 主题切换
 var b=document.getElementById('themeBtn');
 b.onclick=function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('theme',h.dataset.theme)}catch(e){}};
 try{var s=localStorage.getItem('theme');if(s)document.documentElement.dataset.theme=s}catch(e){}
+
+// 目录由 docs.json 驱动（单一数据源，与主站共享）
+function el(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;}
+var BADGE={done:'b-done',wip:'b-wip',todo:'b-todo'};
+
+fetch('docs.json',{cache:'no-cache'}).then(function(r){return r.json();}).then(function(data){
+  if(data.title)document.getElementById('title').textContent=data.title;
+  document.getElementById('subtitle').textContent=data.subtitle||'';
+  var catalog=document.getElementById('catalog');
+  (data.groups||[]).forEach(function(g){
+    catalog.appendChild(el('div','sec',g.note?(g.name+' ('+g.note+')'):g.name));
+    var grid=el('div','grid');
+    (g.docs||[]).forEach(function(d){
+      var a=el('a','card');a.href=d.file;
+      if(d.badge)a.appendChild(el('span','badge '+(BADGE[d.status]||'b-done'),d.badge));
+      a.appendChild(el('h3',null,d.title));
+      if(d.desc)a.appendChild(el('p','desc',d.desc));
+      if(d.tags&&d.tags.length){var t=el('div','tags');d.tags.forEach(function(tag){t.appendChild(el('span','tag',tag));});a.appendChild(t);}
+      grid.appendChild(a);
+    });
+    catalog.appendChild(grid);
+  });
+  if(data.roadmap&&data.roadmap.length){
+    var tl=document.getElementById('tl');
+    data.roadmap.forEach(function(it){
+      var item=el('div','tl-item'+(it.done?' done':''));
+      item.appendChild(el('h4',null,it.title));
+      if(it.detail)item.appendChild(el('p',null,it.detail));
+      tl.appendChild(item);
+    });
+    document.getElementById('roadmap').hidden=false;
+  }
+}).catch(function(){
+  document.getElementById('catalog').innerHTML='<p style="text-align:center;color:var(--muted)">目录加载失败，请刷新重试。</p>';
+});
 </script>
 </body>
 </html>
