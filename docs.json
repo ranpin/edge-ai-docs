@@ -1,0 +1,132 @@
+{
+  "title": "Edge AI Docs",
+  "subtitle": "端侧 AI 学习文档与面试指南 —— 覆盖智能座舱、通用机器人、自动驾驶三大领域，贯穿算法训练、部署优化、Agent 框架三条主线",
+  "groups": [
+    {
+      "name": "智能座舱 · 学习文档",
+      "note": "7 Part",
+      "docs": [
+        {
+          "title": "硬件与系统底层",
+          "file": "cockpit-hardware.html",
+          "badge": "Part A",
+          "status": "done",
+          "desc": "SA8397P SoC 全景、Hexagon DSP 微架构、FastRPC 通信、Hypervisor 多域隔离、SSR 故障恢复",
+          "tags": ["SA8397P", "DSP", "FastRPC"]
+        },
+        {
+          "title": "模型训练与微调",
+          "file": "cockpit-training.html",
+          "badge": "Part B",
+          "status": "done",
+          "desc": "DMS/OMS 数据策略、知识蒸馏、LoRA 微调、SWIFT 训练框架",
+          "tags": ["LoRA", "蒸馏", "SWIFT"]
+        },
+        {
+          "title": "推理优化",
+          "file": "cockpit-infer.html",
+          "badge": "Part C",
+          "status": "done",
+          "desc": "量化 (PTQ/QAT/AIMET)、多核绑定、前缀缓存、投机采样、约束解码、KV Cache 优化",
+          "tags": ["量化", "投机采样", "约束解码"]
+        },
+        {
+          "title": "设备部署",
+          "file": "cockpit-deploy.html",
+          "badge": "Part D",
+          "status": "done",
+          "desc": "QNN 框架、ISP 数据流零拷贝、多模型调度策略、Context Binary",
+          "tags": ["QNN", "ISP", "零拷贝"]
+        },
+        {
+          "title": "aadkcore 核心框架",
+          "file": "cockpit-agent-core.html",
+          "badge": "Part E1",
+          "status": "done",
+          "desc": "统一模型接口、模型调度器、多音区对话管理、RAG、MCP 工具协议、A2A 协议、运行时与插件机制",
+          "tags": ["C++17", "MCP", "A2A", "ModelScheduler"]
+        },
+        {
+          "title": "场景 Agent 应用",
+          "file": "cockpit-agent-group.html",
+          "badge": "Part E2",
+          "status": "done",
+          "desc": "车辆控制 Agent (30+ 技能)、主动视觉 Agent、闲聊 Agent、GUI Agent、Prompt 模板工程",
+          "tags": ["车控", "主动视觉", "GUI Agent"]
+        },
+        {
+          "title": "调试与工具链",
+          "file": "cockpit-debug.html",
+          "badge": "Part F",
+          "status": "done",
+          "desc": "mini-dm、Snapdragon Profiler、qnn-profile-viewer、排障决策树",
+          "tags": ["Profiler", "排障"]
+        }
+      ]
+    },
+    {
+      "name": "智能座舱 · 面试指南",
+      "docs": [
+        {
+          "title": "智能座舱面试指南",
+          "file": "cockpit-interview.html",
+          "badge": "已完成",
+          "status": "done",
+          "desc": "硬件系统、算法训练、部署优化、Agent 大模型、系统设计，38 题，难度分级",
+          "tags": ["面试", "交互答题"]
+        }
+      ]
+    },
+    {
+      "name": "通用机器人",
+      "docs": [
+        {
+          "title": "学习文档",
+          "file": "robot-learning.html",
+          "badge": "已完成",
+          "status": "done",
+          "desc": "Jetson/RK3588 平台、VLA 模型、ROS2 集成、Embodied Agent，15 章 4 Part",
+          "tags": ["Jetson", "VLA", "ROS2"]
+        },
+        {
+          "title": "面试指南",
+          "file": "robot-interview.html",
+          "badge": "已完成",
+          "status": "done",
+          "desc": "平台选型、算法训练、部署实时控制、Agent 大模型、系统设计，29 题",
+          "tags": ["面试", "29 题"]
+        }
+      ]
+    },
+    {
+      "name": "自动驾驶",
+      "docs": [
+        {
+          "title": "学习文档",
+          "file": "ad-learning.html",
+          "badge": "已完成",
+          "status": "done",
+          "desc": "BEV 感知、端到端模型、越野场景、数据飞轮、驾驶 Agent、功能安全，15 章 5 Part",
+          "tags": ["BEV", "端到端", "功能安全"]
+        },
+        {
+          "title": "面试指南",
+          "file": "ad-interview.html",
+          "badge": "已完成",
+          "status": "done",
+          "desc": "BEV 算法、端到端模型、数据训练、部署优化、驾驶 Agent、系统设计，31 题",
+          "tags": ["面试", "31 题"]
+        }
+      ]
+    }
+  ],
+  "roadmap": [
+    { "title": "Iteration 1: 智能座舱学习文档 (7 Part)", "detail": "硬件底层 + 算法训练 + 推理优化 + 部署 + aadkcore 核心框架 + 场景 Agent + 调试工具", "done": true },
+    { "title": "Iteration 2: 智能座舱面试指南", "detail": "38 题, 覆盖硬件/算法/部署/Agent/系统设计", "done": true },
+    { "title": "Iteration 3: 通用机器人学习文档", "detail": "15 章 4 Part, 覆盖平台/训练/部署/Agent", "done": true },
+    { "title": "Iteration 4: 通用机器人面试指南", "detail": "29 题, 覆盖平台/算法/部署/Agent/系统设计", "done": true },
+    { "title": "Iteration 5: 自动驾驶学习文档", "detail": "15 章 5 Part, 覆盖算力/感知/部署/Agent/安全", "done": true },
+    { "title": "Iteration 6: 自动驾驶面试指南", "detail": "31 题, 覆盖 BEV/端到端/部署/Agent/安全", "done": true },
+    { "title": "Iteration 7: 打磨与集成", "detail": "", "done": false }
+  ]
+}
