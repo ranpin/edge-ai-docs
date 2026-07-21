@@ -68,14 +68,14 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 <nav class="top-nav">
   <a href="index.html" class="logo">Edge AI Docs</a>
   <div class="links">
-    <a href="cockpit-hardware.html">A.硬件</a>
-    <a href="cockpit-training.html">B.训练</a>
-    <a href="cockpit-infer.html">C.推理优化</a>
-    <a href="cockpit-deploy.html">D.部署</a>
-    <a href="cockpit-agent-core.html">E1.核心框架</a>
-    <a href="cockpit-agent-group.html">E2.场景Agent</a>
-    <a href="cockpit-debug.html">F.调试</a>
-    <a href="cockpit-interview.html">面试</a>
+    <a href="cockpit/general/hardware.html">A.硬件</a>
+    <a href="cockpit/general/training.html">B.训练</a>
+    <a href="cockpit/general/infer.html">C.推理优化</a>
+    <a href="cockpit/projects/agent-framework/deploy.html">D.部署</a>
+    <a href="cockpit/projects/agent-framework/agent-core.html">E1.核心框架</a>
+    <a href="cockpit/projects/agent-framework/agent-group.html">E2.场景Agent</a>
+    <a href="cockpit/projects/agent-framework/debug.html">F.调试</a>
+    <a href="cockpit/general/interview.html">面试</a>
   </div>
   <div class="right">
     <button class="theme-btn" id="themeBtn">&#9790; / &#9788;</button>
@@ -85,8 +85,8 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 <!-- ===== Sidebar TOC ===== -->
 <aside class="sidebar">
   <div class="toc-part">Part E: Agent 总览</div>
-  <a href="cockpit-agent-core.html" style="font-weight:600;color:var(--accent)">→ E1: aadkcore 核心框架</a>
-  <a href="cockpit-agent-group.html" style="font-weight:600;color:var(--accent)">→ E2: 场景 Agent 应用</a>
+  <a href="cockpit/projects/agent-framework/agent-core.html" style="font-weight:600;color:var(--accent)">→ E1: aadkcore 核心框架</a>
+  <a href="cockpit/projects/agent-framework/agent-group.html" style="font-weight:600;color:var(--accent)">→ E2: 场景 Agent 应用</a>
   <div class="toc-part" style="margin-top:12px">概述章节</div>
   <a href="#ch1">1. 座舱大模型 Agent 架构</a>
   <a href="#ch2">2. 端侧 Agent 框架设计</a>
@@ -105,12 +105,12 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 </div>
 
 <div class="entry-grid">
-  <a class="entry-card" href="cockpit-agent-core.html">
+  <a class="entry-card" href="cockpit/projects/agent-framework/agent-core.html">
     <h3>E1: aadkcore 核心框架</h3>
     <p class="desc">统一模型接口（ModelInstance）、模型调度器（ModelScheduler）、多音区对话管理、RAG 知识增强、MCP 工具协议、A2A 协议、运行时与插件机制、LLM Flow</p>
     <div class="tags"><span class="tag">C++17</span><span class="tag">MCP</span><span class="tag">A2A</span><span class="tag">ModelScheduler</span></div>
   </a>
-  <a class="entry-card" href="cockpit-agent-group.html">
+  <a class="entry-card" href="cockpit/projects/agent-framework/agent-group.html">
     <h3>E2: 场景 Agent 应用</h3>
     <p class="desc">车辆控制 Agent（30+ 技能）、主动视觉 Agent（6 大模式）、闲聊 Agent、GUI Agent、Prompt 模板工程、数据通路与 Fusion 通信</p>
     <div class="tags"><span class="tag">车控</span><span class="tag">主动视觉</span><span class="tag">闲聊</span><span class="tag">GUI Agent</span></div>
@@ -411,7 +411,7 @@ TTS: "好的，已为您打开副驾车窗。"</code></pre>
 <!-- ============================================================ -->
 <div class="info-box">
 <div class="title">LLM 推理优化</div>
-<p>KV Cache 优化、TTFT 优化、投机采样、约束解码、推理引擎对比等内容已整合到独立文档 → <a href="cockpit-infer.html"><strong>Part C: 推理优化</strong></a></p>
+<p>KV Cache 优化、TTFT 优化、投机采样、约束解码、推理引擎对比等内容已整合到独立文档 → <a href="cockpit/general/infer.html"><strong>Part C: 推理优化</strong></a></p>
 </div>
 
 </main>
