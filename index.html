@@ -14,16 +14,36 @@ header{text-align:center;margin-bottom:48px}
 h1{font-size:32px;font-weight:800;margin-bottom:8px}
 header p{color:var(--muted);font-size:15px;max-width:640px;margin:0 auto}
 .theme-btn{position:fixed;top:16px;right:16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;font-size:16px;color:var(--text);z-index:100}
-.sec{font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:2px;margin:40px 0 16px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
-.card{display:block;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px 24px;text-decoration:none;color:var(--text);transition:all .2s;position:relative}
+
+/* 大类 */
+.cat{margin:56px 0}
+.cat-name{font-size:22px;font-weight:800;display:flex;align-items:baseline;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:24px}
+.cat-note{font-size:13px;font-weight:500;color:var(--muted)}
+.subhead{font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:2px;margin:24px 0 14px;display:flex;align-items:center;gap:8px}
+.subhead::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* 卡片网格（通用文档 / 项目内文档共用） */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.card{display:block;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px 20px;text-decoration:none;color:var(--text);transition:all .2s;position:relative}
 .card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.1);border-color:var(--accent)}
-.card h3{font-size:17px;font-weight:700;margin-bottom:4px}
+.card h3{font-size:16px;font-weight:700;margin-bottom:4px;padding-right:52px}
 .card .desc{font-size:13px;color:var(--text2);margin-bottom:10px}
 .tags{display:flex;gap:4px;flex-wrap:wrap}
 .tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:var(--accentL);color:var(--accent)}
 .badge{position:absolute;top:12px;right:12px;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px}
 .b-done{background:#d4edda;color:#155724}.b-wip{background:#fff3cd;color:#856404}.b-todo{background:var(--bg3);color:var(--muted)}
+[data-theme=dark] .b-done{background:#14371f;color:#8fd6a4}[data-theme=dark] .b-wip{background:#3a3312;color:#e6cf7a}
+
+/* 项目竖向时间轴 */
+.ptl{position:relative;padding-left:30px}
+.ptl::before{content:'';position:absolute;left:8px;top:6px;bottom:6px;width:2px;background:linear-gradient(var(--accent),var(--border))}
+.ptl-item{position:relative;margin-bottom:32px}
+.ptl-item:last-child{margin-bottom:0}
+.ptl-item::before{content:'';position:absolute;left:-26px;top:4px;width:14px;height:14px;border-radius:50%;background:var(--bg);border:3px solid var(--accent);box-shadow:0 0 0 4px var(--bg)}
+.ptl-head{display:flex;align-items:baseline;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+.ptl-name{font-size:17px;font-weight:700}
+.ptl-period{font-size:11px;font-weight:600;color:var(--accent);background:var(--accentL);padding:2px 10px;border-radius:999px;white-space:nowrap}
+
 .roadmap{margin:48px 0;padding:28px;background:var(--bg2);border-radius:12px;border:1px solid var(--border)}
 .roadmap h2{font-size:18px;font-weight:700;margin-bottom:16px}
 .tl{position:relative;padding-left:28px}
@@ -60,23 +80,60 @@ try{var s=localStorage.getItem('theme');if(s)document.documentElement.dataset.th
 function el(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;}
 var BADGE={done:'b-done',wip:'b-wip',todo:'b-todo'};
 
+function card(d){
+  var a=el('a','card');a.href=d.file;
+  if(d.badge)a.appendChild(el('span','badge '+(BADGE[d.status]||'b-done'),d.badge));
+  a.appendChild(el('h3',null,d.title));
+  if(d.desc)a.appendChild(el('p','desc',d.desc));
+  if(d.tags&&d.tags.length){var t=el('div','tags');d.tags.forEach(function(tag){t.appendChild(el('span','tag',tag));});a.appendChild(t);}
+  return a;
+}
+function grid(docs){var g=el('div','grid');(docs||[]).forEach(function(d){g.appendChild(card(d));});return g;}
+
+// 兼容旧结构：老 docs.json 用扁平 groups；新结构用 categories(general + projects)
+function normalize(data){
+  if(data.categories)return data.categories;
+  // 回退：把每个 group 当作一个「仅通用文档」的大类
+  return (data.groups||[]).map(function(g){return {name:g.name,note:g.note,general:g.docs,projects:[]};});
+}
+
 fetch('docs.json',{cache:'no-cache'}).then(function(r){return r.json();}).then(function(data){
   if(data.title)document.getElementById('title').textContent=data.title;
   document.getElementById('subtitle').textContent=data.subtitle||'';
   var catalog=document.getElementById('catalog');
-  (data.groups||[]).forEach(function(g){
-    catalog.appendChild(el('div','sec',g.note?(g.name+' ('+g.note+')'):g.name));
-    var grid=el('div','grid');
-    (g.docs||[]).forEach(function(d){
-      var a=el('a','card');a.href=d.file;
-      if(d.badge)a.appendChild(el('span','badge '+(BADGE[d.status]||'b-done'),d.badge));
-      a.appendChild(el('h3',null,d.title));
-      if(d.desc)a.appendChild(el('p','desc',d.desc));
-      if(d.tags&&d.tags.length){var t=el('div','tags');d.tags.forEach(function(tag){t.appendChild(el('span','tag',tag));});a.appendChild(t);}
-      grid.appendChild(a);
-    });
-    catalog.appendChild(grid);
+
+  normalize(data).forEach(function(cat){
+    var box=el('div','cat');
+    var name=el('div','cat-name');
+    name.appendChild(el('span',null,cat.name));
+    if(cat.note)name.appendChild(el('span','cat-note',cat.note));
+    box.appendChild(name);
+
+    // 上半部分：通用文档（网格）
+    if(cat.general&&cat.general.length){
+      box.appendChild(el('div','subhead','通用文档 · 基础与面试'));
+      box.appendChild(grid(cat.general));
+    }
+
+    // 下半部分：项目（竖向时间轴）
+    if(cat.projects&&cat.projects.length){
+      box.appendChild(el('div','subhead','项目 · 时间轴'));
+      var ptl=el('div','ptl');
+      cat.projects.forEach(function(p){
+        var item=el('div','ptl-item');
+        var head=el('div','ptl-head');
+        head.appendChild(el('span','ptl-name',p.name));
+        if(p.period)head.appendChild(el('span','ptl-period',p.period));
+        item.appendChild(head);
+        item.appendChild(grid(p.docs));
+        ptl.appendChild(item);
+      });
+      box.appendChild(ptl);
+    }
+
+    catalog.appendChild(box);
   });
+
   if(data.roadmap&&data.roadmap.length){
     var tl=document.getElementById('tl');
     data.roadmap.forEach(function(it){
