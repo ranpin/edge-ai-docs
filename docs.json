@@ -18,49 +18,49 @@
             "面试",
             "交互答题"
           ]
+        },
+        {
+          "title": "硬件与系统底层",
+          "file": "cockpit-hardware.html",
+          "badge": "Part A",
+          "status": "done",
+          "desc": "SA8397P SoC 全景、Hexagon DSP 微架构、FastRPC 通信、Hypervisor 多域隔离、SSR 故障恢复",
+          "tags": [
+            "SA8397P",
+            "DSP",
+            "FastRPC"
+          ]
+        },
+        {
+          "title": "模型训练与微调",
+          "file": "cockpit-training.html",
+          "badge": "Part B",
+          "status": "done",
+          "desc": "DMS/OMS 数据策略、知识蒸馏、LoRA 微调、SWIFT 训练框架",
+          "tags": [
+            "LoRA",
+            "蒸馏",
+            "SWIFT"
+          ]
+        },
+        {
+          "title": "推理优化",
+          "file": "cockpit-infer.html",
+          "badge": "Part C",
+          "status": "done",
+          "desc": "量化 (PTQ/QAT/AIMET)、多核绑定、前缀缓存、投机采样、约束解码、KV Cache 优化",
+          "tags": [
+            "量化",
+            "投机采样",
+            "约束解码"
+          ]
         }
       ],
       "projects": [
         {
-          "name": "SA8397P 智能座舱大模型",
+          "name": "大模型Agent框架的研发与应用",
           "period": "2024.03 – 2025.10",
           "docs": [
-            {
-              "title": "硬件与系统底层",
-              "file": "cockpit-hardware.html",
-              "badge": "Part A",
-              "status": "done",
-              "desc": "SA8397P SoC 全景、Hexagon DSP 微架构、FastRPC 通信、Hypervisor 多域隔离、SSR 故障恢复",
-              "tags": [
-                "SA8397P",
-                "DSP",
-                "FastRPC"
-              ]
-            },
-            {
-              "title": "模型训练与微调",
-              "file": "cockpit-training.html",
-              "badge": "Part B",
-              "status": "done",
-              "desc": "DMS/OMS 数据策略、知识蒸馏、LoRA 微调、SWIFT 训练框架",
-              "tags": [
-                "LoRA",
-                "蒸馏",
-                "SWIFT"
-              ]
-            },
-            {
-              "title": "推理优化",
-              "file": "cockpit-infer.html",
-              "badge": "Part C",
-              "status": "done",
-              "desc": "量化 (PTQ/QAT/AIMET)、多核绑定、前缀缓存、投机采样、约束解码、KV Cache 优化",
-              "tags": [
-                "量化",
-                "投机采样",
-                "约束解码"
-              ]
-            },
             {
               "title": "设备部署",
               "file": "cockpit-deploy.html",
@@ -172,24 +172,6 @@
       ],
       "projects": [
         {
-          "name": "自动驾驶端到端与 BEV 感知",
-          "period": "2025.01 – 2026.06",
-          "docs": [
-            {
-              "title": "自动驾驶学习文档",
-              "file": "ad-learning.html",
-              "badge": "15 章",
-              "status": "done",
-              "desc": "BEV 感知、端到端模型、越野场景、数据飞轮、驾驶 Agent、功能安全，15 章 5 Part",
-              "tags": [
-                "BEV",
-                "端到端",
-                "功能安全"
-              ]
-            }
-          ]
-        },
-        {
           "name": "Alpamayo-Edge · 8B VLM 边缘量化部署",
           "period": "2026.07",
           "docs": [
@@ -204,6 +186,24 @@
                 "TensorRT-Edge-LLM",
                 "Jetson Orin",
                 "FMHA"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "自动驾驶端到端与 BEV 感知",
+          "period": "2025.01 – 2026.06",
+          "docs": [
+            {
+              "title": "自动驾驶学习文档",
+              "file": "ad-learning.html",
+              "badge": "15 章",
+              "status": "done",
+              "desc": "BEV 感知、端到端模型、越野场景、数据飞轮、驾驶 Agent、功能安全，15 章 5 Part",
+              "tags": [
+                "BEV",
+                "端到端",
+                "功能安全"
               ]
             }
           ]
