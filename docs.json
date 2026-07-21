@@ -4,6 +4,7 @@
   "categories": [
     {
       "name": "智能座舱",
+      "id": "cockpit",
       "note": "座舱端侧大模型 · 学习与面试",
       "general": [
         {
@@ -83,6 +84,7 @@
     },
     {
       "name": "通用机器人",
+      "id": "robot",
       "note": "具身智能 · 学习与面试",
       "general": [
         {
@@ -114,6 +116,7 @@
     },
     {
       "name": "自动驾驶",
+      "id": "ad",
       "note": "端到端与 BEV · 学习与面试",
       "general": [
         {
@@ -143,14 +146,5 @@
         }
       ]
     }
-  ],
-  "roadmap": [
-    { "title": "Iteration 1: 智能座舱学习文档 (7 Part)", "detail": "硬件底层 + 算法训练 + 推理优化 + 部署 + aadkcore 核心框架 + 场景 Agent + 调试工具", "done": true },
-    { "title": "Iteration 2: 智能座舱面试指南", "detail": "38 题, 覆盖硬件/算法/部署/Agent/系统设计", "done": true },
-    { "title": "Iteration 3: 通用机器人学习文档", "detail": "15 章 4 Part, 覆盖平台/训练/部署/Agent", "done": true },
-    { "title": "Iteration 4: 通用机器人面试指南", "detail": "29 题, 覆盖平台/算法/部署/Agent/系统设计", "done": true },
-    { "title": "Iteration 5: 自动驾驶学习文档", "detail": "15 章 5 Part, 覆盖算力/感知/部署/Agent/安全", "done": true },
-    { "title": "Iteration 6: 自动驾驶面试指南", "detail": "31 题, 覆盖 BEV/端到端/部署/Agent/安全", "done": true },
-    { "title": "Iteration 7: 打磨与集成", "detail": "两段式呈现（通用文档 + 项目时间轴）", "done": false }
   ]
 }
