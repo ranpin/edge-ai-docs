@@ -11,10 +11,13 @@
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
 .top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;z-index:1000}
 .top-nav .logo{font-weight:700;font-size:15px;color:var(--accent);margin-right:24px;text-decoration:none}
-.top-nav .links{display:flex;gap:2px;flex-wrap:wrap}
+.top-nav .links{display:flex;gap:2px;flex-wrap:wrap;align-items:center}
 .top-nav .links a{padding:4px 10px;border-radius:5px;text-decoration:none;color:var(--text2);font-size:12px;font-weight:500}
 .top-nav .links a:hover{background:var(--accentL);color:var(--accent)}
 .top-nav .links a.active{background:var(--accent);color:#fff}
+.top-nav .links .grp{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;padding:0 6px 0 10px;white-space:nowrap}
+.top-nav .links .grp:first-child{padding-left:2px}
+.top-nav .links .div{width:1px;height:14px;background:var(--border);margin:0 4px}
 .top-nav .right{margin-left:auto}
 .theme-btn{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--text)}
 .sidebar{position:fixed;top:var(--nav-h);left:0;bottom:0;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;z-index:900}
@@ -68,14 +71,18 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 <nav class="top-nav">
   <a href="index.html" class="logo">Edge AI Docs</a>
   <div class="links">
-    <a href="cockpit/general/hardware.html">A.硬件</a>
-    <a href="cockpit/general/training.html">B.训练</a>
-    <a href="cockpit/general/infer.html">C.推理优化</a>
-    <a href="cockpit/projects/agent-framework/deploy.html">D.部署</a>
-    <a href="cockpit/projects/agent-framework/agent-core.html">E1.核心框架</a>
-    <a href="cockpit/projects/agent-framework/agent-group.html">E2.场景Agent</a>
-    <a href="cockpit/projects/agent-framework/debug.html">F.调试</a>
+    <span class="grp">通识</span>
+    <a href="cockpit/general/hardware.html">硬件</a>
+    <a href="cockpit/general/training.html">训练</a>
+    <a href="cockpit/general/infer.html">推理优化</a>
     <a href="cockpit/general/interview.html">面试</a>
+    <span class="div"></span>
+    <span class="grp">项目·Agent框架</span>
+    <a href="cockpit-agent.html" class="active">总览</a>
+    <a href="cockpit/projects/agent-framework/deploy.html">部署</a>
+    <a href="cockpit/projects/agent-framework/agent-core.html">核心框架</a>
+    <a href="cockpit/projects/agent-framework/agent-group.html">场景Agent</a>
+    <a href="cockpit/projects/agent-framework/debug.html">调试</a>
   </div>
   <div class="right">
     <button class="theme-btn" id="themeBtn">&#9790; / &#9788;</button>
