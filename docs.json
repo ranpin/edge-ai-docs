@@ -14,7 +14,10 @@
           "badge": "38 题",
           "status": "done",
           "desc": "硬件系统、算法训练、部署优化、Agent 大模型、系统设计，38 题，难度分级，交互答题",
-          "tags": ["面试", "交互答题"]
+          "tags": [
+            "面试",
+            "交互答题"
+          ]
         }
       ],
       "projects": [
@@ -28,7 +31,11 @@
               "badge": "Part A",
               "status": "done",
               "desc": "SA8397P SoC 全景、Hexagon DSP 微架构、FastRPC 通信、Hypervisor 多域隔离、SSR 故障恢复",
-              "tags": ["SA8397P", "DSP", "FastRPC"]
+              "tags": [
+                "SA8397P",
+                "DSP",
+                "FastRPC"
+              ]
             },
             {
               "title": "模型训练与微调",
@@ -36,7 +43,11 @@
               "badge": "Part B",
               "status": "done",
               "desc": "DMS/OMS 数据策略、知识蒸馏、LoRA 微调、SWIFT 训练框架",
-              "tags": ["LoRA", "蒸馏", "SWIFT"]
+              "tags": [
+                "LoRA",
+                "蒸馏",
+                "SWIFT"
+              ]
             },
             {
               "title": "推理优化",
@@ -44,7 +55,11 @@
               "badge": "Part C",
               "status": "done",
               "desc": "量化 (PTQ/QAT/AIMET)、多核绑定、前缀缓存、投机采样、约束解码、KV Cache 优化",
-              "tags": ["量化", "投机采样", "约束解码"]
+              "tags": [
+                "量化",
+                "投机采样",
+                "约束解码"
+              ]
             },
             {
               "title": "设备部署",
@@ -52,7 +67,11 @@
               "badge": "Part D",
               "status": "done",
               "desc": "QNN 框架、ISP 数据流零拷贝、多模型调度策略、Context Binary",
-              "tags": ["QNN", "ISP", "零拷贝"]
+              "tags": [
+                "QNN",
+                "ISP",
+                "零拷贝"
+              ]
             },
             {
               "title": "aadkcore 核心框架",
@@ -60,7 +79,12 @@
               "badge": "Part E1",
               "status": "done",
               "desc": "统一模型接口、模型调度器、多音区对话管理、RAG、MCP 工具协议、A2A 协议、运行时与插件机制",
-              "tags": ["C++17", "MCP", "A2A", "ModelScheduler"]
+              "tags": [
+                "C++17",
+                "MCP",
+                "A2A",
+                "ModelScheduler"
+              ]
             },
             {
               "title": "场景 Agent 应用",
@@ -68,7 +92,11 @@
               "badge": "Part E2",
               "status": "done",
               "desc": "车辆控制 Agent (30+ 技能)、主动视觉 Agent、闲聊 Agent、GUI Agent、Prompt 模板工程",
-              "tags": ["车控", "主动视觉", "GUI Agent"]
+              "tags": [
+                "车控",
+                "主动视觉",
+                "GUI Agent"
+              ]
             },
             {
               "title": "调试与工具链",
@@ -76,7 +104,10 @@
               "badge": "Part F",
               "status": "done",
               "desc": "mini-dm、Snapdragon Profiler、qnn-profile-viewer、排障决策树",
-              "tags": ["Profiler", "排障"]
+              "tags": [
+                "Profiler",
+                "排障"
+              ]
             }
           ]
         }
@@ -94,7 +125,10 @@
           "badge": "29 题",
           "status": "done",
           "desc": "平台选型、算法训练、部署实时控制、Agent 大模型、系统设计，29 题",
-          "tags": ["面试", "29 题"]
+          "tags": [
+            "面试",
+            "29 题"
+          ]
         }
       ],
       "projects": [
@@ -108,7 +142,11 @@
               "badge": "15 章",
               "status": "done",
               "desc": "Jetson/RK3588 平台、VLA 模型、ROS2 集成、Embodied Agent，15 章 4 Part",
-              "tags": ["Jetson", "VLA", "ROS2"]
+              "tags": [
+                "Jetson",
+                "VLA",
+                "ROS2"
+              ]
             }
           ]
         }
@@ -126,7 +164,10 @@
           "badge": "31 题",
           "status": "done",
           "desc": "BEV 算法、端到端模型、数据训练、部署优化、驾驶 Agent、系统设计，31 题",
-          "tags": ["面试", "31 题"]
+          "tags": [
+            "面试",
+            "31 题"
+          ]
         }
       ],
       "projects": [
@@ -140,7 +181,30 @@
               "badge": "15 章",
               "status": "done",
               "desc": "BEV 感知、端到端模型、越野场景、数据飞轮、驾驶 Agent、功能安全，15 章 5 Part",
-              "tags": ["BEV", "端到端", "功能安全"]
+              "tags": [
+                "BEV",
+                "端到端",
+                "功能安全"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Alpamayo-Edge · 8B VLM 边缘量化部署",
+          "period": "2026.07",
+          "docs": [
+            {
+              "title": "Cosmos-Reason2-8B · Orin 量化部署实战",
+              "file": "https://ranpin.github.io/qwen-trajectory-prediction/",
+              "badge": "实战",
+              "status": "done",
+              "desc": "INT4/INT8 量化 → Jetson Orin 端到端跑通推理 → 延迟/吞吐/显存/功耗/能效完整权衡；定位并修复 sm_87 FMHA 崩溃",
+              "tags": [
+                "INT4/INT8",
+                "TensorRT-Edge-LLM",
+                "Jetson Orin",
+                "FMHA"
+              ]
             }
           ]
         }
