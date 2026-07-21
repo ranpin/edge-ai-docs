@@ -9,7 +9,7 @@
       "general": [
         {
           "title": "智能座舱面试指南",
-          "file": "cockpit-interview.html",
+          "file": "cockpit/general/interview.html",
           "kind": "面试",
           "badge": "38 题",
           "status": "done",
@@ -21,7 +21,7 @@
         },
         {
           "title": "硬件与系统底层",
-          "file": "cockpit-hardware.html",
+          "file": "cockpit/general/hardware.html",
           "badge": "Part A",
           "status": "done",
           "desc": "SA8397P SoC 全景、Hexagon DSP 微架构、FastRPC 通信、Hypervisor 多域隔离、SSR 故障恢复",
@@ -33,7 +33,7 @@
         },
         {
           "title": "模型训练与微调",
-          "file": "cockpit-training.html",
+          "file": "cockpit/general/training.html",
           "badge": "Part B",
           "status": "done",
           "desc": "DMS/OMS 数据策略、知识蒸馏、LoRA 微调、SWIFT 训练框架",
@@ -45,7 +45,7 @@
         },
         {
           "title": "推理优化",
-          "file": "cockpit-infer.html",
+          "file": "cockpit/general/infer.html",
           "badge": "Part C",
           "status": "done",
           "desc": "量化 (PTQ/QAT/AIMET)、多核绑定、前缀缓存、投机采样、约束解码、KV Cache 优化",
@@ -63,7 +63,7 @@
           "docs": [
             {
               "title": "设备部署",
-              "file": "cockpit-deploy.html",
+              "file": "cockpit/projects/agent-framework/deploy.html",
               "badge": "Part D",
               "status": "done",
               "desc": "QNN 框架、ISP 数据流零拷贝、多模型调度策略、Context Binary",
@@ -75,7 +75,7 @@
             },
             {
               "title": "aadkcore 核心框架",
-              "file": "cockpit-agent-core.html",
+              "file": "cockpit/projects/agent-framework/agent-core.html",
               "badge": "Part E1",
               "status": "done",
               "desc": "统一模型接口、模型调度器、多音区对话管理、RAG、MCP 工具协议、A2A 协议、运行时与插件机制",
@@ -88,7 +88,7 @@
             },
             {
               "title": "场景 Agent 应用",
-              "file": "cockpit-agent-group.html",
+              "file": "cockpit/projects/agent-framework/agent-group.html",
               "badge": "Part E2",
               "status": "done",
               "desc": "车辆控制 Agent (30+ 技能)、主动视觉 Agent、闲聊 Agent、GUI Agent、Prompt 模板工程",
@@ -100,7 +100,7 @@
             },
             {
               "title": "调试与工具链",
-              "file": "cockpit-debug.html",
+              "file": "cockpit/projects/agent-framework/debug.html",
               "badge": "Part F",
               "status": "done",
               "desc": "mini-dm、Snapdragon Profiler、qnn-profile-viewer、排障决策树",
@@ -120,7 +120,7 @@
       "general": [
         {
           "title": "通用机器人面试指南",
-          "file": "robot-interview.html",
+          "file": "robot/general/interview.html",
           "kind": "面试",
           "badge": "29 题",
           "status": "done",
@@ -138,7 +138,7 @@
           "docs": [
             {
               "title": "通用机器人学习文档",
-              "file": "robot-learning.html",
+              "file": "robot/projects/edge-deploy/learning.html",
               "badge": "15 章",
               "status": "done",
               "desc": "Jetson/RK3588 平台、VLA 模型、ROS2 集成、Embodied Agent，15 章 4 Part",
@@ -159,7 +159,7 @@
       "general": [
         {
           "title": "自动驾驶面试指南",
-          "file": "ad-interview.html",
+          "file": "ad/general/interview.html",
           "kind": "面试",
           "badge": "31 题",
           "status": "done",
@@ -196,7 +196,7 @@
           "docs": [
             {
               "title": "自动驾驶学习文档",
-              "file": "ad-learning.html",
+              "file": "ad/projects/bev/learning.html",
               "badge": "15 章",
               "status": "done",
               "desc": "BEV 感知、端到端模型、越野场景、数据飞轮、驾驶 Agent、功能安全，15 章 5 Part",
