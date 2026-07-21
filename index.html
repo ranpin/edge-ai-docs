@@ -10,14 +10,19 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
 .wrap{max-width:1100px;margin:0 auto;padding:40px 24px}
-header{text-align:center;margin-bottom:48px}
+header{text-align:center;margin-bottom:32px}
 h1{font-size:32px;font-weight:800;margin-bottom:8px}
 header p{color:var(--muted);font-size:15px;max-width:640px;margin:0 auto}
 .theme-btn{position:fixed;top:16px;right:16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;font-size:16px;color:var(--text);z-index:100}
 
-/* 大类 */
-.cat{margin:56px 0}
-.cat-name{font-size:22px;font-weight:800;display:flex;align-items:baseline;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:24px}
+/* 分类切换标签（三个大类各自成页） */
+.tabs{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:44px}
+.tab{padding:10px 22px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;transition:all .2s}
+.tab:hover{border-color:var(--accent);color:var(--text)}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 4px 14px rgba(67,97,238,.3)}
+
+/* 大类内容 */
+.cat-name{font-size:24px;font-weight:800;display:flex;align-items:baseline;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:24px}
 .cat-note{font-size:13px;font-weight:500;color:var(--muted)}
 .subhead{font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:2px;margin:24px 0 14px;display:flex;align-items:center;gap:8px}
 .subhead::after{content:'';flex:1;height:1px;background:var(--border)}
@@ -44,16 +49,7 @@ header p{color:var(--muted);font-size:15px;max-width:640px;margin:0 auto}
 .ptl-name{font-size:17px;font-weight:700}
 .ptl-period{font-size:11px;font-weight:600;color:var(--accent);background:var(--accentL);padding:2px 10px;border-radius:999px;white-space:nowrap}
 
-.roadmap{margin:48px 0;padding:28px;background:var(--bg2);border-radius:12px;border:1px solid var(--border)}
-.roadmap h2{font-size:18px;font-weight:700;margin-bottom:16px}
-.tl{position:relative;padding-left:28px}
-.tl::before{content:'';position:absolute;left:7px;top:0;bottom:0;width:2px;background:var(--border)}
-.tl-item{position:relative;margin-bottom:20px}
-.tl-item::before{content:'';position:absolute;left:-25px;top:3px;width:10px;height:10px;border-radius:50%;border:2px solid var(--accent);background:var(--bg)}
-.tl-item.done::before{background:var(--accent)}
-.tl-item h4{font-size:13px;font-weight:600;margin-bottom:2px}
-.tl-item p{font-size:12px;color:var(--muted)}
-footer{text-align:center;margin-top:48px;padding:20px;color:var(--muted);font-size:12px}
+footer{text-align:center;margin-top:56px;padding:20px;color:var(--muted);font-size:12px}
 </style>
 </head>
 <body>
@@ -63,11 +59,8 @@ footer{text-align:center;margin-top:48px;padding:20px;color:var(--muted);font-si
     <h1 id="title">Edge AI Docs</h1>
     <p id="subtitle"></p>
   </header>
+  <nav class="tabs" id="tabs"></nav>
   <main id="catalog"></main>
-  <div class="roadmap" id="roadmap" hidden>
-    <h2>迭代路线图</h2>
-    <div class="tl" id="tl"></div>
-  </div>
   <footer>Edge AI Docs -- 算法训练/微调 | 部署与优化 | Agent 框架</footer>
 </div>
 <script>
@@ -93,57 +86,71 @@ function grid(docs){var g=el('div','grid');(docs||[]).forEach(function(d){g.appe
 // 兼容旧结构：老 docs.json 用扁平 groups；新结构用 categories(general + projects)
 function normalize(data){
   if(data.categories)return data.categories;
-  // 回退：把每个 group 当作一个「仅通用文档」的大类
-  return (data.groups||[]).map(function(g){return {name:g.name,note:g.note,general:g.docs,projects:[]};});
+  return (data.groups||[]).map(function(g,i){return {name:g.name,id:'g'+i,note:g.note,general:g.docs,projects:[]};});
+}
+function catId(cat,i){return cat.id||('c'+i);}
+
+// 渲染单个大类（相当于一个「页面」）
+function renderCategory(cat){
+  var catalog=document.getElementById('catalog');
+  catalog.innerHTML='';
+  var name=el('div','cat-name');
+  name.appendChild(el('span',null,cat.name));
+  if(cat.note)name.appendChild(el('span','cat-note',cat.note));
+  catalog.appendChild(name);
+
+  // 上半：通用文档（网格）
+  if(cat.general&&cat.general.length){
+    catalog.appendChild(el('div','subhead','通用文档 · 基础与面试'));
+    catalog.appendChild(grid(cat.general));
+  }
+  // 下半：项目（竖向时间轴）
+  if(cat.projects&&cat.projects.length){
+    catalog.appendChild(el('div','subhead','项目 · 时间轴'));
+    var ptl=el('div','ptl');
+    cat.projects.forEach(function(p){
+      var item=el('div','ptl-item');
+      var head=el('div','ptl-head');
+      head.appendChild(el('span','ptl-name',p.name));
+      if(p.period)head.appendChild(el('span','ptl-period',p.period));
+      item.appendChild(head);
+      item.appendChild(grid(p.docs));
+      ptl.appendChild(item);
+    });
+    catalog.appendChild(ptl);
+  }
 }
 
 fetch('docs.json',{cache:'no-cache'}).then(function(r){return r.json();}).then(function(data){
   if(data.title)document.getElementById('title').textContent=data.title;
   document.getElementById('subtitle').textContent=data.subtitle||'';
-  var catalog=document.getElementById('catalog');
+  var cats=normalize(data);
+  var tabsEl=document.getElementById('tabs');
+  var btns=[];
 
-  normalize(data).forEach(function(cat){
-    var box=el('div','cat');
-    var name=el('div','cat-name');
-    name.appendChild(el('span',null,cat.name));
-    if(cat.note)name.appendChild(el('span','cat-note',cat.note));
-    box.appendChild(name);
+  function activate(i){
+    btns.forEach(function(btn,j){btn.className='tab'+(j===i?' active':'');});
+    renderCategory(cats[i]);
+    var id=catId(cats[i],i);
+    if(('#'+id)!==location.hash){try{history.replaceState(null,'',location.pathname+'#'+id);}catch(e){location.hash=id;}}
+  }
 
-    // 上半部分：通用文档（网格）
-    if(cat.general&&cat.general.length){
-      box.appendChild(el('div','subhead','通用文档 · 基础与面试'));
-      box.appendChild(grid(cat.general));
-    }
-
-    // 下半部分：项目（竖向时间轴）
-    if(cat.projects&&cat.projects.length){
-      box.appendChild(el('div','subhead','项目 · 时间轴'));
-      var ptl=el('div','ptl');
-      cat.projects.forEach(function(p){
-        var item=el('div','ptl-item');
-        var head=el('div','ptl-head');
-        head.appendChild(el('span','ptl-name',p.name));
-        if(p.period)head.appendChild(el('span','ptl-period',p.period));
-        item.appendChild(head);
-        item.appendChild(grid(p.docs));
-        ptl.appendChild(item);
-      });
-      box.appendChild(ptl);
-    }
-
-    catalog.appendChild(box);
+  cats.forEach(function(cat,i){
+    var btn=el('button','tab',cat.name);
+    btn.onclick=function(){activate(i);};
+    tabsEl.appendChild(btn);btns.push(btn);
   });
 
-  if(data.roadmap&&data.roadmap.length){
-    var tl=document.getElementById('tl');
-    data.roadmap.forEach(function(it){
-      var item=el('div','tl-item'+(it.done?' done':''));
-      item.appendChild(el('h4',null,it.title));
-      if(it.detail)item.appendChild(el('p',null,it.detail));
-      tl.appendChild(item);
-    });
-    document.getElementById('roadmap').hidden=false;
-  }
+  // 初始：按 hash 定位到对应大类，否则第一个
+  var want=(location.hash||'').replace('#','');
+  var start=0;
+  cats.forEach(function(cat,i){if(catId(cat,i)===want)start=i;});
+  activate(start);
+
+  window.addEventListener('hashchange',function(){
+    var h=(location.hash||'').replace('#','');
+    cats.forEach(function(cat,i){if(catId(cat,i)===h&&!btns[i].classList.contains('active'))activate(i);});
+  });
 }).catch(function(){
   document.getElementById('catalog').innerHTML='<p style="text-align:center;color:var(--muted)">目录加载失败，请刷新重试。</p>';
 });
