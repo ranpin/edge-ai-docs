@@ -195,7 +195,7 @@
           "docs": [
             {
               "title": "Cosmos-Reason2-8B · Orin 量化部署实战",
-              "file": "https://ranpin.github.io/qwen-trajectory-prediction/",
+              "file": "alpamayo-edge.html",
               "badge": "实战",
               "status": "done",
               "desc": "INT4/INT8 量化 → Jetson Orin 端到端跑通推理 → 延迟/吞吐/显存/功耗/能效完整权衡；定位并修复 sm_87 FMHA 崩溃",
