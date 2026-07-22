@@ -82,7 +82,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 <main class="main">
 
 <h1>通用机器人 — 面试指南</h1>
-<p class="subtitle">29 道精选面试题 — 覆盖平台选型、算法训练、部署控制、Agent 大模型与系统设计</p>
+<p class="subtitle">32 道精选面试题 — 覆盖平台选型、算法训练、部署控制、Agent 大模型与系统设计</p>
 
 <!-- ==================== Section 1 ==================== -->
 <h2 id="s1">一、平台选型与基础</h2>
@@ -166,7 +166,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
-    <p><span class="key">VLA</span>（Vision-Language-Action）模型如 RT-2、Octo 等原始参数量通常在数十亿级别，裁剪到端侧 50M 以下需要多层次的压缩策略。首先是<span class="key">架构精简</span>：将视觉编码器从 ViT-Large 替换为 EfficientNet-B0 或 MobileNetV3（约 3-5M 参数），语言编码器从完整 LLM 替换为 distilled TinyBERT 或直接使用预编码的文本 embedding lookup table，Action head 使用轻量 MLP 或 diffusion policy 的小型 U-Net。其次是<span class="key">知识蒸馏</span>：用完整的云端 VLA 大模型作为 teacher，指导小模型学习中间特征和输出动作分布，关键是设计好蒸馏损失——既要匹配最终 action 输出，也要匹配中间层的视觉-语言对齐特征。第三是<span class="key">模态解耦</span>：不在端侧做完整的视觉-语言推理，而是将语言理解部分离线处理，将指令编码为固定维度的 task embedding 缓存在端侧，运行时只需视觉编码器 + task embedding + action decoder，大幅减少参数量。第四是<span class="key">量化与剪枝</span>：对裁剪后的模型进一步做 INT8 量化（参数量不变但推理加速）和结构化剪枝（如移除 attention heads）。典型的端侧 VLA 可压缩到 20-40M 参数，在 Jetson Orin NX 上以 10-20 Hz 运行。</p>
+    <p><span class="key">VLA</span>（Vision-Language-Action）模型如 RT-2（12B–55B）、OpenVLA（7B）、π0（~3B）等原始参数量通常在数十亿级别，裁剪到端侧 50M 以下需要多层次的压缩策略（注意：并非所有 VLA 都很大——Octo 本身只有 27–93M，属天生轻量的对照，不需要这套压缩）。首先是<span class="key">架构精简</span>：将视觉编码器从 ViT-Large 替换为 EfficientNet-B0 或 MobileNetV3（约 3-5M 参数），语言编码器从完整 LLM 替换为 distilled TinyBERT 或直接使用预编码的文本 embedding lookup table，Action head 使用轻量 MLP 或 diffusion policy 的小型 U-Net。其次是<span class="key">知识蒸馏</span>：用完整的云端 VLA 大模型作为 teacher，指导小模型学习中间特征和输出动作分布，关键是设计好蒸馏损失——既要匹配最终 action 输出，也要匹配中间层的视觉-语言对齐特征。第三是<span class="key">模态解耦</span>：不在端侧做完整的视觉-语言推理，而是将语言理解部分离线处理，将指令编码为固定维度的 task embedding 缓存在端侧，运行时只需视觉编码器 + task embedding + action decoder，大幅减少参数量。第四是<span class="key">量化与剪枝</span>：对裁剪后的模型进一步做 INT8 量化（参数量不变但推理加速）和结构化剪枝（如移除 attention heads）。典型的端侧 VLA 可压缩到 20-40M 参数，在 Jetson Orin NX 上以 10-20 Hz 运行。</p>
   </div>
 </div>
 
@@ -220,12 +220,42 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
   </div>
 </div>
 
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q14: VLA 是怎么把"动作"输出出来的？动作 tokenization 与 action chunking</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>VLA 的关键设计之一是<strong>动作如何表征与解码</strong>，它直接决定延迟与控制方式，主流有三条路线：（1）<span class="key">离散动作 token</span>——RT-1/RT-2/OpenVLA 把每个连续动作维度（如末端位姿的 Δx/Δy/Δz/Δ姿态与夹爪开合）离散成约 256 个 bin，当作"词"由自回归 LM 逐个吐出；OpenVLA 直接把这些 bin 覆盖到 LLaMA 词表中最少用的 token 上，复用语言模型头。（2）<span class="key">扩散 / 流匹配动作头</span>——Octo 用 diffusion action head，π0 在 VLM（PaliGemma）之上接一个 flow-matching 的"action expert"，一次前向输出连续动作，避免逐 token 解码。（3）回归 MLP——最简单，直接回归动作，但多模态动作分布容易被平均化。<span class="key">Action Chunking</span>（动作分块，ACT / Diffusion Policy / π0）是让慢速策略可用于实时控制的关键技巧：一次预测未来一段动作序列（如 8–50 步）而非单步，配合 temporal ensembling 平滑衔接，于是一个 5–10Hz 的策略也能输出高频控制流。这也呼应 Q20 的延迟预算——VLA 常以"低频出块 + 高频执行"的方式落地。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q15: 当前开源 VLA 版图：OpenVLA 与 π0 各是什么？</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>面试常被追问"点名几个真实 VLA"。<span class="key">OpenVLA</span>（2024）——7B，视觉用 DINOv2 + SigLIP 双编码器、语言用 Llama-2，在 Open X-Embodiment（近百万条真机轨迹）上训练，输出离散动作 token，是开源可复现的强基线，支持 LoRA 微调与 INT4/INT8 量化后端侧化。<span class="key">π0</span>（Physical Intelligence，2024）——约 3B，在 PaliGemma VLM 上接 flow-matching action expert，以 action chunk 形式可输出高达 ~50Hz 的连续控制，擅长灵巧操作。其他常见对照：RT-2（Google，12B–55B，闭源，把动作当语言 token）、Octo（27–93M，轻量 diffusion policy）、RDT-1B（双臂扩散策略）。选型逻辑：要真机数据 + 通用性选 OpenVLA/π0；要极致轻量、算力紧张则用 Octo 量级并配合 action chunking。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q16: 模仿学习与强化学习在机器人策略里怎么选？BC 有什么坑？</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p><span class="key">模仿学习（IL）</span>——从专家示范中监督学习策略，最常见是<strong>行为克隆（BC）</strong>：把"状态→动作"当回归/分类来学。优点是稳定、样本高效、无需奖励设计与危险探索；核心坑是<span class="key">协变量漂移 / 误差累积</span>——策略一旦偏离示范分布就进入没见过的状态，误差滚雪球（compounding error）。缓解手段：<span class="key">DAgger</span>（在策略实际访问到的状态上补标专家动作，把分布拉回）、action chunking 减少决策次数、以及在数据中覆盖"恢复动作"。<span class="key">强化学习（RL）</span>——用奖励在交互中试错优化，能超越示范上限、主动探索，但需要可用的奖励函数、大量（常是仿真）rollout，且实机探索有安全风险。选择原则：<strong>有示范、要快要稳 → IL/BC（+DAgger）</strong>；<strong>有可靠奖励与仿真、要超越示范 → RL</strong>；实践中常"IL 预训练打底 + RL/残差策略微调"，或在仿真里 RL 后蒸馏给只依赖真实传感器的 student（呼应 Q7 的 teacher-student）。</p>
+  </div>
+</div>
+
 <!-- ==================== Section 3 ==================== -->
 <h2 id="s3">三、部署与实时控制</h2>
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q14: TensorRT 优化全流程</span><span class="diff diff-mid">中级</span>
+    <span>Q17: TensorRT 优化全流程</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -235,7 +265,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q15: Dynamic shape 的处理策略</span><span class="diff diff-mid">中级</span>
+    <span>Q18: Dynamic shape 的处理策略</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -245,7 +275,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q16: 多模型共享 GPU 显存的调度方法</span><span class="diff diff-hard">高级</span>
+    <span>Q19: 多模型共享 GPU 显存的调度方法</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -255,7 +285,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q17: 实时控制延迟预算如何分配</span><span class="diff diff-hard">高级</span>
+    <span>Q20: 实时控制延迟预算如何分配</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -265,7 +295,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q18: RT-PREEMPT vs Xenomai 选择</span><span class="diff diff-mid">中级</span>
+    <span>Q21: RT-PREEMPT vs Xenomai 选择</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -275,7 +305,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q19: 传感器时间同步方案设计</span><span class="diff diff-hard">高级</span>
+    <span>Q22: 传感器时间同步方案设计</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -288,7 +318,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q20: Embodied Agent 与传统状态机架构的对比</span><span class="diff diff-mid">中级</span>
+    <span>Q23: Embodied Agent 与传统状态机架构的对比</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -298,7 +328,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q21: 端侧 Function Calling 安全性设计</span><span class="diff diff-hard">高级</span>
+    <span>Q24: 端侧 Function Calling 安全性设计</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -308,7 +338,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q22: 视觉-语言接地 (Grounding) 的技术挑战</span><span class="diff diff-hard">高级</span>
+    <span>Q25: 视觉-语言接地 (Grounding) 的技术挑战</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -318,7 +348,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q23: 端侧向量数据库选型 (FAISS-lite vs Hnswlib)</span><span class="diff diff-mid">中级</span>
+    <span>Q26: 端侧向量数据库选型 (FAISS-lite vs Hnswlib)</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -328,7 +358,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q24: KV Cache 管理策略对比</span><span class="diff diff-hard">高级</span>
+    <span>Q27: KV Cache 管理策略对比</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -338,7 +368,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q25: Speculative Decoding 在端侧的可行性</span><span class="diff diff-hard">高级</span>
+    <span>Q28: Speculative Decoding 在端侧的可行性</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -351,7 +381,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q26: 设计人形机器人的端到端感知-决策-执行系统</span><span class="diff diff-hard">高级</span>
+    <span>Q29: 设计人形机器人的端到端感知-决策-执行系统</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -361,7 +391,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q27: 设计机械臂的自主抓取系统 (含 VLM 理解)</span><span class="diff diff-hard">高级</span>
+    <span>Q30: 设计机械臂的自主抓取系统 (含 VLM 理解)</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -371,7 +401,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q28: 设计多机器人协作清洁系统的 Agent 架构</span><span class="diff diff-hard">高级</span>
+    <span>Q31: 设计多机器人协作清洁系统的 Agent 架构</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -381,7 +411,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q29: 设计服务机器人的长期记忆系统</span><span class="diff diff-hard">高级</span>
+    <span>Q32: 设计服务机器人的长期记忆系统</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
