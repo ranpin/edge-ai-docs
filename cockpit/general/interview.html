@@ -96,7 +96,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 <main class="main">
 
 <h1>智能座舱面试指南</h1>
-<p class="subtitle">基于 Qualcomm SA8397P 平台 · 48 道精选题 · 覆盖硬件/训练/部署/Agent/系统设计/面试方法论</p>
+<p class="subtitle">基于 Qualcomm SA8397P 平台 · 51 道精选题 · 覆盖硬件/训练/部署/Agent/系统设计/面试方法论</p>
 
 <!-- ========================================================== -->
 <!-- Section 1: 硬件与系统 — 概念辨析题 (10 questions) -->
@@ -132,7 +132,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
-    <p><span class="key">Android Binder</span> 是 Linux 内核提供的 IPC 机制，用于 Android 进程间通信，数据需要经过序列化/反序列化和至少一次内存拷贝（copy_from_user / copy_to_user），主要服务于 CPU 侧的 Java/Native 服务调用。<span class="key">FastRPC</span> 是 Qualcomm 专门设计的跨处理器 RPC 框架，用于 CPU（HLOS）与 DSP 之间的通信。FastRPC 最大的优势在于支持 <span class="key">零拷贝</span>（zero-copy）数据传输：通过 <span class="key">ION</span> 或 <span class="key">DMA-BUF</span> 分配共享内存，CPU 和 DSP 可以直接访问同一块物理内存，避免数据拷贝的开销。Binder 无法跨处理器域调用 DSP，它只能在 CPU 侧的进程间工作。此外，FastRPC 内建了 DSP 侧的 <span class="key">PD</span>（Protection Domain）管理、签名校验和异常恢复机制，能在 DSP 进程崩溃时自动 SSR 恢复。对于座舱场景中每帧 30fps 的图像推理而言，FastRPC 的零拷贝特性直接决定了端到端延迟是否能满足实时性要求。</p>
+    <p><span class="key">Android Binder</span> 是 Android 的 IPC 机制（驱动源自 Android，后并入 Linux 主线），用于 Android 进程间通信。它的关键设计恰恰是<strong>单次拷贝</strong>——内核用一次 copy_from_user 把数据写入接收进程 mmap 映射的缓冲区，接收方直接读取，无需第二次拷贝（已优于管道/socket 的两次拷贝）；但它仍需序列化/反序列化，且主要服务于 CPU 侧的 Java/Native 服务调用，无法跨处理器域访问 DSP。<span class="key">FastRPC</span> 是 Qualcomm 专门设计的跨处理器 RPC 框架，用于 CPU（HLOS）与 DSP 之间的通信。FastRPC 最大的优势在于支持 <span class="key">零拷贝</span>（zero-copy）数据传输：通过 <span class="key">ION</span> 或 <span class="key">DMA-BUF</span> 分配共享内存，CPU 和 DSP 可以直接访问同一块物理内存，避免数据拷贝的开销。Binder 无法跨处理器域调用 DSP，它只能在 CPU 侧的进程间工作。此外，FastRPC 内建了 DSP 侧的 <span class="key">PD</span>（Protection Domain）管理、签名校验和异常恢复机制，能在 DSP 进程崩溃时自动 SSR 恢复。对于座舱场景中每帧 30fps 的图像推理而言，FastRPC 的零拷贝特性直接决定了端到端延迟是否能满足实时性要求。</p>
   </div>
 </div>
 
@@ -154,7 +154,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
-    <p><span class="key">CDSP</span>（Compute DSP）是面向通用高性能计算设计的 DSP，配备了 <span class="key">HVX</span> 和 <span class="key">HMX</span> 硬件加速单元，以及大容量 <span class="key">VTCM</span>，是 AI 推理的主力计算单元。<span class="key">SDSP</span>（Sensor DSP）则面向低功耗传感器处理场景，如 Always-On 语音唤醒、传感器 Hub 数据融合等，它通常只有标量核心和有限的 HVX 能力，没有 HMX 矩阵加速单元。SDSP 的设计目标是在极低功耗（微瓦级）下持续运行，而非高吞吐计算。因此，AI 模型推理必须在 CDSP 上执行。如果错误地将推理任务提交到 SDSP，不仅会因为缺少 HMX 导致大量算子 fallback 到标量执行而极度缓慢，还可能因 VTCM 不足而直接报错。在 QNN 初始化时通过指定 backend 为 <code>libQnnHtp.so</code> 并确认 DSP 类型为 CDSP，可以避免此类问题。</p>
+    <p><span class="key">CDSP</span>（Compute DSP）是面向通用高性能计算设计的 DSP，配备了 <span class="key">HVX</span> 和 <span class="key">HMX</span> 硬件加速单元，以及大容量 <span class="key">VTCM</span>，是 AI 推理的主力计算单元。<span class="key">SDSP</span>（Sensor DSP）则面向低功耗传感器处理场景，如 Always-On 语音唤醒、传感器 Hub 数据融合等，它通常只有标量核心和有限的 HVX 能力，没有 HMX 矩阵加速单元。SDSP 的设计目标是在极低功耗（毫瓦级）下持续运行，而非高吞吐计算。因此，AI 模型推理必须在 CDSP 上执行。如果错误地将推理任务提交到 SDSP，不仅会因为缺少 HMX 导致大量算子 fallback 到标量执行而极度缓慢，还可能因 VTCM 不足而直接报错。在 QNN 初始化时通过指定 backend 为 <code>libQnnHtp.so</code> 并确认 DSP 类型为 CDSP，可以避免此类问题。</p>
   </div>
 </div>
 
@@ -258,7 +258,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
-    <p><span class="key">PTQ</span>（Post-Training Quantization，训练后量化）不需要重新训练，只需用一小批标定数据（通常 500-1000 张）统计每层的激活值范围，然后将 FP32 权重和激活量化为 INT8。优点是快速便捷，缺点是对某些模型（特别是深层网络和含 Concat/Add 分支的模型）精度损失可能较大。<span class="key">QAT</span>（Quantization-Aware Training，量化感知训练）在训练过程中插入模拟量化节点（fake quantize），让模型在训练时就学会适应量化误差。QAT 通常需要额外训练 10-20 个 epoch，但精度损失远小于 PTQ。决策原则如下：首先尝试 PTQ，用 QNN 的 <code>qnn-converter</code> 做 INT8 量化后验证精度——如果精度下降在 1% 以内，直接使用 PTQ；如果下降超过 2%，启用 QAT。对于座舱安全相关模型（如 DMS 疲劳检测），建议无论 PTQ 精度如何都做 QAT，因为量化引入的微小误差在边界样本上可能导致漏检。QAT 实现上推荐使用 PyTorch 的 <span class="key">torch.ao.quantization</span> 模块或 Qualcomm 的 <span class="key">AIMET</span> 工具，它们支持直接导出 QNN 兼容的量化参数。</p>
+    <p><span class="key">PTQ</span>（Post-Training Quantization，训练后量化）不需要重新训练，只需用一小批标定数据（通常 500-1000 张）统计每层的激活值范围，然后将 FP32 权重和激活量化为 INT8。优点是快速便捷，缺点是对某些模型（特别是深层网络和含 Concat/Add 分支的模型）精度损失可能较大。<span class="key">QAT</span>（Quantization-Aware Training，量化感知训练）在训练过程中插入模拟量化节点（fake quantize），让模型在训练时就学会适应量化误差。QAT 通常需要额外训练 10-20 个 epoch，但精度损失远小于 PTQ。决策原则如下：首先尝试 PTQ，用 QNN 的 <code>qnn-onnx-converter</code> 做 INT8 量化后验证精度——如果精度下降在 1% 以内，直接使用 PTQ；如果下降超过 2%，启用 QAT。对于座舱安全相关模型（如 DMS 疲劳检测），建议无论 PTQ 精度如何都做 QAT，因为量化引入的微小误差在边界样本上可能导致漏检。QAT 实现上推荐使用 PyTorch 的 <span class="key">torch.ao.quantization</span> 模块或 Qualcomm 的 <span class="key">AIMET</span> 工具，它们支持直接导出 QNN 兼容的量化参数。</p>
   </div>
 </div>
 
@@ -309,22 +309,33 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 <!-- ========================================================== -->
 <!-- Section 3: 部署与优化题 (8 questions) -->
 <!-- ========================================================== -->
-<h2 id="sec3">三、部署与优化题</h2>
-
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q19: 请完整描述一个模型从训练到在 SA8397P 上运行的 QNN 部署流水线。</span>
+    <span>Q19: ms-swift（SWIFT）在座舱 Qwen 系列模型微调中扮演什么角色？与 LoRA/蒸馏是什么关系？</span>
     <span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
-    <p>完整的 <span class="key">QNN 部署流水线</span> 分为五个阶段。第一阶段，<strong>模型导出</strong>：将 PyTorch/TF 训练好的模型导出为 <span class="key">ONNX</span> 格式（推荐 opset 13+），确保所有算子有标准 ONNX 对应。第二阶段，<strong>模型转换</strong>：使用 <code>qnn-onnx-converter</code> 将 ONNX 转换为 QNN IR（生成 .cpp 模型定义和 .bin 权重文件），此时可以指定量化参数或标记自定义算子。第三阶段，<strong>量化</strong>：准备 500-1000 张代表性标定数据，使用 <code>qnn-net-run --input_list calibration_list.txt</code> 收集激活值范围，生成 <span class="key">encoding 文件</span>（记录每层的 scale 和 zero_point）。第四阶段，<strong>编译 Context Binary</strong>：使用 <code>qnn-context-binary-generator</code> 将量化后的模型编译为目标芯片的 <span class="key">Context Binary</span>（.bin），这一步会做算子调度、VTCM tiling、HMX/HVX 分配等芯片级优化，生成的二进制可直接被 DSP 加载执行。第五阶段，<strong>上板部署</strong>：将 Context Binary 推送到设备，应用通过 <code>QnnContext_createFromBinary()</code> 加载，注册输入输出 Tensor，调用 <code>QnnGraph_execute()</code> 执行推理。部署后需要用 <code>qnn-profile-viewer</code> 分析每层耗时，验证无算子 fallback。</p>
+    <p><span class="key">SWIFT</span>（Scalable lightWeight Infrastructure for Fine-Tuning，modelscope/ms-swift）是 ModelScope 的一体化训练框架，支持 300+ LLM/多模态模型的 SFT、<span class="key">LoRA/QLoRA</span>、DPO/RLHF、量化与推理导出。它是把前面蒸馏/LoRA/QAT 串起来的<strong>工程载体</strong>：（1）<strong>数据</strong>——统一的对话/多模态数据格式，便于把座舱指令、Function Calling 样本喂给 Qwen 系列；（2）<strong>微调</strong>——一行命令切换全量/LoRA/QLoRA，QLoRA 让 3-7B 模型在单张消费级 GPU 上即可微调，适合显存受限的研发机；（3）<strong>对齐</strong>——用 DPO 提升 Function Calling / JSON 输出的稳定性；（4）<strong>导出</strong>——训练后可合并 LoRA 权重并导出 ONNX，直接衔接 QNN 部署流水线。与 LoRA/蒸馏的关系：LoRA/蒸馏/QAT 是"方法"，SWIFT 是"框架"——把这些方法封装成可复现的训练配置。面试可强调选它的理由：对 Qwen 系列一等公民支持、训练→量化→导出链路完整，减少自研胶水代码。</p>
+  </div>
+</div>
+
+<h2 id="sec3">三、部署与优化题</h2>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q20: 请完整描述一个模型从训练到在 SA8397P 上运行的 QNN 部署流水线。</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>完整的 <span class="key">QNN 部署流水线</span> 分为五个阶段。第一阶段，<strong>模型导出</strong>：将 PyTorch/TF 训练好的模型导出为 <span class="key">ONNX</span> 格式（推荐 opset 13+），确保所有算子有标准 ONNX 对应。第二阶段，<strong>模型转换</strong>：使用 <code>qnn-onnx-converter</code> 将 ONNX 转换为 QNN IR（生成 .cpp 模型定义和 .bin 权重文件），此时可以指定量化参数或标记自定义算子。第三阶段，<strong>量化</strong>：准备 500-1000 张代表性标定数据，在<strong>转换器</strong>中完成——<code>qnn-onnx-converter --input_list calibration_list.txt --act_bw 8 --weight_bw 8</code> 在转换时统计激活值范围并生成 <span class="key">encoding 文件</span>（记录每层的 scale 和 zero_point）。注意 <code>qnn-net-run</code> 是执行/验证工具（在 x86 或设备上跑已构建好的模型），并不负责生成量化 encoding，切勿混淆。第四阶段，<strong>编译 Context Binary</strong>：使用 <code>qnn-context-binary-generator</code> 将量化后的模型编译为目标芯片的 <span class="key">Context Binary</span>（.bin），这一步会做算子调度、VTCM tiling、HMX/HVX 分配等芯片级优化，生成的二进制可直接被 DSP 加载执行。第五阶段，<strong>上板部署</strong>：将 Context Binary 推送到设备，应用通过 <code>QnnContext_createFromBinary()</code> 加载，注册输入输出 Tensor，调用 <code>QnnGraph_execute()</code> 执行推理。部署后需要用 <code>qnn-profile-viewer</code> 分析每层耗时，验证无算子 fallback。</p>
   </div>
 </div>
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q20: Context Binary 预编译和动态加载（JIT 编译）有什么区别？各有什么优劣？</span>
+    <span>Q21: Context Binary 预编译和动态加载（JIT 编译）有什么区别？各有什么优劣？</span>
     <span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
@@ -335,7 +346,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q21: 如何设计一条从摄像头到推理结果的零拷贝数据路径？</span>
+    <span>Q22: 如何设计一条从摄像头到推理结果的零拷贝数据路径？</span>
     <span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
@@ -346,7 +357,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q22: 座舱中多个 AI 模型（DMS/OMS/手势/语音）如何调度以共享 CDSP？</span>
+    <span>Q23: 座舱中多个 AI 模型（DMS/OMS/手势/语音）如何调度以共享 CDSP？</span>
     <span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
@@ -357,7 +368,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q23: 座舱 AI 系统的冷启动优化有哪些关键措施？</span>
+    <span>Q24: 座舱 AI 系统的冷启动优化有哪些关键措施？</span>
     <span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
@@ -368,7 +379,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q24: 请设计一个完整的 DMS 推理管线，从传感器到决策输出。</span>
+    <span>Q25: 请设计一个完整的 DMS 推理管线，从传感器到决策输出。</span>
     <span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
@@ -379,7 +390,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q25: 如何对端侧推理进行延迟 Profiling？常见瓶颈有哪些？</span>
+    <span>Q26: 如何对端侧推理进行延迟 Profiling？常见瓶颈有哪些？</span>
     <span class="diff diff-easy">初级</span>
   </div>
   <div class="q-body">
@@ -390,7 +401,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q26: FastRPC 调用超时如何排查和解决？</span>
+    <span>Q27: FastRPC 调用超时如何排查和解决？</span>
     <span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
@@ -402,11 +413,22 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 <!-- ========================================================== -->
 <!-- Section 4: Agent 与大模型题 (8 questions) -->
 <!-- ========================================================== -->
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q28: PTQ 精度不达标时，AIMET 有哪些"救精度"手段？per-channel / 对称量化为什么关键？</span>
+    <span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>朴素 PTQ 掉点时不必立刻上 QAT——Qualcomm <span class="key">AIMET</span> 提供几种低成本 PTQ 增强：（1）<span class="key">CLE</span>（Cross-Layer Equalization，跨层权重均衡）——利用 ReLU 的正尺度不变性在相邻 Conv 间重新缩放权重，压平各通道动态范围的悬殊，对 depthwise-heavy 的 MobileNet 尤其有效；（2）<span class="key">Bias Correction</span>（偏置校正）——量化会引入激活均值偏移，用校准集统计该偏移并补进 bias；（3）<span class="key">AdaRound</span>（自适应舍入）——不再简单"四舍五入"权重，而是用少量校准数据为每个权重学习向上/向下取整的最优选择，通常能把 INT8（乃至 INT4 权重）的掉点显著拉回。此外<strong>量化粒度是最重要的实操杠杆</strong>：<span class="key">per-channel</span>（逐输出通道各自 scale）远优于 per-tensor，权重尤甚；HTP 对权重偏好 per-channel + <span class="key">对称量化</span>（zero_point=0，省掉零点补偿、更快），激活则常用 per-tensor 非对称。实践顺序：per-channel 对称权重 → CLE → Bias Correction → AdaRound，仍不达标再上 QAT。</p>
+  </div>
+</div>
+
 <h2 id="sec4">四、Agent 与大模型题</h2>
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q27: 如何为座舱选择合适的端侧大语言模型？评估标准是什么？</span>
+    <span>Q29: 如何为座舱选择合适的端侧大语言模型？评估标准是什么？</span>
     <span class="diff diff-easy">初级</span>
   </div>
   <div class="q-body">
@@ -417,7 +439,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q28: 端侧 Function Calling 如何设计？与云端方案有什么区别？</span>
+    <span>Q30: 端侧 Function Calling 如何设计？与云端方案有什么区别？</span>
     <span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
@@ -428,7 +450,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q29: 端侧 Agent 的 Tool Use 需要哪些安全沙箱级别？如何设计？</span>
+    <span>Q31: 端侧 Agent 的 Tool Use 需要哪些安全沙箱级别？如何设计？</span>
     <span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
@@ -439,18 +461,18 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q30: 端侧 LLM 的 KV Cache 管理有哪些策略？内存不够时怎么办？</span>
+    <span>Q32: 端侧 LLM 的 KV Cache 管理有哪些策略？内存不够时怎么办？</span>
     <span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
-    <p><span class="key">KV Cache</span> 存储了 Transformer 注意力层中每个 token 的 Key 和 Value 向量，避免重复计算。对于一个 4B 参数的多模态模型（如 Qwen3-Omni-4B），每个 token 的 KV Cache 约占 1-2MB（取决于层数、头数和多模态 token 开销），2048 tokens 的 context window 需要约 2-3GB KV Cache，这在端侧内存受限环境下压力巨大。管理策略包括：第一，<span class="key">滑动窗口注意力</span>（Sliding Window Attention）：只保留最近 N 个 token 的 KV Cache（如 512），超出窗口的旧 token 的 KV 被丢弃。这牺牲了长距离依赖但大幅降低内存占用。第二，<span class="key">KV Cache 量化</span>：将 KV Cache 从 FP16 量化到 INT8 甚至 INT4，内存减半或减至四分之一，对生成质量影响可控（perplexity 增加 <1%）。第三，<span class="key">PagedAttention</span>：借鉴虚拟内存的分页思想，将 KV Cache 分为固定大小的 page（如 16 tokens/page），按需分配和释放，避免内存碎片。第四，<span class="key">重要性驱动的淘汰</span>：基于 attention score 统计识别"不重要"的历史 token，优先淘汰其 KV Cache。座舱场景中对话通常较短（5-10 轮），建议组合使用滑动窗口（窗口大小 1024）+ KV Cache INT8 量化，可以将内存占用控制在 800MB 以内。</p>
+    <p><span class="key">KV Cache</span> 存储了 Transformer 注意力层中每个 token 的 Key 和 Value 向量，避免重复计算。对于一个 4B 参数的多模态模型（如 Qwen3-Omni-4B），每个 token 的 KV Cache 约占 0.5MB（以 32 层、32 KV head、head_dim 128、FP16 计：2×32×32×128×2B≈512KB；若用 GQA 则更小），2048 tokens 的 context window 约需 1GB KV Cache（与后文估算题的算法一致），叠加权重后在端侧内存受限环境下压力已很大。管理策略包括：第一，<span class="key">滑动窗口注意力</span>（Sliding Window Attention）：只保留最近 N 个 token 的 KV Cache（如 512），超出窗口的旧 token 的 KV 被丢弃。这牺牲了长距离依赖但大幅降低内存占用。第二，<span class="key">KV Cache 量化</span>：将 KV Cache 从 FP16 量化到 INT8 甚至 INT4，内存减半或减至四分之一，对生成质量影响可控（perplexity 增加 <1%）。第三，<span class="key">PagedAttention</span>：借鉴虚拟内存的分页思想，将 KV Cache 分为固定大小的 page（如 16 tokens/page），按需分配和释放，避免内存碎片。第四，<span class="key">重要性驱动的淘汰</span>：基于 attention score 统计识别"不重要"的历史 token，优先淘汰其 KV Cache。座舱场景中对话通常较短（5-10 轮），建议组合使用滑动窗口（窗口大小 1024）+ KV Cache INT8 量化，可以将内存占用控制在 800MB 以内。</p>
   </div>
 </div>
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q31: 如何优化端侧 LLM 的 TTFT（首 Token 延迟）？</span>
+    <span>Q33: 如何优化端侧 LLM 的 TTFT（首 Token 延迟）？</span>
     <span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
@@ -461,7 +483,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q32: Speculative Decoding（投机解码）的原理是什么？端侧能用吗？</span>
+    <span>Q34: Speculative Decoding（投机解码）的原理是什么？端侧能用吗？</span>
     <span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
@@ -472,7 +494,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q33: 端云混合推理架构如何设计？如何决定哪些请求走端侧、哪些走云端？</span>
+    <span>Q35: 端云混合推理架构如何设计？如何决定哪些请求走端侧、哪些走云端？</span>
     <span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
@@ -483,7 +505,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q34: 座舱端侧 Agent 的 Memory（记忆系统）如何设计？</span>
+    <span>Q36: 座舱端侧 Agent 的 Memory（记忆系统）如何设计？</span>
     <span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
@@ -495,11 +517,22 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 <!-- ========================================================== -->
 <!-- Section 5: 综合系统设计题 (4 questions, all 高级) -->
 <!-- ========================================================== -->
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q37: MCP 与 A2A 有什么区别？座舱多 Agent 如何协作？</span>
+    <span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>两者是互补的协议层。<span class="key">MCP</span>（Model Context Protocol）解决 <strong>Agent↔工具/数据</strong> 的连接：把车控、导航、媒体、车辆状态等封装成标准化的 tool/resource，LLM 通过统一接口发现与调用（相当于"AI 的 USB-C"）。<span class="key">A2A</span>（Agent-to-Agent）解决 <strong>Agent↔Agent</strong> 的协作：不同 Agent 之间通过 Agent Card 发现彼此能力、委派任务、交换中间结果。座舱典型分工：SystemAgent（总控）用 A2A 把用户意图分派给专职 Agent——车控 Agent、导航 Agent、闲聊 Agent、主动视觉 Agent；每个专职 Agent 再用 MCP 去调它自己那组工具。好处是解耦（新增场景 Agent 不动主控）、能力可组合、便于按安全级别隔离权限。端侧实现要点：A2A 消息与 Function Calling 结果共用统一 schema；跨 Agent 调用同样要过安全沙箱与速率限制（见 Q31），避免 Agent 间循环调用。</p>
+  </div>
+</div>
+
 <h2 id="sec5">五、综合系统设计题</h2>
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q35: 请设计一个完整的 DMS 系统，从传感器选型到量产部署。</span>
+    <span>Q38: 请设计一个完整的 DMS 系统，从传感器选型到量产部署。</span>
     <span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
@@ -510,7 +543,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q36: 设计一个支持多模态输入的座舱 Agent 架构。</span>
+    <span>Q39: 设计一个支持多模态输入的座舱 Agent 架构。</span>
     <span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
@@ -521,7 +554,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q37: 设计座舱多模型调度系统，同时管理 DMS、OMS、手势识别和语音模型。</span>
+    <span>Q40: 设计座舱多模型调度系统，同时管理 DMS、OMS、手势识别和语音模型。</span>
     <span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
@@ -532,7 +565,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q38: 设计 DSP SSR 故障恢复策略，确保生产环境中 DMS 功能持续可用。</span>
+    <span>Q41: 设计 DSP SSR 故障恢复策略，确保生产环境中 DMS 功能持续可用。</span>
     <span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
@@ -548,7 +581,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q39: 面试中遇到系统设计题，应该用怎样的结构化思路作答？</span>
+    <span>Q42: 面试中遇到系统设计题，应该用怎样的结构化思路作答？</span>
     <span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
@@ -566,7 +599,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q40: 用 RASCEF 框架回答：设计一个车载端侧多模态大模型交互系统。</span>
+    <span>Q43: 用 RASCEF 框架回答：设计一个车载端侧多模态大模型交互系统。</span>
     <span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
@@ -574,7 +607,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
     <p><strong>R — 需求澄清</strong>：平台为 SA8397P（CDSP ~70 TOPS INT8、16GB LPDDR5x、~68 GB/s 带宽）；需支持语音对话、图像理解（车内外摄像头）、主动场景推荐；首字延迟 &lt;1s，decode 速率 &gt;8 tok/s；同时运行 DMS/OMS 等安全模型不可中断；支持离线使用；需满足 PIPL 和《汽车数据安全管理若干规定》。</p>
     <p><strong>A — 顶层架构</strong>：五层设计——(1) <span class="key">感知层</span>：4 路摄像头 + 麦克风阵列 + CAN 总线，ISP 硬件完成 RAW→YUV 转换；(2) <span class="key">预处理层</span>：图像 resize/crop 在 GPU 完成，音频 VAD 在 CPU 完成；(3) <span class="key">推理引擎层</span>：ModelScheduler 管理模型生命周期，优先级调度 DMS(P0)/OMS(P1)/LLM(P3)，Qwen3-Omni-4B INT4 部署在 CDSP 上，使用 Continuous Batching 服务多区域请求；(4) <span class="key">Agent 决策层</span>：SystemAgent 加载场景 Agent 插件（libagent_group.so），通过 MCP 协议调用 Function Calling 完成导航/空调/媒体控制；(5) <span class="key">输出层</span>：流式 TTS 合成（Qwen3-Omni 原生支持音频输出），HMI 渲染通过 Fusion DataTransport 分发到各屏幕。</p>
     <p><strong>S — 规模与存储</strong>：Qwen3-Omni-4B INT4 权重 ~2.5GB；KV Cache 预算 ~2GB（支持 2048 token 上下文）；DMS/OMS 模型共 ~200MB；系统总内存占用控制在 6GB 以内，留 10GB 给 Android 系统和 HMI。DDR 带宽分析：decode 阶段 LLM 需 ~5 GB/s（权重读取），DMS 30fps 需 ~3 GB/s，ISP ~8 GB/s，DPU ~6 GB/s，总计 ~22 GB/s，低于 68 GB/s 上限。模型从 Flash 冷加载约 8-10s，可通过预加载到 DDR 实现亚秒级切换。</p>
-    <p><strong>C — 核心算法</strong>：选择 Qwen3-Omni-4B 因为它原生支持音频输入和输出，单一模型替代传统的 ASR + LLM + TTS 三段管线，减少串联延迟和内存开销。量化方案采用 GPTQ INT4 per-group 量化，在精度损失可控的前提下将权重压缩至 2.5GB。注意力计算采用 <span class="key">FlashAttention</span>——将 Q/K/V 分块加载到 VTCM（~4MB），分 tile 计算 softmax 后写回 DDR，避免 O(n²) 的中间矩阵 materialization。长上下文场景下辅以 Sliding Window Attention 将 KV Cache 增长控制在常数级别。</p>
+    <p><strong>C — 核心算法</strong>：选择 Qwen3-Omni-4B 因为它原生支持音频输入和输出，单一模型替代传统的 ASR + LLM + TTS 三段管线，减少串联延迟和内存开销。量化方案采用 GPTQ INT4 per-group 量化，在精度损失可控的前提下将权重压缩至 2.5GB。注意力计算采用 <span class="key">FlashAttention</span>——将 Q/K/V 分块加载到 VTCM（约 8MB，与前文硬件小节一致），分 tile 计算 softmax 后写回 DDR，避免 O(n²) 的中间矩阵 materialization。长上下文场景下辅以 Sliding Window Attention 将 KV Cache 增长控制在常数级别。</p>
     <p><strong>E — 工程细节（展开 Continuous Batching）</strong>：车内多区域（主驾语音 + 副驾文字 + 后排娱乐）的请求通过 MsgDeliver 进入统一队列。调度器以 <span class="key">iteration 粒度</span>（而非 request 粒度）管理 batch——每个 decode step 完成后，检查是否有新请求进入 prefill、是否有请求完成 EOS。新请求的 prefill 与已有请求的 decode 可在同一 batch 中并行（prefill 在 HMX 上计算密集，decode 在 DDR 带宽受限，二者瓶颈不同，可部分重叠）。资源隔离：每个请求独立管理 KV Cache pages（类 vLLM 的 PagedAttention），request 完成后立即释放对应 pages。优先级策略：主驾语音请求标记 P1 可插队，后排娱乐请求标记 P3 在 CDSP 繁忙时排队等待。</p>
     <p><strong>F — 容错与降级</strong>：(1) LLM 推理超时（&gt;5s 无输出）——自动降级到本地规则引擎，返回预设回复"抱歉，请稍后再试"；(2) DSP SSR 崩溃——800ms 内完成 Context 重建，期间 DMS 切换到 CPU fallback 的轻量人脸检测模型；(3) 离线场景——所有推理在本地完成，禁用需要网络的 Function Calling（如在线导航），切换到离线地图 API；(4) OTA 模型更新——A/B 分区策略，新模型写入 B 分区，验证推理正确后才切换，失败自动回滚到 A 分区；(5) 热保护——DSP 温度 &gt;85°C 时降低 LLM decode 频率，&gt;95°C 时暂停 LLM 仅保留 DMS。</p>
   </div>
@@ -582,7 +615,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q41: 系统设计题中如何做好「估算」环节？以 LLM 推理资源估算为例说明。</span>
+    <span>Q44: 系统设计题中如何做好「估算」环节？以 LLM 推理资源估算为例说明。</span>
     <span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
@@ -602,7 +635,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q42: 如何在面试中介绍「端侧 AI Agent 框架」项目经验？</span>
+    <span>Q45: 如何在面试中介绍「端侧 AI Agent 框架」项目经验？</span>
     <span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
@@ -619,7 +652,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q43: 如何包装「模型量化与部署优化」相关的项目经验？</span>
+    <span>Q46: 如何包装「模型量化与部署优化」相关的项目经验？</span>
     <span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
@@ -628,14 +661,14 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
     <p><strong>可深挖的技术亮点</strong>：</p>
     <p>(1) <span class="key">ONNX→QNN 转换陷阱处理</span>：「PyTorch 导出 ONNX 时遇到动态 shape 问题——KV Cache 的 seq_len 维度是动态的，但 QNN 后端只支持固定 shape。解决方案是将 KV Cache 按最大长度预分配，通过 mask 控制有效长度，同时将 NCHW 布局转换为 QNN 偏好的 NHWC 避免额外 transpose 开销。」</p>
     <p>(2) <span class="key">量化精度调优</span>：「INT4 量化后发现模型在长对话场景下出现语义漂移。通过逐层输出对比定位到第 28-31 层的 FFN 模块对量化最敏感。解决方案是将这 4 层的 FFN 保持 INT8 精度（mixed-precision），模型体积仅增加 ~5% 但长对话准确率恢复到 FP16 的 97%。」</p>
-    <p>(3) <span class="key">FlashAttention 端侧适配</span>：「将 FlashAttention 的 tiling 策略适配到 Hexagon DSP 的 VTCM 约束（~4MB）。VTCM 需要同时存放 Q/K/V 的分块和 softmax 中间结果，通过计算最优 tile size（block_size = sqrt(VTCM_size / (3 × head_dim × dtype_size))）在计算效率和 VTCM 利用率之间找到平衡点。」</p>
+    <p>(3) <span class="key">FlashAttention 端侧适配</span>：「将 FlashAttention 的 tiling 策略适配到 Hexagon DSP 的 VTCM 约束（约 8MB）。VTCM 需要同时存放 Q/K/V 的分块和 softmax 中间结果，通过计算最优 tile size（block_size = sqrt(VTCM_size / (3 × head_dim × dtype_size))）在计算效率和 VTCM 利用率之间找到平衡点。」</p>
     <p><strong>包装原则</strong>：(1) 用「问题→分析→方案→效果」四段式讲述，不要只说"我做了 XX"；(2) 每个亮点附带一个具体数字（延迟降低 XX%、内存减少 XX MB）；(3) 强调端侧和云端的差异——面试官可能熟悉云端部署但不了解端侧约束，这正是你的差异化优势；(4) 准备好解释 Roofline Model 分析和 prefill/decode 的 compute-bound vs memory-bound 特性，这能展示理论功底。</p>
   </div>
 </div>
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q44: 技术面试中如何讲述「调试排障」经历才能加分？</span>
+    <span>Q47: 技术面试中如何讲述「调试排障」经历才能加分？</span>
     <span class="diff diff-easy">初级</span>
   </div>
   <div class="q-body">
@@ -654,7 +687,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q45: 「请介绍一个你主导的技术方案，说说你是如何推动落地的。」</span>
+    <span>Q48: 「请介绍一个你主导的技术方案，说说你是如何推动落地的。」</span>
     <span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
@@ -671,7 +704,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q46: 「说说你和同事在技术方案上产生分歧时是如何解决的。」</span>
+    <span>Q49: 「说说你和同事在技术方案上产生分歧时是如何解决的。」</span>
     <span class="diff diff-easy">初级</span>
   </div>
   <div class="q-body">
@@ -688,7 +721,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q47: 「描述一次你犯的技术错误以及你从中学到了什么。」</span>
+    <span>Q50: 「描述一次你犯的技术错误以及你从中学到了什么。」</span>
     <span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
@@ -706,7 +739,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q48: 行为面试通用准备清单与高频问题分类。</span>
+    <span>Q51: 行为面试通用准备清单与高频问题分类。</span>
     <span class="diff diff-easy">初级</span>
   </div>
   <div class="q-body">

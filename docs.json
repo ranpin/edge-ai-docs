@@ -11,9 +11,9 @@
           "title": "智能座舱面试指南",
           "file": "cockpit/general/interview.html",
           "kind": "面试",
-          "badge": "38 题",
+          "badge": "51 题",
           "status": "done",
-          "desc": "硬件系统、算法训练、部署优化、Agent 大模型、系统设计，38 题，难度分级，交互答题",
+          "desc": "硬件系统、算法训练、部署优化、Agent 大模型、系统设计，51 题，难度分级，交互答题",
           "tags": [
             "面试",
             "交互答题"
@@ -122,12 +122,12 @@
           "title": "通用机器人面试指南",
           "file": "robot/general/interview.html",
           "kind": "面试",
-          "badge": "29 题",
+          "badge": "32 题",
           "status": "done",
-          "desc": "平台选型、算法训练、部署实时控制、Agent 大模型、系统设计，29 题",
+          "desc": "平台选型、算法训练、部署实时控制、Agent 大模型、系统设计，32 题",
           "tags": [
             "面试",
-            "29 题"
+            "32 题"
           ]
         }
       ],
@@ -161,12 +161,12 @@
           "title": "自动驾驶面试指南",
           "file": "ad/general/interview.html",
           "kind": "面试",
-          "badge": "31 题",
+          "badge": "34 题",
           "status": "done",
-          "desc": "BEV 算法、端到端模型、数据训练、部署优化、驾驶 Agent、系统设计，31 题",
+          "desc": "BEV 算法、端到端模型、数据训练、部署优化、驾驶 Agent、系统设计，34 题",
           "tags": [
             "面试",
-            "31 题"
+            "34 题"
           ]
         }
       ],
