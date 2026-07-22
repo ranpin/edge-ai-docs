@@ -83,7 +83,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 <main class="main">
 
 <h1>自动驾驶 — 面试指南</h1>
-<p class="subtitle">31 道精选面试题 — 覆盖 BEV 感知、端到端架构、数据闭环、部署优化、Agent 安全与系统设计</p>
+<p class="subtitle">34 道精选面试题 — 覆盖 BEV 感知、端到端架构、数据闭环、部署优化、Agent 安全与系统设计</p>
 
 <!-- ==================== Section 1 ==================== -->
 <h2 id="s1">一、BEV 感知算法</h2>
@@ -94,7 +94,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
-    <p><span class="key">BEV</span>（Bird's Eye View）感知的核心是将多个相机的 2D 图像特征变换到统一的 3D 鸟瞰空间中，实现多视角融合和 3D 空间推理。2D→3D 变换的主流方法分为两大类。<span class="key">显式深度估计</span>（LSS 系列）：对每个图像像素预测深度分布（通常离散化为 D 个 depth bins），将 2D 特征沿射线方向 "提升"（lift）到 3D 空间，形成 frustum 特征体，再通过 "splat" 操作将所有相机的 frustum 投影到 BEV 网格上累加。代表方法包括 LSS、BEVDet、BEVDepth。其优势是几何可解释性强，但深度估计不准会导致特征错位。<span class="key">隐式查询投影</span>（Transformer 系列）：在 BEV 平面上定义一组可学习的查询（query），通过 cross-attention 机制到各相机图像特征上采样信息。具体地，每个 BEV query 根据相机内外参数计算其在各图像上的投影位置，从对应位置的图像特征中提取信息。代表方法包括 <span class="key">BEVFormer</span>（使用 deformable attention + spatial cross-attention）。其优势是不需要显式深度估计，端到端学习更灵活，但计算量较大。近期方法如 <span class="key">FB-BEV</span> 和 <span class="key">SOLOFusion</span> 开始融合两种范式的优势，同时使用深度估计和查询机制。</p>
+    <p><span class="key">BEV</span>（Bird's Eye View）感知的核心是将多个相机的 2D 图像特征变换到统一的 3D 鸟瞰空间中，实现多视角融合和 3D 空间推理。2D→3D 变换的主流方法分为两大类。<span class="key">显式深度估计</span>（LSS 系列）：对每个图像像素预测深度分布（通常离散化为 D 个 depth bins），将 2D 特征沿射线方向 "提升"（lift）到 3D 空间，形成 frustum 特征体，再通过 "splat" 操作将所有相机的 frustum 投影到 BEV 网格上累加。代表方法包括 LSS、BEVDet、BEVDepth。其优势是几何可解释性强，但深度估计不准会导致特征错位。<span class="key">隐式查询投影</span>（Transformer 系列）：在 BEV 平面上定义一组可学习的查询（query），通过 cross-attention 机制到各相机图像特征上采样信息。具体地，每个 BEV query 根据相机内外参数计算其在各图像上的投影位置，从对应位置的图像特征中提取信息。代表方法包括 <span class="key">BEVFormer</span>（使用 deformable attention + spatial cross-attention）。其优势是不需要显式深度估计，端到端学习更灵活，但计算量较大。近期方法如 <span class="key">FB-BEV / FB-OCC</span>（前向 LSS 深度投影 + 后向 BEVFormer 查询）开始融合两种范式的优势，同时使用深度估计和查询机制。（注：SOLOFusion 常被误归此类，它其实是长/短时序融合方法，见 Q2。）</p>
   </div>
 </div>
 
@@ -134,7 +134,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
-    <p>nuScenes 数据集定义了自动驾驶 3D 检测的标准评价指标体系。<span class="key">mAP</span>（mean Average Precision）的计算方式与 2D 检测不同：不使用 IoU 阈值匹配，而是基于 <span class="key">BEV 中心距离</span>匹配——在 BEV 平面上计算预测框和真值框中心点距离，使用 {0.5m, 1m, 2m, 4m} 四个距离阈值，每个阈值下计算各类别的 AP（对 recall-precision 曲线积分），然后对所有类别和阈值取平均得到 mAP。<span class="key">NDS</span>（nuScenes Detection Score）是综合评价指标，计算公式为：NDS = (1/10) * [5 * mAP + sum(mTP)]，其中 mTP 是五个 True Positive 指标的归一化平均值，包括：<span class="key">mATE</span>（平均平移误差，衡量位置精度）、<span class="key">mASE</span>（平均尺寸误差，衡量大小精度）、<span class="key">mAOE</span>（平均朝向误差，衡量角度精度）、<span class="key">mAVE</span>（平均速度误差，衡量运动估计）、<span class="key">mAAE</span>（平均属性误差，衡量属性分类如是否在移动）。NDS 的设计使得模型不仅要检测到目标（mAP），还要准确估计其位置、大小、朝向和运动状态，更全面地反映 3D 感知质量。当前 SOTA 模型在 nuScenes test set 上 NDS 可达 75+，mAP 可达 70+。</p>
+    <p>nuScenes 数据集定义了自动驾驶 3D 检测的标准评价指标体系。<span class="key">mAP</span>（mean Average Precision）的计算方式与 2D 检测不同：不使用 IoU 阈值匹配，而是基于 <span class="key">BEV 中心距离</span>匹配——在 BEV 平面上计算预测框和真值框中心点距离，使用 {0.5m, 1m, 2m, 4m} 四个距离阈值，每个阈值下计算各类别的 AP（对 recall-precision 曲线积分），然后对所有类别和阈值取平均得到 mAP。<span class="key">NDS</span>（nuScenes Detection Score）是综合评价指标，计算公式为：NDS = (1/10) · [5·mAP + Σ<sub>TP</sub>(1 − min(1, mTP))]——对五个 True Positive <strong>误差</strong>指标各做 (1 − min(1, 误差)) 转成分数再求和（误差越大得分越低），故权重 5（mAP）+ 5（TP）合计 10。五个 TP 指标为：<span class="key">mATE</span>（平均平移误差，衡量位置精度）、<span class="key">mASE</span>（平均尺寸误差，衡量大小精度）、<span class="key">mAOE</span>（平均朝向误差，衡量角度精度）、<span class="key">mAVE</span>（平均速度误差，衡量运动估计）、<span class="key">mAAE</span>（平均属性误差，衡量属性分类如是否在移动）。NDS 的设计使得模型不仅要检测到目标（mAP），还要准确估计其位置、大小、朝向和运动状态，更全面地反映 3D 感知质量。当前 SOTA 模型在 nuScenes test set 上 NDS 可达 75+，mAP 可达 70+。</p>
   </div>
 </div>
 
@@ -144,7 +144,27 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
-    <p>Camera 和 LiDAR 在 BEV 空间中融合面临空间对齐和特征对齐的双重挑战。<span class="key">空间对齐</span>：Camera 和 LiDAR 的安装位置不同，需要通过外参标定将两者的坐标系统一到自车坐标系。LiDAR 点云可以直接投影到 BEV 网格（按 x-y 位置分配到网格并编码 z 维度特征），Camera 特征则需要通过 LSS/BEVFormer 等方法变换到 BEV 空间。关键是确保两者投影到的 BEV 网格分辨率和范围一致（如均为 0.5m/pixel，覆盖 [-50m, 50m]）。<span class="key">特征级融合</span>方法主要有三种：<span class="key">逐点拼接</span>（Concatenation）——将 Camera BEV 特征和 LiDAR BEV 特征在 channel 维度拼接，再通过卷积融合，简单但可能被低质量模态拖累；<span class="key">注意力融合</span>（如 BEVFusion 的方法）——使用 cross-attention 或 gating 机制让两个模态互相增强，LiDAR 提供精确的几何信息，Camera 提供丰富的语义信息；<span class="key">统一 BEV 编码器</span>（如 UniFormer）——将两个模态的 BEV 特征统一送入一个 Transformer 编码器，通过自注意力自动学习跨模态交互。<span class="key">时间对齐</span>也很重要：Camera 和 LiDAR 的采集时刻可能不完全同步（如 Camera 30fps vs LiDAR 10fps），需要根据时间差和自车运动对 LiDAR 点云做 ego-motion compensation。BEVFusion（MIT 版本）的实验表明，Camera+LiDAR 融合相比纯 LiDAR 方案可提升 mAP 约 1-3 个点，在远距离和小目标检测上改善尤其明显。</p>
+    <p>Camera 和 LiDAR 在 BEV 空间中融合面临空间对齐和特征对齐的双重挑战。<span class="key">空间对齐</span>：Camera 和 LiDAR 的安装位置不同，需要通过外参标定将两者的坐标系统一到自车坐标系。LiDAR 点云可以直接投影到 BEV 网格（按 x-y 位置分配到网格并编码 z 维度特征），Camera 特征则需要通过 LSS/BEVFormer 等方法变换到 BEV 空间。关键是确保两者投影到的 BEV 网格分辨率和范围一致（如均为 0.5m/pixel，覆盖 [-50m, 50m]）。<span class="key">特征级融合</span>方法主要有三种：<span class="key">逐点拼接</span>（Concatenation）——将 Camera BEV 特征和 LiDAR BEV 特征在 channel 维度拼接，再通过卷积融合，简单但可能被低质量模态拖累；<span class="key">注意力融合</span>（如 BEVFusion 的方法）——使用 cross-attention 或 gating 机制让两个模态互相增强，LiDAR 提供精确的几何信息，Camera 提供丰富的语义信息；<span class="key">统一 BEV 编码器</span>（如 UVTR，或 BEVFusion 的共享 BEV 编码器）——将两个模态的 BEV 特征统一送入一个 Transformer 编码器，通过自注意力自动学习跨模态交互。<span class="key">时间对齐</span>也很重要：Camera 和 LiDAR 的采集时刻可能不完全同步（如 Camera 30fps vs LiDAR 10fps），需要根据时间差和自车运动对 LiDAR 点云做 ego-motion compensation。BEVFusion（MIT 版本）的实验表明，Camera+LiDAR 融合相比纯 LiDAR 方案可提升 mAP 约 1-3 个点，在远距离和小目标检测上改善尤其明显。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q7: 3D 语义占用（Occupancy）网络解决了 BEV 框式检测的什么短板？</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>框式（bounding-box）检测只能识别<strong>训练过的类别</strong>、且用长方体近似形状，对不规则障碍（翻倒货物、施工设施）、悬空障碍（限高横杆）和未知类别（open-set）容易漏检。<span class="key">3D 语义占用</span>把空间体素化，预测每个 voxel 的占用概率 + 语义（+可选运动 flow），本质是"稠密几何 + 语义"，能表达任意形状与未知障碍——这对安全至关重要（宁可判为"占用不可通行"也不放过）。表征权衡：稠密 voxel 显存/算力大，<span class="key">TPV</span>（三视图，TPVFormer）与稀疏化是常见折中，BEV 可看作把高度压扁的特例。代表工作：MonoScene、TPVFormer、SurroundOcc、OccNet，以及 <span class="key">Occ3D / OpenOccupancy</span> 基准。产线上常把 occupancy 与框检测并行：occupancy 兜底通用障碍，检测提供带 ID/速度的实例。特斯拉的 occupancy network 是其纯视觉方案的关键一环。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q8: 4D 成像雷达与传统毫米波雷达的区别？为什么进 BEV 融合？</span><span class="diff diff-mid">中级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>传统毫米波雷达只给距离 + 方位 + 相对速度（Doppler），点云稀疏、几乎无高度信息，多用于 ACC/AEB 的测距测速。<span class="key">4D 成像雷达</span>增加了<strong>俯仰（elevation）</strong>维度，输出稠密得多的点云，能给出目标高度与更细轮廓，同时保留 radar 固有优势：直接测速、全天候（雨雾/逆光/黑夜）鲁棒、成本低于 LiDAR。因此它越来越多作为一路模态进 <span class="key">BEV 融合</span>——用 radar pillar/point encoder 生成 radar BEV 特征，与 camera BEV（缺深度与测速）互补：camera 给语义、radar 给几何与速度且不惧恶劣天气。局限：分辨率仍逊于 LiDAR，多径与杂波需滤除。典型用法是 camera + 4D radar 的低成本高鲁棒组合，用于对标"纯视觉 + LiDAR"。</p>
   </div>
 </div>
 
@@ -153,7 +173,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q7: 端到端自动驾驶 (UniAD/VAD) vs 模块化方案的优劣</span><span class="diff diff-mid">中级</span>
+    <span>Q9: 端到端自动驾驶 (UniAD/VAD) vs 模块化方案的优劣</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -163,7 +183,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q8: 端到端模型的可解释性问题</span><span class="diff diff-hard">高级</span>
+    <span>Q10: 端到端模型的可解释性问题</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -173,7 +193,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q9: 端到端模型的中间表征设计</span><span class="diff diff-hard">高级</span>
+    <span>Q11: 端到端模型的中间表征设计</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -183,7 +203,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q10: GenAD 等生成式驾驶模型的价值</span><span class="diff diff-hard">高级</span>
+    <span>Q12: GenAD 等生成式驾驶模型的价值</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -193,7 +213,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q11: 模块化方案中各模块的接口设计原则</span><span class="diff diff-mid">中级</span>
+    <span>Q13: 模块化方案中各模块的接口设计原则</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -206,7 +226,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q12: 数据飞轮 (data flywheel) 设计</span><span class="diff diff-hard">高级</span>
+    <span>Q14: 数据飞轮 (data flywheel) 设计</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -216,7 +236,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q13: 长尾 Corner Case 的自动发现方法</span><span class="diff diff-hard">高级</span>
+    <span>Q15: 长尾 Corner Case 的自动发现方法</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -226,7 +246,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q14: 仿真数据在训练中的有效利用</span><span class="diff diff-mid">中级</span>
+    <span>Q16: 仿真数据在训练中的有效利用</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -236,7 +256,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q15: 影子模式 (shadow mode) 的工作原理</span><span class="diff diff-mid">中级</span>
+    <span>Q17: 影子模式 (shadow mode) 的工作原理</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -246,7 +266,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q16: 主动学习在自动驾驶数据标注中的应用</span><span class="diff diff-mid">中级</span>
+    <span>Q18: 主动学习在自动驾驶数据标注中的应用</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -259,7 +279,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q17: BEV 模型端侧量化的特殊挑战</span><span class="diff diff-hard">高级</span>
+    <span>Q19: BEV 模型端侧量化的特殊挑战</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -269,7 +289,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q18: Temporal 特征缓存策略</span><span class="diff diff-mid">中级</span>
+    <span>Q20: Temporal 特征缓存策略</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -279,7 +299,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q19: 多传感器数据同步在部署中的处理</span><span class="diff diff-mid">中级</span>
+    <span>Q21: 多传感器数据同步在部署中的处理</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -289,7 +309,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q20: TensorRT vs QNN 在 AD 场景的选择</span><span class="diff diff-mid">中级</span>
+    <span>Q22: TensorRT vs QNN 在 AD 场景的选择</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -299,7 +319,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q21: 模型推理实时性保证策略</span><span class="diff diff-mid">中级</span>
+    <span>Q23: 模型推理实时性保证策略</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -309,7 +329,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q22: OTA 模型更新的安全机制</span><span class="diff diff-mid">中级</span>
+    <span>Q24: OTA 模型更新的安全机制</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -322,7 +342,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q23: VLM 在驾驶场景中的应用方式</span><span class="diff diff-mid">中级</span>
+    <span>Q25: VLM 在驾驶场景中的应用方式</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -332,7 +352,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q24: 驾驶 Agent 安全约束设计</span><span class="diff diff-hard">高级</span>
+    <span>Q26: 驾驶 Agent 安全约束设计</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -342,7 +362,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q25: 端云协同推理的分工策略</span><span class="diff diff-mid">中级</span>
+    <span>Q27: 端云协同推理的分工策略</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -352,17 +372,17 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q26: ASIL 等级分解方法</span><span class="diff diff-mid">中级</span>
+    <span>Q28: ASIL 等级分解方法</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
-    <p><span class="key">ASIL</span>（Automotive Safety Integrity Level）是 ISO 26262 定义的汽车安全完整性等级，从低到高分为 QM、ASIL-A、ASIL-B、ASIL-C、ASIL-D。ASIL 等级由三个因素决定：<span class="key">严重度</span>（Severity, S1-S3）——事故对人员伤害程度；<span class="key">暴露度</span>（Exposure, E1-E4）——危险场景出现的概率；<span class="key">可控度</span>（Controllability, C1-C3）——驾驶员或系统避免伤害的能力。三者通过风险矩阵映射到 ASIL 等级。<span class="key">ASIL 分解</span>是将高 ASIL 等级的安全需求分解到多个组件，使每个组件承担更低的 ASIL 等级，降低开发成本和难度。分解规则基于 <span class="key">冗余独立原则</span>：ASIL-D 可分解为 ASIL-D(D) + QM、ASIL-C(D) + ASIL-A(D)、ASIL-B(D) + ASIL-B(D)（括号中的 D 表示分解来源）。例如：AEB（自动紧急制动）功能被评估为 ASIL-D，可以分解为：主感知通路（Camera BEV 检测）承担 ASIL-B(D) + 冗余感知通路（Radar 检测）承担 ASIL-B(D），两个独立通路任一检测到碰撞风险都触发制动。分解的前提是两个组件必须满足<span class="key">独立性</span>（independent）和<span class="key">无共因失效</span>（freedom from interference）——不共享硬件、不共享软件、不共享开发团队。这就是为什么自动驾驶系统通常使用 Camera + Radar 的冗余方案，而不是两个 Camera，因为两个 Camera 共享相似的失效模式（如逆光致盲）。</p>
+    <p><span class="key">ASIL</span>（Automotive Safety Integrity Level）是 ISO 26262 定义的汽车安全完整性等级，从低到高分为 QM、ASIL-A、ASIL-B、ASIL-C、ASIL-D。ASIL 等级由三个因素决定：<span class="key">严重度</span>（Severity, S1-S3）——事故对人员伤害程度；<span class="key">暴露度</span>（Exposure, E1-E4）——危险场景出现的概率；<span class="key">可控度</span>（Controllability, C1-C3）——驾驶员或系统避免伤害的能力。三者通过风险矩阵映射到 ASIL 等级。<span class="key">ASIL 分解</span>是将高 ASIL 等级的安全需求分解到多个组件，使每个组件承担更低的 ASIL 等级，降低开发成本和难度。分解规则基于 <span class="key">冗余独立原则</span>：ASIL-D 可分解为 ASIL-D(D) + QM、ASIL-C(D) + ASIL-A(D)、ASIL-B(D) + ASIL-B(D)（括号中的 D 表示分解来源）。例如：AEB（自动紧急制动）功能被评估为 ASIL-D，可以分解为：主感知通路（Camera BEV 检测）承担 ASIL-B(D) + 冗余感知通路（Radar 检测）承担 ASIL-B(D），两个独立通路任一检测到碰撞风险都触发制动。分解的前提是两个组件必须满足<span class="key">充分独立性</span>（sufficient independence）并做<span class="key">共因失效 CCF</span>（common-cause failure）分析——不共享硬件、不共享软件、不共享开发团队。（勿与"freedom from interference / FFI"混淆——后者是不同 ASIL 元素共存互不干扰的准则，用于混合关键度集成，不是分解独立性准则。）这就是为什么自动驾驶系统通常使用 Camera + Radar 的冗余方案，而不是两个 Camera，因为两个 Camera 共享相似的失效模式（如逆光致盲）。</p>
   </div>
 </div>
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q27: 冗余系统设计原则</span><span class="diff diff-mid">中级</span>
+    <span>Q29: 冗余系统设计原则</span><span class="diff diff-mid">中级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -372,11 +392,21 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q28: SOTIF (预期功能安全) 分析方法</span><span class="diff diff-hard">高级</span>
+    <span>Q30: SOTIF (预期功能安全) 分析方法</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
     <p><span class="key">SOTIF</span>（Safety Of The Intended Functionality, ISO 21448）关注的是系统在无故障状态下因功能不足或人员误用导致的危害——这正是 AI 感知系统的核心安全挑战。与 ISO 26262（关注硬件/软件故障）不同，SOTIF 关注的是 "系统正确运行但仍可能不安全" 的情况，如：感知模型漏检行人（功能不足）、驾驶员对自动驾驶能力过度信任（误用）。SOTIF 分析方法包括以下步骤。<span class="key">场景分析</span>：识别所有可能触发功能不足的场景——将驾驶场景按 <span class="key">四象限模型</span>分类：Area 1（已知安全场景）、Area 2（已知不安全场景）、Area 3（未知不安全场景）、Area 4（未知安全场景）。SOTIF 的目标是缩小 Area 2 和 Area 3。<span class="key">触发条件分析</span>：系统性地识别导致感知/决策失败的触发条件（Triggering Conditions），如强逆光、大雨、异形车辆、非常规交通参与者行为等，每个触发条件评估其发生概率和导致的危害严重度。<span class="key">验证与确认</span>：通过大规模路测里程（如 10 亿公里仿真 + 1000 万公里实车）统计残余风险，验证 Area 2 和 Area 3 的面积足够小（残余风险可接受）。<span class="key">针对 AI 模型的特殊分析</span>：评估模型的 ODD（运行设计域）边界——在哪些条件下模型性能会退化到不可接受的水平；使用对抗样本测试模型的鲁棒性；建立模型性能监控（runtime monitoring），检测模型输出的置信度异常并触发降级。SOTIF 要求建立持续改进的闭环——每个已知的不安全场景都要制定消除或缓解措施，然后验证措施有效性。</p>
+  </div>
+</div>
+
+<div class="q-card">
+  <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
+    <span>Q31: 除了 SPFM，ASIL-D 还有哪些量化安全指标？FTTI 是什么？</span><span class="diff diff-hard">高级</span>
+  </div>
+  <div class="q-body">
+    <p><strong>答案：</strong></p>
+    <p>ISO 26262 对硬件随机失效给出三个量化度量，ASIL-D 的门槛为：<span class="key">SPFM</span>（单点故障度量）≥ 99%、<span class="key">LFM</span>（潜伏故障度量，Latent Fault Metric）≥ 90%、<span class="key">PMHF</span>（随机硬件失效概率，Probabilistic Metric for random HW Failures）&lt; 10⁻⁸ /h（即 &lt; 10 FIT）。（对照：ASIL-B 约 SPFM≥90% / PMHF&lt;10⁻⁷；ASIL-C 约 SPFM≥97% / PMHF&lt;10⁻⁷。）时间维度的关键概念是 <span class="key">FTTI</span>（Fault Tolerant Time Interval，容错时间间隔）——从故障发生到"若不处置即导致危害"的最长时间；系统必须在 FTTI 内完成"检测 + 进入安全状态"，即 <span class="key">FTTI ≥ FDTI（故障检测时间）+ FRTI（故障响应时间）</span>。例如 AEB 制动链的 FTTI 很短，就要求安全监控 MCU 的检测与切换极快。这些指标经 HARA → 安全目标 → FMEDA/FTA 定量分配到软硬件，是功能安全面试的高频量化点。</p>
   </div>
 </div>
 
@@ -385,7 +415,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q29: 设计 L2+ 高速场景的完整感知方案</span><span class="diff diff-hard">高级</span>
+    <span>Q32: 设计 L2+ 高速场景的完整感知方案</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -395,7 +425,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q30: 设计越野场景的可通行性判断系统</span><span class="diff diff-hard">高级</span>
+    <span>Q33: 设计越野场景的可通行性判断系统</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
@@ -405,7 +435,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <div class="q-card">
   <div class="q-header" onclick="this.parentElement.classList.toggle('open')">
-    <span>Q31: 设计自动驾驶系统的功能安全架构</span><span class="diff diff-hard">高级</span>
+    <span>Q34: 设计自动驾驶系统的功能安全架构</span><span class="diff diff-hard">高级</span>
   </div>
   <div class="q-body">
     <p><strong>答案：</strong></p>
