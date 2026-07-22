@@ -129,6 +129,19 @@
             "面试",
             "32 题"
           ]
+        },
+        {
+          "title": "Datawhale 具身智能教程 · every-embodied",
+          "file": "https://github.com/datawhalechina/every-embodied",
+          "kind": "参考",
+          "badge": "开源教程",
+          "status": "done",
+          "desc": "Datawhale 开源具身智能教程（Zero to Hero）：机器人运动学、CV、运动规划/控制、RL、仿真、VLA/世界模型，工程可复现、仅需 Python 基础。外部链接，点击直达 GitHub。",
+          "tags": [
+            "具身智能",
+            "VLA",
+            "开源教程"
+          ]
         }
       ],
       "projects": [
