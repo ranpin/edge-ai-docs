@@ -108,6 +108,19 @@
                 "Profiler",
                 "排障"
               ]
+            },
+            {
+              "title": "APK 集成与端侧服务化",
+              "file": "cockpit/projects/agent-framework/apk-integration.html",
+              "badge": "Part G",
+              "status": "done",
+              "desc": "lantu_demo 宿主 APK：三层架构、JNI 桥接、NanoHTTPD 本地服务、多模态协议转换、前台服务自愈、QNN Skel 打包、上车部署脚本",
+              "tags": [
+                "APK",
+                "JNI",
+                "NanoHTTPD",
+                "自愈"
+              ]
             }
           ]
         }
