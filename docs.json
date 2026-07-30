@@ -54,6 +54,19 @@
             "投机采样",
             "约束解码"
           ]
+        },
+        {
+          "title": "Android 开发 & JNI 基础",
+          "file": "cockpit/general/android-jni.html",
+          "badge": "基础",
+          "status": "done",
+          "desc": "从创建工程到 JNI 桥接的完整学习路径：工程结构、Gradle、四大组件、JNI 命名/类型映射/句柄模式/C++ 回调、CMake 与 .so、NPU/FastRPC、前台服务自愈，以 lantu_demo 为教材",
+          "tags": [
+            "Android",
+            "JNI",
+            "Gradle",
+            "教程"
+          ]
         }
       ],
       "projects": [
