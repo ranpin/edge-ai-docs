@@ -5,21 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>自动驾驶 — 面试指南 — Edge AI Docs</title>
 <style>
-:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-h:52px}
-[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e}
+:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-bg:rgba(255,255,255,.82);--nav-h:52px}
+[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e;--nav-bg:rgba(15,15,26,.82)}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
-.top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;z-index:1000}
-.top-nav .logo{font-weight:700;font-size:15px;color:var(--accent);margin-right:24px;text-decoration:none}
+.top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);display:flex;align-items:center;gap:4px;padding:0 20px;z-index:1000;background:var(--nav-bg);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+.top-nav .logo{font-weight:800;font-size:15px;letter-spacing:.3px;color:var(--accent);margin-right:20px;text-decoration:none;transition:opacity .2s}
+.top-nav .logo:hover{opacity:.75}
 .top-nav .links{display:flex;gap:2px;flex-wrap:wrap;align-items:center}
-.top-nav .links a{padding:4px 10px;border-radius:5px;text-decoration:none;color:var(--text2);font-size:12px;font-weight:500}
+.top-nav .links a{position:relative;padding:5px 11px;border-radius:7px;text-decoration:none;color:var(--text2);font-size:12.5px;font-weight:500;transition:color .18s,background .18s}
 .top-nav .links a:hover{background:var(--accentL);color:var(--accent)}
-.top-nav .links a.active{background:var(--accent);color:#fff}
-.top-nav .links .grp{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;padding:0 6px 0 10px;white-space:nowrap}
+.top-nav .links a.active{background:var(--accent);color:#fff;font-weight:600;box-shadow:0 2px 8px rgba(67,97,238,.35)}
+.top-nav .links .grp{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1.2px;text-transform:uppercase;padding:0 7px 0 12px;white-space:nowrap}
 .top-nav .links .grp:first-child{padding-left:2px}
-.top-nav .links .div{width:1px;height:14px;background:var(--border);margin:0 4px}
+.top-nav .links .div{width:1px;height:16px;background:var(--border);margin:0 6px}
 .top-nav .right{margin-left:auto}
-.theme-btn{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--text)}
+.theme-btn{background:transparent;border:1px solid var(--border);border-radius:8px;padding:5px 10px;cursor:pointer;font-size:13px;color:var(--text2);transition:color .18s,border-color .18s,background .18s}
+.theme-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accentL)}
 .sidebar{position:fixed;top:var(--nav-h);left:0;bottom:0;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;z-index:900}
 .sidebar a{display:block;padding:4px 16px 4px 20px;text-decoration:none;color:var(--text2);font-size:12px;border-left:3px solid transparent}
 .sidebar a:hover{color:var(--accent);background:var(--accentL)}
