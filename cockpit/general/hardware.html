@@ -13,14 +13,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans S
 .top-nav .logo{display:flex;align-items:center;font-weight:800;font-size:15px;letter-spacing:.2px;color:var(--text);margin-right:22px;text-decoration:none;transition:opacity .2s}
 .top-nav .logo::before{content:"";width:9px;height:9px;border-radius:3px;background:var(--accent);margin-right:9px;box-shadow:0 0 0 3px var(--accentL)}
 .top-nav .logo:hover{opacity:.7}
-.top-nav .links{display:flex;gap:2px;flex-wrap:wrap;align-items:center}
-.top-nav .links a{position:relative;padding:6px 12px;border-radius:8px;text-decoration:none;color:var(--text2);font-size:13px;font-weight:500;transition:color .18s,background .18s}
-.top-nav .links a:hover{background:var(--accentL);color:var(--accent)}
-.top-nav .links a.active{background:var(--accentL);color:var(--accent);font-weight:600}
-.top-nav .links a.active::after{content:"";position:absolute;left:10px;right:10px;bottom:2px;height:2px;border-radius:2px;background:var(--accent)}
-.top-nav .links .grp{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1.2px;text-transform:uppercase;padding:0 8px 0 14px;white-space:nowrap}
-.top-nav .links .grp:first-child{padding-left:2px}
-.top-nav .links .div{width:1px;height:16px;background:var(--border);margin:0 6px}
 .top-nav .right{margin-left:auto}
 .theme-btn{background:transparent;border:1px solid var(--border);border-radius:8px;padding:5px 10px;cursor:pointer;font-size:13px;color:var(--text2);transition:color .18s,border-color .18s,background .18s}
 .theme-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accentL)}
@@ -61,26 +53,8 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 </head>
 <body>
 
-<nav class="top-nav">
-  <a href="../../index.html" class="logo">Edge AI Docs</a>
-  <div class="links">
-    <span class="grp">通识</span>
-    <a href="hardware.html" class="active">硬件</a>
-    <a href="training.html">训练</a>
-    <a href="infer.html">推理优化</a>
-    <a href="interview.html">面试</a>
-    <a href="android-jni.html">安卓&amp;JNI</a>
-    <span class="div"></span>
-    <span class="grp">项目·Agent框架</span>
-    <a href="../../cockpit-agent.html">总览</a>
-    <a href="../projects/agent-framework/deploy.html">部署</a>
-    <a href="../projects/agent-framework/agent-core.html">核心框架</a>
-    <a href="../projects/agent-framework/agent-group.html">场景Agent</a>
-    <a href="../projects/agent-framework/debug.html">调试</a>
-    <a href="../projects/agent-framework/apk-integration.html">APK集成</a>
-  </div>
-  <div class="right"><button class="theme-btn" id="themeBtn">Light/Dark</button></div>
-</nav>
+<nav class="top-nav"></nav>
+<script src="../../nav.js" data-active="cockpit/general/hardware.html"></script>
 
 <aside class="sidebar">
   <div class="toc-part">Part A: 硬件与系统底层</div>
