@@ -8,7 +8,7 @@
 :root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-bg:rgba(255,255,255,.82);--nav-h:52px}
 [data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e;--nav-bg:rgba(15,15,26,.82)}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px;overflow-wrap:break-word}
 .top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);display:flex;align-items:center;padding:0 20px;z-index:1000;background:var(--nav-bg);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
 .top-nav .logo{display:flex;align-items:center;font-weight:800;font-size:15px;letter-spacing:.2px;color:var(--text);margin-right:22px;text-decoration:none;transition:opacity .2s}
 .top-nav .logo::before{content:"";width:9px;height:9px;border-radius:3px;background:var(--accent);margin-right:9px;box-shadow:0 0 0 3px var(--accentL)}
@@ -34,6 +34,7 @@ strong{color:var(--text)}
 .info-box.err{border-left-color:var(--danger)}
 .info-box .title{font-weight:700;font-size:13px;margin-bottom:4px}
 table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+.tbl-wrap{overflow-x:auto}
 th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
 th{background:var(--accentL);color:var(--accentD);font-weight:600}
 tr:nth-child(even){background:var(--bg2)}
@@ -85,7 +86,7 @@ ol.steps code{font-size:12px}
 
 <h3 id="sec-tools">1.1 调试工具总览</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>工具</th><th>类别</th><th>用途</th><th>典型使用场景</th></tr>
 </thead>
@@ -127,7 +128,7 @@ ol.steps code{font-size:12px}
   <td>量化敏感度分析（逐层量化精度影响）；混合精度量化策略搜索；量化后模型精度恢复（AdaRound / CLE）</td>
 </tr>
 </tbody>
-</table>
+</table></div>
 
 <h3 id="sec-tree">1.2 排障决策树</h3>
 <p>当端侧推理出现问题时，按以下决策树系统排查，避免盲目调试：</p>
@@ -208,7 +209,7 @@ flowchart TD
 <h3 id="sec-perf">1.4 常见性能优化清单</h3>
 <p>以下清单涵盖端侧推理的常见性能优化点，按优先级排序：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>优先级</th><th>优化项</th><th>检查方法</th><th>预期提升</th><th>注意事项</th></tr>
 </thead>
@@ -284,7 +285,7 @@ flowchart TD
   <td>确保输入 tensor 128 字节对齐；使用 NHWC 布局（HTP 原生格式）避免运行时 transpose。</td>
 </tr>
 </tbody>
-</table>
+</table></div>
 
 <div class="info-box ok">
 <div class="title">性能优化黄金法则</div>
@@ -319,7 +320,7 @@ flowchart TD
     style H fill:#2ecc71,color:#fff
 </div></div>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>问题现象</th><th>可能原因</th><th>排查方法</th><th>解决方案</th></tr>
 </thead>
@@ -355,13 +356,13 @@ flowchart TD
 <td>重新转换量化模型</td>
 </tr>
 </tbody>
-</table>
+</table></div>
 
 <h3>2.2 量化敏感层分析</h3>
 
 <p>LLM 的不同层对量化的敏感度差异很大。通常以下层最为敏感：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>层类型</th><th>量化敏感度</th><th>原因</th><th>建议精度</th></tr>
 </thead>
@@ -373,7 +374,7 @@ flowchart TD
 <tr><td><strong>后几层 Attention</strong></td><td>中</td><td>接近输出，精度影响较直接</td><td>INT8 或 INT4</td></tr>
 <tr><td><strong>Vision Encoder</strong></td><td>中-高</td><td>图像特征编码精度影响多模态理解</td><td>INT8</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <pre><code># 逐层精度敏感度分析 (AIMET 方式)
 # 逐个将每层量化为 INT4，其余保持 FP16，观察 Perplexity 变化
@@ -405,7 +406,7 @@ for layer_idx in range(num_layers):
 
 <p>端侧 LLM 推理的内存占用由以下部分组成，理解各部分的大小和增长模式是排障的前提：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>内存组成</th><th>大小估算 (Qwen3-Omni-4B INT4)</th><th>是否随推理增长</th><th>说明</th></tr>
 </thead>
@@ -417,7 +418,7 @@ for layer_idx in range(num_layers):
 <tr><td><strong>Vision Encoder</strong></td><td>~300-500 MB</td><td>否（独立模型）</td><td>ViT 权重 + 图像预处理缓冲区</td></tr>
 <tr><td><strong>总计</strong></td><td>~3.5-4.0 GB（初始）</td><td>KV Cache 持续增长</td><td>峰值取决于最大序列长度和并发数</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3>3.2 KV Cache OOM 排障</h3>
 
@@ -442,7 +443,7 @@ for layer_idx in range(num_layers):
   结合模型权重 2.5GB + 激活值 0.5GB:
     总内存 ≈ 3.0 GB + KV Cache</code></pre>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>OOM 场景</th><th>触发条件</th><th>症状</th><th>解决方案</th></tr>
 </thead>
@@ -472,7 +473,7 @@ for layer_idx in range(num_layers):
 <td>引用计数检查；每轮对话结束后验证 KV Cache 释放</td>
 </tr>
 </tbody>
-</table>
+</table></div>
 
 <h3>3.3 内存监控与预警</h3>
 
@@ -505,7 +506,7 @@ done</code></pre>
 
 <h3>4.1 端侧 LLM 常见 Crash 类型</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>Crash 类型</th><th>触发场景</th><th>日志特征</th><th>排查要点</th></tr>
 </thead>
@@ -541,7 +542,7 @@ done</code></pre>
 <td>检查内存使用曲线，定位内存泄漏或 KV Cache 未释放</td>
 </tr>
 </tbody>
-</table>
+</table></div>
 
 <h3>4.2 DSP Crash 分析流程</h3>
 
@@ -570,28 +571,28 @@ done</code></pre>
 <h3>4.3 典型案例分析</h3>
 
 <h3>案例 1：量化模型间歇性输出乱码</h3>
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>现象</th><td>INT4 量化模型在长时间运行后（~2 小时）偶发输出乱码 token</td></tr>
 <tr><th>排查</th><td>1. 短时间运行正常 → 排除模型文件损坏<br/>2. 内存监控发现 KV Cache 持续增长 → 存在未释放<br/>3. 乱码出现时 KV Cache 已占满预分配空间，新 token 写入越界</td></tr>
 <tr><th>根因</th><td>多轮对话清理逻辑中，当用户切换 scenario_id 时，旧 scenario 的 KV Cache 未被释放</td></tr>
 <tr><th>修复</th><td>在 scenario 切换时主动调用 KV Cache 清理；增加 KV Cache 使用量的边界检查</td></tr>
-</table>
+</table></div>
 
 <h3>案例 2：特定图片输入导致 DSP Crash</h3>
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>现象</th><td>某张图片送入 Vision Encoder 时 DSP 立即 SSR</td></tr>
 <tr><th>排查</th><td>1. mini-dm 获取 crash dump，PC 地址指向 QNN Conv2D 算子<br/>2. 分析图片：分辨率为 1920×1080（非标准输入尺寸）<br/>3. Vision Encoder 输入要求 448×448，但预处理 resize 未执行就送入了原始分辨率</td></tr>
 <tr><th>根因</th><td>图像预处理 pipeline 中的 resize 函数在接收 YUV420 格式时路径异常，跳过了 resize 直接送入模型</td></tr>
 <tr><th>修复</th><td>在 model_inference.cpp 的 image format conversion 之后增加 shape 校验断言</td></tr>
-</table>
+</table></div>
 
 <h3>案例 3：多音区并发导致 FastRPC Timeout</h3>
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>现象</th><td>驾驶员和副驾同时发送语音指令时，偶发 FastRPC timeout（~10% 复现率）</td></tr>
 <tr><th>排查</th><td>1. Snapdragon Profiler 时间线分析：两个请求的 Prefill 同时到达 HTP<br/>2. 单独执行每个请求均正常 → 并发争抢问题<br/>3. HTP 在处理第一个请求的 Prefill 时，第二个请求的 FastRPC 调用排队等待超过 2s timeout</td></tr>
 <tr><th>根因</th><td>ModelScheduler 未对 Prefill 阶段做分片，大 Prompt 的 Prefill 独占 HTP 时间过长</td></tr>
 <tr><th>修复</th><td>1. Prefill 分片：将长 Prompt 分为多段，每段之间允许插入高优先级请求<br/>2. FastRPC timeout 从 2s 调整为 5s<br/>3. 高优先级请求（车控）可抢占低优先级（闲聊）的 Prefill</td></tr>
-</table>
+</table></div>
 
 <!-- ============================================================ -->
 <!-- Chapter 5: 日志与监控体系 -->
@@ -602,7 +603,7 @@ done</code></pre>
 
 <p>aadkcore 框架内置了多级日志系统，用于端侧 Agent 的运行时诊断：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>日志级别</th><th>用途</th><th>典型内容</th><th>生产环境开启</th></tr>
 </thead>
@@ -613,7 +614,7 @@ done</code></pre>
 <tr><td><strong>DEBUG</strong></td><td>详细调试</td><td>每个 token 的生成时间、KV Cache 使用量、Prompt 内容</td><td>仅调试时开启</td></tr>
 <tr><td><strong>TRACE</strong></td><td>算子级追踪</td><td>QNN 每个算子的执行时间和内存分配</td><td>仅性能分析时开启</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <pre><code class="language-bash"># 端侧日志查看方法
 
@@ -635,7 +636,7 @@ mini-dm  # 捕获 Hexagon DSP 实时日志</code></pre>
 
 <p>aadkcore 附带独立的监控服务 <code>aadk_monitor</code>（通过 systemd 管理），负责持续监控 Agent 进程的健康状态：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>监控项</th><th>检查方式</th><th>告警阈值</th><th>自动恢复</th></tr>
 </thead>
@@ -646,13 +647,13 @@ mini-dm  # 捕获 Hexagon DSP 实时日志</code></pre>
 <tr><td><strong>DSP 状态</strong></td><td>检查 remoteproc 状态</td><td>状态为 crashed 或 offline</td><td>记录 crash 信息 + 等待 SSR 恢复</td></tr>
 <tr><td><strong>心跳检测</strong></td><td>向 system_agent 发送 health check 请求</td><td>连续 3 次无响应</td><td>强制重启 system_agent</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3>5.3 性能数据采集 (Profiling)</h3>
 
 <p>aadkcore 通过 <code>registerProfilingCallback</code> 接口支持实时性能数据采集，便于监控和优化：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>性能指标</th><th>采集方式</th><th>典型值 (Qwen3-Omni-4B INT4)</th><th>异常阈值</th></tr>
 </thead>
@@ -663,7 +664,7 @@ mini-dm  # 捕获 Hexagon DSP 实时日志</code></pre>
 <tr><td><strong>KV Cache 使用率</strong></td><td>当前使用 / 最大分配</td><td>变化范围 0-100%</td><td>持续 &gt; 80%</td></tr>
 <tr><td><strong>NPU 利用率</strong></td><td>HTP 忙时间 / 总时间</td><td>推理时 &gt; 90%</td><td>&lt; 50% (可能有 fallback)</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <div class="info-box ok">
 <div class="title">调试工具选择指南</div>

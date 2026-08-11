@@ -8,7 +8,7 @@
 :root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-bg:rgba(255,255,255,.82);--nav-h:52px}
 [data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e;--nav-bg:rgba(15,15,26,.82)}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px;overflow-wrap:break-word}
 .top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);display:flex;align-items:center;padding:0 20px;z-index:1000;background:var(--nav-bg);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
 .top-nav .logo{display:flex;align-items:center;font-weight:800;font-size:15px;letter-spacing:.2px;color:var(--text);margin-right:22px;text-decoration:none;transition:opacity .2s}
 .top-nav .logo::before{content:"";width:9px;height:9px;border-radius:3px;background:var(--accent);margin-right:9px;box-shadow:0 0 0 3px var(--accentL)}
@@ -29,6 +29,7 @@ h3{font-size:16px;font-weight:600;margin:20px 0 10px}
 p{margin-bottom:10px;color:var(--text2)}
 strong{color:var(--text)}
 table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+.tbl-wrap{overflow-x:auto}
 th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
 th{background:var(--accentL);color:var(--accentD);font-weight:600}
 tr:nth-child(even){background:var(--bg2)}
@@ -723,14 +724,14 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
   <div class="q-body">
     <p><strong>答案：</strong></p>
     <p>行为面试题可归为 <span class="key">五大类</span>，每类至少准备一个与端侧 AI / 座舱项目相关的故事：</p>
-    <table>
+    <div class="tbl-wrap"><table>
       <tr><th>类别</th><th>高频问题示例</th><th>考察重点</th><th>项目中可用的素材方向</th></tr>
       <tr><td>技术领导力</td><td>主导过什么技术方案？如何推动落地？</td><td>识别问题、方案设计、影响他人</td><td>aadkcore 框架从 0 到 1 的设计与推广</td></tr>
       <tr><td>协作沟通</td><td>技术分歧如何解决？跨团队合作经历？</td><td>尊重、数据驱动、共赢</td><td>端云协同方案选型、与 Android/Linux 平台团队协作</td></tr>
       <tr><td>失败复盘</td><td>犯过什么错？项目失败经历？</td><td>自省、改进、成长</td><td>KV Cache 预分配导致 OOM、量化精度问题排查</td></tr>
       <tr><td>压力应对</td><td>deadline 紧张时怎么处理？紧急线上问题？</td><td>优先级判断、冷静决策</td><td>DSP SSR 线上崩溃的紧急定位与修复</td></tr>
       <tr><td>学习成长</td><td>如何快速学习新技术？转型经历？</td><td>学习方法、适应能力</td><td>从越野自动驾驶转型到座舱 LLM Agent 开发</td></tr>
-    </table>
+    </table></div>
     <p><strong>准备方法</strong>：(1) 为每一类写下 2 个 STAR 故事大纲（共 10 个），每个控制在 2 分钟口述时间内；(2) 练习时录音回放，检查是否有口头禅、是否超时、是否遗漏了 Result；(3) 每个故事准备 1-2 个面试官可能的追问及应对（"如果重来一次你会怎么做？""这个方案的缺点是什么？"）；(4) 回答中自然地融入技术深度——行为面试不等于不讲技术，用技术细节支撑你的决策和行动会更有说服力。</p>
     <p><strong>通用回答原则</strong>：(1) 永远用「我」而非「我们」描述你的具体贡献；(2) 每个回答必须有量化的 Result（降低 XX%、缩短 XX 天、支持 XX 个并发）；(3) 即使是失败的故事，也要以正面的 Learning 结尾；(4) 不要编造——面试官的追问会暴露虚构的细节，真实但经过提炼的故事远比完美但虚假的故事更有说服力。</p>
   </div>

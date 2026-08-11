@@ -8,7 +8,7 @@
 :root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-bg:rgba(255,255,255,.82);--nav-h:52px}
 [data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e;--nav-bg:rgba(15,15,26,.82)}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px;overflow-wrap:break-word}
 .top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);display:flex;align-items:center;padding:0 20px;z-index:1000;background:var(--nav-bg);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
 .top-nav .logo{display:flex;align-items:center;font-weight:800;font-size:15px;letter-spacing:.2px;color:var(--text);margin-right:22px;text-decoration:none;transition:opacity .2s}
 .top-nav .logo::before{content:"";width:9px;height:9px;border-radius:3px;background:var(--accent);margin-right:9px;box-shadow:0 0 0 3px var(--accentL)}
@@ -34,6 +34,7 @@ strong{color:var(--text)}
 .info-box.err{border-left-color:var(--danger)}
 .info-box .title{font-weight:700;font-size:13px;margin-bottom:4px}
 table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+.tbl-wrap{overflow-x:auto}
 th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
 th{background:var(--accentL);color:var(--accentD);font-weight:600}
 tr:nth-child(even){background:var(--bg2)}
@@ -86,7 +87,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <h3>1.1 APK 的角色</h3>
 <p><code>lantu_demo</code> 不是一个独立训练或推理引擎，而是一个 <strong>宿主容器（host）</strong>。它的职责是：</p>
-<table>
+<div class="tbl-wrap"><table>
 <thead><tr><th>职责</th><th>说明</th></tr></thead>
 <tbody>
 <tr><td><strong>加载并初始化 native SDK</strong></td><td>按正确顺序加载 <code>libcdsprpc.so</code>、<code>libmodelinfer.so</code> 及全部 QNN/LLM 依赖，设置 DSP 运行环境</td></tr>
@@ -95,7 +96,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 <tr><td><strong>协议适配</strong></td><td>兼容 OpenAI 风格 <code>/v1/chat/completions</code> 与自定义 <code>/inject</code> 协议，并完成多模态消息的类型判定与格式转换</td></tr>
 <tr><td><strong>稳定性兜底</strong></td><td>串行化请求、超时检测、native 卡死时进程级自愈重启</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <p>它承载的模型是 <strong>Qwen3-Omni-4B</strong>（INT4 量化 + 场景 LoRA），模型文件不打包进 APK，而是放在车机固定路径 <code>/AI/vllm_sdk/models</code> 下，由 SDK 在 init 阶段读取（见 <a href="#ch3">第 3 节</a>）。</p>
 
@@ -145,7 +146,7 @@ flowchart TB
 
 <h3>2.1 Android 应用层（Java）</h3>
 <p>全部位于 <code>app/src/main/java/com/example/myapplication/</code>，各组件职责如下：</p>
-<table>
+<div class="tbl-wrap"><table>
 <thead><tr><th>类</th><th>类型</th><th>职责</th></tr></thead>
 <tbody>
 <tr><td><code>MyApplication</code></td><td>Application</td><td>进程级初始化：按序加载 native 库、设置 <code>ADSP_LIBRARY_PATH</code>（早于任何 Activity/Service）</td></tr>
@@ -159,11 +160,11 @@ flowchart TB
 <tr><td><code>ScenarioReplyHandler</code></td><td>interface</td><td>回调契约 <code>onReply(String result, boolean isFinished)</code></td></tr>
 <tr><td><code>AssetFolderCopier</code></td><td>工具类</td><td>按 App 版本号把 <code>assets/</code> 下的小模型拷贝到 <code>filesDir</code>（备用路径，主链路用 <code>/AI</code>）</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3>2.2 JNI 桥接层（C++）</h3>
 <p>位于 <code>app/src/main/cpp/</code>，由 CMake 编译为 <code>libmodelinfer.so</code>：</p>
-<table>
+<div class="tbl-wrap"><table>
 <thead><tr><th>文件</th><th>作用</th></tr></thead>
 <tbody>
 <tr><td><code>modelinfer.cpp</code></td><td>5 个 JNI 函数实现：<code>nativeCreate / nativeDestroy / nativeInit / nativeRequestNpuPermission / nativeInference</code>；负责 Java↔C++ 类型转换、构造 <code>banma::DataMessage</code>、注册跨线程回调</td></tr>
@@ -172,11 +173,11 @@ flowchart TB
 <tr><td><code>include/model_inference.h</code></td><td><code>banma::ModelInference</code> 类接口：<code>init / inference_msg / requestNpuAccess / registerProfilingCallback / stopInferenceTask / releaseModelResources</code></td></tr>
 <tr><td><code>include/VoyahAIProxy.hpp</code></td><td>NPU 资源管理与性能监控抽象接口（<code>requestNpuAccess / syncNpuProfileToServer / registerNpuResourceEventCallback</code>）</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3>2.3 Native SDK 与依赖（预编译 .so）</h3>
 <p>全部位于 <code>app/src/main/jniLibs/arm64-v8a/</code>（<strong>仅 arm64-v8a</strong>，由 <code>abiFilters</code> 限定）。按功能归类：</p>
-<table>
+<div class="tbl-wrap"><table>
 <thead><tr><th>分类</th><th>关键库</th><th>说明</th></tr></thead>
 <tbody>
 <tr><td><strong>业务 SDK</strong></td><td><code>libandroid_sdk.so</code>、<code>libagent_group.so</code>、<code>libvoyah_ai_client.so</code>、<code>libaadkcore.so</code>、<code>libaisa.so</code>、<code>libqualla.so</code></td><td>banma/voyah 推理与 Agent 框架（对应 Part E 的 aadkcore + agent_group）</td></tr>
@@ -185,7 +186,7 @@ flowchart TB
 <tr><td><strong>系统 / FastRPC</strong></td><td><code>libcdsprpc.so</code>（系统库，经 <code>&lt;uses-native-library&gt;</code> 声明）</td><td>FastRPC 通道，Host（APK）↔ cDSP 跨处理器调用</td></tr>
 <tr><td><strong>通用依赖</strong></td><td><code>libopencv_*.so</code>、<code>libcurl.so</code>、<code>libssl.so</code>/<code>libcrypto.so</code>、<code>libjsoncpp.so</code>、<code>libomp.so</code>、<code>libc++_shared.so</code>、<code>libperfetto.so</code></td><td>图像处理、网络、TLS、JSON、OpenMP 并行、C++ 运行时、性能追踪</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <div class="info-box warn">
 <div class="title">libQnnHtpV81Skel.so 不能被 strip</div>
@@ -301,18 +302,18 @@ flowchart TB
 
 <h3 id="sec-protocol">5.2 协议解析与转换</h3>
 <p>调用方来源多样，payload 存在多种历史格式。<code>serve()</code> 先判定是否需要转换为标准 <code>messages</code> 数组：</p>
-<table>
+<div class="tbl-wrap"><table>
 <thead><tr><th>输入格式</th><th>判定条件</th><th>处理</th></tr></thead>
 <tbody>
 <tr><td>标准 OpenAI 格式</td><td>顶层已有非空 <code>messages: []</code></td><td><strong>原样透传</strong>，不重新序列化（避免 fastjson 重排导致 UTF-8/中文丢失）</td></tr>
 <tr><td>历史 + query</td><td>含 <code>query</code> 或 <code>extend._overwrite_params</code></td><td><code>convertToMessagesFormat()</code>：先铺 <code>_overwrite_params.history</code>，再追加 query 为 user message</td></tr>
 <tr><td>query_parts</td><td>含 <code>extend.query_parts</code> 或顶层 <code>query_parts</code></td><td>把每个 part（text/image）转成 content 数组元素，组装为单条 user message</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3 id="sec-msgtype">5.3 多模态类型判定</h3>
 <p>底层 <code>DataMessage.msg_type</code> 必须与实际模态匹配，否则会走错推理链路。<code>decideMsgTypeFromProtocol()</code> 遍历 <code>messages[].content</code>（content 可能是 string 或 array），统计是否出现 <code>image</code>/<code>image_url</code> 与 <code>audio</code> 类型，映射到枚举：</p>
-<table>
+<div class="tbl-wrap"><table>
 <thead><tr><th>检测到</th><th>MsgType</th><th>值</th></tr></thead>
 <tbody>
 <tr><td>仅文本</td><td><code>TEXT</code></td><td>0</td></tr>
@@ -320,7 +321,7 @@ flowchart TB
 <tr><td>文本 + 音频</td><td><code>TEXT_AUDIO</code></td><td>4</td></tr>
 <tr><td>文本 + 图像 + 音频</td><td><code>TEXT_IMAGE_AUDIO</code></td><td>6</td></tr>
 </tbody>
-</table>
+</table></div>
 <p>枚举完整定义见 <code>data_message.h</code> 的 <code>banma::MsgType</code>（0~6 共 7 种组合）。</p>
 
 <h3 id="sec-stream">5.4 同步与 SSE 流式</h3>
@@ -401,7 +402,7 @@ p->inference_msg(msg, stream, cb);</code></pre>
 
 <h3>7.1 场景 ID</h3>
 <p>场景 ID 定义在 <code>data_message.h</code>，决定 SDK 内部走哪条 Agent 链路。HTTP 层从 payload 提取（优先级：顶层 &gt; body &gt; extend）并做元数据校验：</p>
-<table>
+<div class="tbl-wrap"><table>
 <thead><tr><th>scenario_id</th><th>宏</th><th>场景</th><th>所需元数据</th></tr></thead>
 <tbody>
 <tr><td>0</td><td><code>OAI_INFERENCE</code></td><td>通用 OAI 推理</td><td>—</td></tr>
@@ -409,7 +410,7 @@ p->inference_msg(msg, stream, cb);</code></pre>
 <tr><td>200</td><td><code>CLOTH_RECOGNIZE_HVAC_RECOMMEND</code></td><td>衣着识别 → 空调推荐</td><td><code>extend._overwrite_params.voice_zone</code>（音区，决定图像裁剪）</td></tr>
 <tr><td>300</td><td><code>OUTCAR_VISUAL_QA</code></td><td>舱外视觉问答</td><td><code>camera_id</code>（摄像头编号）</td></tr>
 </tbody>
-</table>
+</table></div>
 <p>HTTP 层在缺少关键元数据时只打 <code>WARNING</code> 日志、不阻断请求（SDK 可能用默认值），便于联调定位。</p>
 
 <h3>7.2 舱外 QA（300）的三阶段流式协议</h3>
@@ -458,7 +459,7 @@ flowchart TB
     style TOMB fill:#f39c12,color:#fff
 </div></div>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead><tr><th>开关</th><th>默认</th><th>语义</th></tr></thead>
 <tbody>
 <tr><td><code>SYNC_TIMEOUT_MS</code></td><td>60 000</td><td>合法长生成实测 ≤15s，取 60s 留余量；既不误杀又能识别 native 卡死</td></tr>
@@ -466,7 +467,7 @@ flowchart TB
 <tr><td><code>SELF_HEAL_ENABLED</code></td><td>true</td><td>生产自愈：达阈值即 <code>killProcess</code>，靠 <code>START_STICKY</code> 干净重启</td></tr>
 <tr><td><code>CRASH_FOR_TOMBSTONE</code></td><td>false</td><td>诊断取证：超时即 SIGABRT 让 debuggerd 抓全线程 native 栈，<strong>取证后不自动拉起</strong>（优先级最高）</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <div class="info-box err">
 <div class="title">crash ≠ 可靠自愈</div>
@@ -477,7 +478,7 @@ flowchart TB
 <h2 id="ch9">9. 构建与部署</h2>
 
 <h3>9.1 build.gradle 关键配置</h3>
-<table>
+<div class="tbl-wrap"><table>
 <thead><tr><th>配置</th><th>值 / 说明</th></tr></thead>
 <tbody>
 <tr><td><code>compileSdk / minSdk / targetSdk</code></td><td>33（Android 13）</td></tr>
@@ -487,7 +488,7 @@ flowchart TB
 <tr><td><code>packagingOptions.jniLibs</code></td><td><code>useLegacyPackaging true</code> + <code>doNotStrip "**/libQnnHtpV81Skel.so"</code></td></tr>
 <tr><td><code>applicationVariants</code></td><td>产物自动命名为 <code>lantu-sdk-app-&lt;buildType&gt;-&lt;yyyyMMddHHmm&gt;.apk</code>（与部署脚本约定一致）</td></tr>
 </tbody>
-</table>
+</table></div>
 <p>依赖侧引入 <code>nanohttpd</code>（HTTP 服务）、<code>fastjson</code> + <code>gson</code>（JSON）、<code>androidx.lifecycle-service</code>、<code>material</code> 等；并用 <code>resolutionStrategy.force</code> 把 <code>androidx.activity</code> 锁到 1.7.2 以兼容 compileSdk 33。</p>
 
 <h3>9.2 上车部署脚本（tar_push_install_apk.sh）</h3>
