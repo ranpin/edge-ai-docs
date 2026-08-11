@@ -75,6 +75,17 @@
           "period": "2024.03 – 2025.10",
           "docs": [
             {
+              "title": "项目总览",
+              "file": "cockpit-agent.html",
+              "badge": "总览",
+              "status": "done",
+              "desc": "大模型 Agent 框架项目总览：整体架构、模块划分与文档导读",
+              "tags": [
+                "总览",
+                "导读"
+              ]
+            },
+            {
               "title": "设备部署",
               "file": "cockpit/projects/agent-framework/deploy.html",
               "badge": "Part D",
