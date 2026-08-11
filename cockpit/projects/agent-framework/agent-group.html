@@ -8,7 +8,7 @@
 :root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-bg:rgba(255,255,255,.82);--nav-h:52px}
 [data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e;--nav-bg:rgba(15,15,26,.82)}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px;overflow-wrap:break-word}
 .top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);display:flex;align-items:center;padding:0 20px;z-index:1000;background:var(--nav-bg);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
 .top-nav .logo{display:flex;align-items:center;font-weight:800;font-size:15px;letter-spacing:.2px;color:var(--text);margin-right:22px;text-decoration:none;transition:opacity .2s}
 .top-nav .logo::before{content:"";width:9px;height:9px;border-radius:3px;background:var(--accent);margin-right:9px;box-shadow:0 0 0 3px var(--accentL)}
@@ -34,6 +34,7 @@ strong{color:var(--text)}
 .info-box.err{border-left-color:var(--danger)}
 .info-box .title{font-weight:700;font-size:13px;margin-bottom:4px}
 table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+.tbl-wrap{overflow-x:auto}
 th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
 th{background:var(--accentL);color:var(--accentD);font-weight:600}
 tr:nth-child(even){background:var(--bg2)}
@@ -122,7 +123,7 @@ graph LR
 <h3 id="sec-scenario-ids">1.2 Scenario ID 分配表</h3>
 <p>所有 scenario_id 统一定义在 <code>aadkcore/include/runtime/constant_ids.h</code> 中，保证跨模块一致性：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>常量名</th><th>scenario_id</th><th>Agent 名称</th><th>说明</th></tr>
 </thead>
@@ -142,7 +143,7 @@ graph LR
 <tr><td><code>OUTCAR_QA_SCENARIO_ID</code></td><td>1300</td><td>OutCarQA</td><td>车外问答</td></tr>
 <tr><td><code>BROADCAST_SCENARIO_ID</code></td><td>65535</td><td>Broadcast</td><td>广播消息（特殊）</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <div class="info-box">
 <div class="title">ID 复用说明</div>
@@ -152,7 +153,7 @@ graph LR
 <h3 id="sec-conditional">1.3 条件编译体系</h3>
 <p>agent_factory.cpp 通过多级条件编译宏控制 Agent 的编译包含，实现不同车型和功能的灵活裁剪：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>宏定义</th><th>控制范围</th><th>包含的 Agent</th></tr>
 </thead>
@@ -171,12 +172,12 @@ graph LR
 <tr><td><code>FEATURE_WELCOME_MODE</code></td><td>迎宾模式独立开关</td><td>WelcomeModeDispatcher</td></tr>
 <tr><td><code>FEATURE_VIDEO_CHAT</code></td><td>视频聊天独立开关</td><td>VideoChatDispatcher</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3 id="sec-runtime-cfg">1.4 runtime_config.json 配置</h3>
 <p>运行时通过 <code>runtime_config.json</code> 选择当前平台和模型配置，支持 Orin 和 8397 两套硬件：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>平台</th><th>model_name</th><th>推理后端</th><th>基础模型</th></tr>
 </thead>
@@ -184,7 +185,7 @@ graph LR
 <tr><td><strong>orin</strong>（默认）</td><td><code>lape/Qwen2.5-Omni-7B</code></td><td>Lape (llama.cpp)</td><td>Qwen2.5-Omni-7B</td></tr>
 <tr><td><strong>8397</strong></td><td><code>qnn/qwen2.5-vl</code></td><td>QNN (Qualcomm)</td><td>Qwen2.5-VL-3B</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <p>每个平台分别配置 <code>model_config</code>（基础推理）和 <code>active_model_config</code>（主动视觉推理）两套模型参数文件。<code>current_runtime</code> 字段决定当前激活的平台。</p>
 
@@ -228,7 +229,7 @@ sequenceDiagram
 <h3 id="sec-cc-intent">2.2 意图分类枚举</h3>
 <p>CarControlDispatcher 定义了 <code>TypeClass</code> 枚举，LLM 输出解析后根据结果分类路由：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>枚举值</th><th>数值</th><th>说明</th><th>处理方式</th></tr>
 </thead>
@@ -239,12 +240,12 @@ sequenceDiagram
 <tr><td><code>SUMMARY</code></td><td>3</td><td>总结摘要</td><td>生成文本摘要</td></tr>
 <tr><td><code>CHAT</code></td><td>4</td><td>普通闲聊</td><td>路由到 ChitchatDispatcher 处理</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3 id="sec-cc-skills">2.3 车控技能精华表</h3>
 <p>技能定义在 <code>car_control.yaml</code> 的 <code>car_skills</code> 部分，共 30+ 项技能。以下为核心技能摘要：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>技能名</th><th>功能</th><th>关键参数</th><th>规则要点</th></tr>
 </thead>
@@ -272,12 +273,12 @@ sequenceDiagram
 <tr><td><code>door_child_lock_control</code></td><td>儿童锁</td><td>door_position[后排左/右], state</td><td>默认双侧锁定</td></tr>
 <tr><td><code>cant_control</code></td><td>不可控</td><td>args 为空</td><td>需求不在技能表内时触发</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3 id="sec-cc-prompt">2.4 Prompt 模板设计</h3>
 <p>CarControlDispatcher 的 Prompt 由 <code>car_control.yaml</code> 中的多段模板拼接而成：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>模板段</th><th>内容</th><th>关键要素</th></tr>
 </thead>
@@ -289,7 +290,7 @@ sequenceDiagram
 <tr><td><code>system_prompt_suffix</code></td><td>cant_control 兜底</td><td>不在技能表内的需求返回 cant_control</td></tr>
 <tr><td><code>user_prompt</code></td><td>用户输入模板</td><td><code>&lt;说话人位置:{{LOCATION}}&gt; &lt;指向:{{DIRECTION}}&gt;{{VIPUSER}}</code></td></tr>
 </tbody>
-</table>
+</table></div>
 
 <div class="info-box ok">
 <div class="title">JSON Schema 输出约束</div>
@@ -299,7 +300,7 @@ sequenceDiagram
 <h3 id="sec-cc-passenger">2.5 乘客感知规则</h3>
 <p>CarControlDispatcher 通过 <code>PassengerInfo</code> 结构体（含 pos/occupancy/gender/age 字段）实现精细化乘客感知。<code>parse_passenger_info()</code> 解析车辆上报的乘客信息，<code>get_passenger_infos()</code> 将其格式化注入 Prompt：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>场景</th><th>规则</th><th>实现方式</th></tr>
 </thead>
@@ -310,7 +311,7 @@ sequenceDiagram
 <tr><td>座椅加热联动</td><td>有人座位同步加热档位</td><td>seat_heating 技能规则</td></tr>
 <tr><td>座椅通风 + 成年女性</td><td>女性座位通风强制 1 档</td><td>seat_ventilation 技能规则</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <p>此外，<code>voice_zone_map_</code> 将音区编码映射到位置名称（1=主驾, 2=副驾, 4=左后, 8=右后, 16=中左, 32=中右），<code>direction_map_</code> 将指向信息（right/left/up）映射到目标位置，实现基于语音源和手势指向的精准控制。</p>
 
@@ -324,7 +325,7 @@ sequenceDiagram
 
 <h3 id="sec-av-modes">3.1 六大场景模式</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>模式</th><th>mode 值</th><th>触发条件</th><th>核心功能</th><th>关键方法</th></tr>
 </thead>
@@ -336,7 +337,7 @@ sequenceDiagram
 <tr><td><strong>危险动作识别</strong></td><td>--</td><td>实时</td><td>吸烟、儿童站立、手伸窗外</td><td><code>handle_dangerous_action_request()</code></td></tr>
 <tr><td><strong>遗留物检测</strong></td><td>--</td><td>下车</td><td>座椅上独立物品检测</td><td><code>handle_left_object_request()</code></td></tr>
 </tbody>
-</table>
+</table></div>
 
 <p>此外，<code>handle_intelligent_cockpit_request()</code> 实现自动座舱场景，包括吃东西、睡觉、阅读、玩电子产品等行为检测，并联动阅读灯和空调等车控设备。对应的 task_id 列表为：<code>xz_front_behavior</code>, <code>xz_rear_behavior</code>, <code>xz_front_temp</code>, <code>xz_rear_dangerous_behavior</code>。</p>
 
@@ -370,7 +371,7 @@ graph LR
 <p>为避免重复打扰用户，ActiveVisionDispatcher 通过 <code>safety_notify_duration_ = 8000</code>（8 秒）控制同类安全告警的最小通知间隔。<code>last_safety_notify_timestamp_</code> 记录上次通知时间戳。</p>
 
 <p>自适应车控联动通过两个控制器实现：</p>
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>控制器</th><th>功能</th><th>触发场景</th></tr>
 </thead>
@@ -378,7 +379,7 @@ graph LR
 <tr><td><code>AdaptiveReadingLights</code></td><td>根据视觉识别结果自动调节阅读灯亮度和开关</td><td>检测到阅读行为时开灯，离开时关灯</td></tr>
 <tr><td><code>AdaptiveAirCondition</code></td><td>根据乘客状态自动调节空调</td><td>检测到乘客体表温度偏差时调整空调</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <p><code>is_exit_reminder_enabled_</code> 标志控制下车提醒功能的开关，当启用时在送宾场景中触发遗留物检测。</p>
 
@@ -392,7 +393,7 @@ graph LR
 
 <h3>4.1 核心架构</h3>
 <p>ChitchatDispatcher 同样继承自 <code>AgentPlugin</code>，核心组件包括：</p>
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>组件</th><th>类型</th><th>功能</th></tr>
 </thead>
@@ -402,7 +403,7 @@ graph LR
 <tr><td><code>prompt_manager_</code></td><td><code>shared_ptr&lt;PromptManager&gt;</code></td><td>Prompt 模板加载与管理</td></tr>
 <tr><td><code>data_dumper_</code></td><td><code>unique_ptr&lt;DataDump&gt;</code></td><td>推理数据录制</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3>4.2 多轮对话上下文管理</h3>
 <p><code>ChatHistory</code> 维护对话历史，<code>process_history()</code> 将历史记录转换为模型输入的 <code>MessageList</code> 格式。<code>history_to_string()</code> 用于调试日志和数据录制。<code>clear_memory()</code> 接口支持清空对话历史重新开始。</p>
@@ -431,7 +432,7 @@ graph LR
 
 <h3>5.1 核心数据结构</h3>
 <p><code>GuiInfo</code> 结构体封装了 GUI 操作的完整上下文：</p>
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>字段</th><th>类型</th><th>说明</th></tr>
 </thead>
@@ -442,7 +443,7 @@ graph LR
 <tr><td><code>viewtrees</code></td><td>json</td><td>当前界面 View Tree 结构化描述</td></tr>
 <tr><td><code>screenshots</code></td><td>string</td><td>当前界面截图（Base64）</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3>5.2 id_table.yaml 映射</h3>
 <p><code>id_table.yaml</code> 定义了数字 ID 到页面 URL 的映射表（共 200+ 条），用于将 VLM 识别的 UI 控件 ID 映射到实际的应用页面地址。映射格式为 <code>ID: page://domain/element_id</code>，覆盖 SystemUI、SmartCar、AirCondition 等多个应用域。</p>
@@ -483,7 +484,7 @@ sequenceDiagram
 <!-- ============================================================ -->
 <h2 id="ch6">6. 其他场景 Agent</h2>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>Agent 名称</th><th>类名</th><th>scenario_id</th><th>编译条件</th><th>核心功能</th></tr>
 </thead>
@@ -545,7 +546,7 @@ sequenceDiagram
   <td>OpenAI API 兼容推理接口，支持标准 chat/completions 格式的消息解析（system/user/history），支持 Base64 图片输入和流式输出。</td>
 </tr>
 </tbody>
-</table>
+</table></div>
 
 <div class="info-box warn">
 <div class="title">注意事项</div>
@@ -583,7 +584,7 @@ car_skills:                     # 技能定义段
 
 <h3 id="sec-pt-placeholder">7.2 占位符替换机制</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>占位符</th><th>说明</th><th>替换来源</th><th>示例</th></tr>
 </thead>
@@ -600,13 +601,13 @@ car_skills:                     # 技能定义段
 <tr><td><code>{{alias_info}}</code></td><td>已注册乘客信息</td><td>用户系统</td><td>"主驾: 陈总, 副驾: 未注册"</td></tr>
 <tr><td><code>{{KNOWLEDGE}}</code></td><td>RAG 知识库内容</td><td>GUI Agent RAG 查询</td><td>控件描述文本</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <p>替换由 <code>replaceLocationPlaceholder()</code>、<code>replacePlaceholder()</code> 和 <code>replaceSystemPlaceholder()</code> 三个方法协作完成，按顺序替换不同类别的占位符。</p>
 
 <h3 id="sec-pt-compare">7.3 多场景 Prompt 模板对比</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>维度</th><th>车辆控制 (car_control.yaml)</th><th>闲聊 (chitchat.yaml)</th><th>主动视觉 (active_vision.yaml)</th><th>GUI Agent (gui_agent.yaml)</th></tr>
 </thead>
@@ -618,7 +619,7 @@ car_skills:                     # 技能定义段
 <tr><td><strong>乘客感知</strong></td><td>PERSONGROUP 完整</td><td>座位信息</td><td>PassengerInfo 结构化</td><td>无</td></tr>
 <tr><td><strong>模板文件数</strong></td><td>1 (多段拼接)</td><td>1 (多段拼接)</td><td>1 (多 mode 多 task)</td><td>1 (system + rag)</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <div class="info-box ok">
 <div class="title">Prompt 工程 Best Practice</div>
@@ -644,7 +645,7 @@ agent_runtime-&gt;set_dispatcher(msg_deliver);
 agent_runtime-&gt;start_server();
 ProcessWait();  // 信号等待 (SIGINT/SIGTERM/SIGSEGV/SIGABRT)</code></pre>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>组件</th><th>类</th><th>继承自</th><th>职责</th></tr>
 </thead>
@@ -654,7 +655,7 @@ ProcessWait();  // 信号等待 (SIGINT/SIGTERM/SIGSEGV/SIGABRT)</code></pre>
 <tr><td>消息路由</td><td><code>MsgDispacher</code></td><td><code>BaseMsgDeliver</code></td><td>根据 scenario_id 将消息分发到对应的 Dispatcher</td></tr>
 <tr><td>运行时</td><td><code>AgentRuntime</code></td><td>aadkcore</td><td>管理 Server/Client 生命周期，连接 Server 回调和 Dispatcher</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3 id="sec-dt-flow">8.2 数据流全景</h3>
 
@@ -685,7 +686,7 @@ graph TB
 <h3 id="sec-dt-dump">8.3 消息录制与回放</h3>
 <p>每个 Dispatcher 都内置了 <code>DataDump</code> 实例，通过 <code>set_data_dump_flag()</code> 控制数据录制开关。录制的内容包括：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>录制内容</th><th>格式</th><th>用途</th></tr>
 </thead>
@@ -695,7 +696,7 @@ graph TB
 <tr><td>LLM 输出</td><td>JSON</td><td>精度验证和回归测试</td></tr>
 <tr><td>推理耗时</td><td>时间戳</td><td>性能分析</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <p>启动时通过命令行参数 <code>-d/--dump</code> 控制录制行为（默认值为 1，启用录制）。录制的完整消息流可用于离线回放调试，避免依赖真实硬件环境。</p>
 

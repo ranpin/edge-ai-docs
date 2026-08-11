@@ -8,7 +8,7 @@
 :root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-bg:rgba(255,255,255,.82);--nav-h:52px}
 [data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e;--nav-bg:rgba(15,15,26,.82)}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px;overflow-wrap:break-word}
 .top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);display:flex;align-items:center;padding:0 20px;z-index:1000;background:var(--nav-bg);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
 .top-nav .logo{display:flex;align-items:center;font-weight:800;font-size:15px;letter-spacing:.2px;color:var(--text);margin-right:22px;text-decoration:none;transition:opacity .2s}
 .top-nav .logo::before{content:"";width:9px;height:9px;border-radius:3px;background:var(--accent);margin-right:9px;box-shadow:0 0 0 3px var(--accentL)}
@@ -33,6 +33,7 @@ strong{color:var(--text)}
 .info-box.warn{border-left-color:var(--warning)}.info-box.ok{border-left-color:var(--success)}.info-box.err{border-left-color:var(--danger)}
 .info-box .title{font-weight:700;font-size:13px;margin-bottom:4px}
 table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+.tbl-wrap{overflow-x:auto}
 th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
 th{background:var(--accentL);color:var(--accentD);font-weight:600}
 tr:nth-child(even){background:var(--bg2)}
@@ -110,7 +111,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 
 <h3>1.3 详细规格对比</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>指标</th><th>Qualcomm SA8650P</th><th>NVIDIA Orin</th><th>TI TDA4VM</th><th>Mobileye EyeQ6H</th></tr>
 <tr><td><strong>AI 算力</strong></td><td>~100 TOPS (INT8)</td><td>254 TOPS (INT8)</td><td>8 TOPS (INT8)</td><td>~34 TOPS</td></tr>
 <tr><td><strong>CPU</strong></td><td>Kryo 685 (8 核)</td><td>12x Cortex-A78AE</td><td>2x Cortex-A72 + 6x Cortex-R5F</td><td>多核 MIPS (封闭)</td></tr>
@@ -121,7 +122,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 <tr><td><strong>摄像头支持</strong></td><td>最多 18 路</td><td>最多 16 路</td><td>最多 8 路</td><td>最多 12 路</td></tr>
 <tr><td><strong>开发生态</strong></td><td>QNN / SNPE</td><td>CUDA / TensorRT</td><td>TI TIDL / Edge AI</td><td>封闭 SDK</td></tr>
 <tr><td><strong>典型应用</strong></td><td>L2+/L3，座舱驾驶一芯</td><td>L3/L4 高阶智驾</td><td>L2 前视 ADAS</td><td>L2/L2+ 前装量产</td></tr>
-</table>
+</table></div>
 
 <div class="info-box">
   <div class="title">没有"最佳" SoC — 选型取决于场景</div>
@@ -172,24 +173,24 @@ flowchart TB
 
 <p>在一个典型的 L3/L4 自动驾驶系统中，算力预算分配大致如下：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>模块</th><th>占比</th><th>运行单元</th><th>典型任务</th></tr>
 <tr><td><strong>感知</strong></td><td>60%</td><td>GPU / NPU</td><td>BEV 特征提取、3D 目标检测、语义分割、车道线识别、交通标志检测</td></tr>
 <tr><td><strong>预测</strong></td><td>15%</td><td>GPU / CPU</td><td>轨迹预测 (其他交通参与者未来运动)、意图识别、交互建模</td></tr>
 <tr><td><strong>规划</strong></td><td>15%</td><td>CPU</td><td>路径规划、行为决策、运动规划、轨迹优化</td></tr>
 <tr><td><strong>系统开销</strong></td><td>10%</td><td>CPU / Safety Island</td><td>传感器同步、数据传输、安全监控、日志记录、OTA 通信</td></tr>
-</table>
+</table></div>
 
 <h3>2.3 功能安全分区</h3>
 
 <p>异构 SoC 的功能安全设计核心是<strong>分区隔离</strong>：高性能但不保证安全的应用分区 (QM) 和保证安全的安全分区 (ASIL-D) 独立运行，通过硬件隔离保证一方故障不会影响另一方。</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>分区</th><th>安全等级</th><th>运行内容</th><th>故障后果</th></tr>
 <tr><td><strong>应用分区 (QM)</strong></td><td>QM (无安全要求)</td><td>GPU 上的 DNN 推理、高精地图渲染、座舱 HMI</td><td>感知性能降级，触发 fallback</td></tr>
 <tr><td><strong>安全分区 (ASIL-D)</strong></td><td>ASIL-D</td><td>Safety Island 上的安全监控、Watchdog、紧急制动逻辑</td><td>不允许故障 (&lt;10 FIT)</td></tr>
 <tr><td><strong>安全相关分区 (ASIL-B)</strong></td><td>ASIL-B</td><td>CPU lockstep 上的规划验证、碰撞检测</td><td>触发降级到更低自动化等级</td></tr>
-</table>
+</table></div>
 
 <div class="info-box warn">
   <div class="title">GPU/NPU 推理通常为 QM 等级</div>
@@ -232,13 +233,13 @@ flowchart LR
 
 <h3>3.2 主流 BEV 方案对比</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>方案</th><th>核心方法</th><th>时序融合</th><th>nuScenes NDS</th><th>延迟 (Orin)</th><th>优势</th><th>劣势</th></tr>
 <tr><td><strong>BEVDet</strong></td><td>LSS 显式深度估计 + Voxel Pooling</td><td>BEVDet4D 帧拼接</td><td>~51.7</td><td>~45ms</td><td>结构简洁，量化友好</td><td>深度估计误差较大</td></tr>
 <tr><td><strong>BEVFormer</strong></td><td>Deformable Attention + BEV Query</td><td>Temporal Self-Attention</td><td>~56.9</td><td>~90ms</td><td>精度高，时序建模优雅</td><td>Deformable Attention 量化困难</td></tr>
 <tr><td><strong>StreamPETR</strong></td><td>Sparse Query + Motion-aware</td><td>Query 传播</td><td>~55.0</td><td>~65ms</td><td>稀疏查询，计算效率高</td><td>遮挡场景性能受限</td></tr>
 <tr><td><strong>BEVFusion</strong></td><td>Camera BEV + LiDAR BEV 特征级融合</td><td>可选</td><td>~69.2 (含 LiDAR)</td><td>~100ms</td><td>多模态融合精度最高</td><td>依赖 LiDAR，成本高</td></tr>
-</table>
+</table></div>
 
 <h3>3.3 BEV 训练实用技巧</h3>
 
@@ -281,14 +282,14 @@ flowchart LR
 
 <h3>4.5 方法综合对比</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>方法</th><th>输入模态</th><th>nuScenes mAP</th><th>延迟 (Orin, ms)</th><th>硬件要求</th><th>量产适用性</th></tr>
 <tr><td><strong>PointPillars</strong></td><td>LiDAR</td><td>~40.1</td><td>~10</td><td>GPU (Sparse Conv)</td><td>高 (成熟稳定)</td></tr>
 <tr><td><strong>CenterPoint</strong></td><td>LiDAR</td><td>~60.3</td><td>~25</td><td>GPU (3D Sparse Conv)</td><td>高</td></tr>
 <tr><td><strong>BEVFormer</strong></td><td>Camera</td><td>~41.6</td><td>~90</td><td>GPU (Deformable Attn)</td><td>中 (量化挑战)</td></tr>
 <tr><td><strong>StreamPETR</strong></td><td>Camera</td><td>~45.0</td><td>~65</td><td>GPU (Standard Attn)</td><td>中高</td></tr>
 <tr><td><strong>BEVFusion</strong></td><td>Camera + LiDAR</td><td>~68.5</td><td>~100</td><td>GPU (双模态)</td><td>中 (依赖 LiDAR)</td></tr>
-</table>
+</table></div>
 
 <!-- ============================================================ -->
 <!-- Chapter 5: 端到端自动驾驶模型 -->
@@ -324,7 +325,7 @@ flowchart LR
 
 <h3>5.3 端到端 vs 模块化对比</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>维度</th><th>端到端 (E2E)</th><th>模块化 (Modular)</th></tr>
 <tr><td><strong>灵活性</strong></td><td>低 — 模型是黑盒，难以单独替换某个模块</td><td>高 — 感知/预测/规划可独立迭代</td></tr>
 <tr><td><strong>可解释性</strong></td><td>低 — 决策过程不透明</td><td>高 — 每个模块有明确的输入输出</td></tr>
@@ -334,7 +335,7 @@ flowchart LR
 <tr><td><strong>安全认证</strong></td><td>极难 — 无法对黑盒进行 ASIL 认证</td><td>可分模块认证</td></tr>
 <tr><td><strong>Debug 效率</strong></td><td>低 — 问题难以定位到具体模块</td><td>高 — 可逐模块排查</td></tr>
 <tr><td><strong>代表工作</strong></td><td>UniAD, VAD, GenAD</td><td>Apollo, Autoware, Tesla (早期)</td></tr>
-</table>
+</table></div>
 
 <div class="info-box warn">
   <div class="title">端到端是研究趋势，但模块化仍主导量产</div>
@@ -365,14 +366,14 @@ flowchart LR
 
 <p><strong>典型地形类别体系</strong>：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>大类</th><th>子类</th><th>可通行性</th><th>感知难点</th></tr>
 <tr><td><strong>硬质地面</strong></td><td>干燥沥青、砾石路、岩石面</td><td>高通行性</td><td>与未铺装道路的边界模糊</td></tr>
 <tr><td><strong>松软地面</strong></td><td>干沙、湿沙、淤泥、松土</td><td>中/低 (依赖含水量)</td><td>视觉外观相似但物理性质差异巨大</td></tr>
 <tr><td><strong>植被覆盖</strong></td><td>短草、高草、灌木、落叶堆</td><td>短草可通行，高草/灌木可能不可通行</td><td>高度和密度难以从单帧图像判断</td></tr>
 <tr><td><strong>水体</strong></td><td>浅水坑、深水区、泥水混合</td><td>浅水可通行，深水危险</td><td>水深无法从视觉直接判断，反射干扰</td></tr>
 <tr><td><strong>不可通行</strong></td><td>悬崖、深沟、大型岩石、倒木</td><td>不可通行</td><td>几何障碍需要 3D 感知</td></tr>
-</table>
+</table></div>
 
 <p><strong>地形分类模型设计要点</strong>：</p>
 <ul style="margin:0 0 10px 20px;color:var(--text2)">
@@ -403,7 +404,7 @@ def geometric_traversability(height_map, vehicle_params):
 
 <p><strong>语义分析</strong>：不同地形类型对应不同的物理属性 (摩擦系数、陷入风险、对车辆的损伤)，需要将地形分类结果映射为可通行性评分：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>地形类型</th><th>摩擦系数</th><th>陷入风险</th><th>通行性评分</th><th>推荐速度</th></tr>
 <tr><td>干燥砾石路</td><td>0.6-0.8</td><td>极低</td><td>0.9</td><td>30-50 km/h</td></tr>
 <tr><td>干沙</td><td>0.3-0.5</td><td>中</td><td>0.5</td><td>10-20 km/h</td></tr>
@@ -412,13 +413,13 @@ def geometric_traversability(height_map, vehicle_params):
 <tr><td>高草/灌木</td><td>0.3-0.5</td><td>中 (隐藏障碍)</td><td>0.3</td><td>5-10 km/h</td></tr>
 <tr><td>浅水坑 (&lt;20cm)</td><td>0.2-0.4</td><td>中</td><td>0.4</td><td>5-15 km/h</td></tr>
 <tr><td>岩石面</td><td>0.7-0.9</td><td>极低</td><td>0.6 (颠簸)</td><td>10-20 km/h</td></tr>
-</table>
+</table></div>
 
 <h3>6.4 结构化道路 vs 越野：核心差异</h3>
 
 <p>越野自动驾驶与结构化道路自动驾驶在几乎每个维度上都存在根本性差异：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>维度</th><th>结构化道路</th><th>越野/非结构化</th></tr>
 <tr><td><strong>道路边界</strong></td><td>车道线、路沿、护栏，边界清晰</td><td>无明确边界，可通行区域需推断</td></tr>
 <tr><td><strong>交通规则</strong></td><td>交通法规、红绿灯、标志牌</td><td>无交通规则，纯物理约束</td></tr>
@@ -428,7 +429,7 @@ def geometric_traversability(height_map, vehicle_params):
 <tr><td><strong>速度控制</strong></td><td>限速标志、交通流</td><td>地形适应性速度 (地形越复杂速度越低)</td></tr>
 <tr><td><strong>失败模式</strong></td><td>碰撞、违规</td><td>陷车、侧翻、悬挂损坏</td></tr>
 <tr><td><strong>数据可用性</strong></td><td>海量 (nuScenes, Waymo, KITTI)</td><td>极度稀缺 (RUGD, RELLIS-3D)</td></tr>
-</table>
+</table></div>
 
 <div class="chart-wrap"><div class="chart-box" id="chart-offroad-compare"></div></div>
 
@@ -511,13 +512,13 @@ flowchart LR
 
 <p>从海量的候选 corner case 中选择最有价值的样本进行标注，是主动学习 (Active Learning) 的核心问题。选样策略：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>策略</th><th>原理</th><th>优点</th><th>缺点</th></tr>
 <tr><td><strong>不确定性采样</strong></td><td>选择模型最不确定的样本</td><td>直接针对模型弱点</td><td>可能选择大量相似场景</td></tr>
 <tr><td><strong>多样性采样</strong></td><td>在特征空间中做 K-Means 聚类，每类选代表</td><td>保证场景多样性</td><td>可能忽略真正困难的场景</td></tr>
 <tr><td><strong>混合策略</strong></td><td>先不确定性筛选 Top-K，再多样性聚类选子集</td><td>兼顾困难性和多样性</td><td>实现复杂，超参敏感</td></tr>
 <tr><td><strong>代表性采样</strong></td><td>选择与未标注池分布最接近的样本</td><td>减少数据偏差</td><td>计算成本高</td></tr>
-</table>
+</table></div>
 
 <div class="info-box ok">
   <div class="title">数据飞轮是自动驾驶的真正竞争壁垒</div>
@@ -572,7 +573,7 @@ flowchart LR
 
 <h3>8.4 量化友好/不友好算子</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>算子类型</th><th>量化友好度</th><th>推荐精度</th><th>说明</th></tr>
 <tr><td><strong>标准卷积 (Conv2D)</strong></td><td>高</td><td>INT8</td><td>权重分布均匀，量化损失小</td></tr>
 <tr><td><strong>Batch Normalization</strong></td><td>高</td><td>融合到 Conv</td><td>推理时折叠到卷积，无额外开销</td></tr>
@@ -582,7 +583,7 @@ flowchart LR
 <tr><td><strong>Grid Sample</strong></td><td>低</td><td>FP16</td><td>双线性插值对量化误差放大</td></tr>
 <tr><td><strong>检测头 (bbox regression)</strong></td><td>中</td><td>INT16</td><td>回归输出精度要求高于分类</td></tr>
 <tr><td><strong>FPN (特征金字塔)</strong></td><td>高</td><td>INT8</td><td>特征融合对量化鲁棒</td></tr>
-</table>
+</table></div>
 
 <!-- ============================================================ -->
 <!-- Chapter 9: 多传感器融合部署 -->
@@ -657,13 +658,13 @@ sequenceDiagram
 
 <p>无论规划模型如何生成轨迹，最终执行前都必须通过一系列安全约束检查：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>检查项</th><th>方法</th><th>时间预算</th><th>失败处理</th></tr>
 <tr><td><strong>碰撞检测</strong></td><td>轨迹沿线的 BEV 占据检查、膨胀障碍物</td><td>&lt;2ms</td><td>触发重规划或紧急制动</td></tr>
 <tr><td><strong>运动学可行性</strong></td><td>检查曲率、加速度、jerk 是否超出车辆能力</td><td>&lt;1ms</td><td>裁剪到可行范围</td></tr>
 <tr><td><strong>道路边界约束</strong></td><td>轨迹点是否在可行驶区域内</td><td>&lt;1ms</td><td>向道路内侧偏移</td></tr>
 <tr><td><strong>时序一致性</strong></td><td>当前轨迹与上一帧轨迹的跳变是否过大</td><td>&lt;0.5ms</td><td>平滑插值到上一帧</td></tr>
-</table>
+</table></div>
 
 <h3>10.3 Fallback 层级架构</h3>
 
@@ -682,13 +683,13 @@ flowchart TB
     style L0 fill:#868e96,color:#fff
 </div></div>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>规划级别</th><th>运行位置</th><th>延迟预算</th><th>安全等级</th><th>安全保证</th></tr>
 <tr><td><strong>L4 规划器</strong></td><td>GPU / CPU (主系统)</td><td>50ms</td><td>QM</td><td>最优轨迹但无安全保证</td></tr>
 <tr><td><strong>L3 Fallback</strong></td><td>CPU (lockstep)</td><td>20ms</td><td>ASIL-B</td><td>保守但安全的车道保持</td></tr>
 <tr><td><strong>L2 紧急避让</strong></td><td>CPU (lockstep)</td><td>10ms</td><td>ASIL-C</td><td>碰撞前的最后避让</td></tr>
 <tr><td><strong>L0 安全停车</strong></td><td>Safety Island (MCU)</td><td>5ms</td><td>ASIL-D</td><td>无条件安全停车</td></tr>
-</table>
+</table></div>
 
 <!-- ================================================================ -->
 <!-- PART D: 自动驾驶 Agent -->
@@ -733,7 +734,7 @@ flowchart LR
 
 <h3>11.2 VLM 驾驶 vs 传统 Pipeline</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>维度</th><th>VLM 驾驶 Agent</th><th>传统感知-预测-规划 Pipeline</th></tr>
 <tr><td><strong>可解释性</strong></td><td>高 — 生成自然语言推理过程</td><td>低 — 各模块输出数值，人难以理解决策逻辑</td></tr>
 <tr><td><strong>泛化能力</strong></td><td>强 — 预训练知识覆盖 open-world 场景</td><td>弱 — 仅能处理训练集中见过的场景</td></tr>
@@ -742,7 +743,7 @@ flowchart LR
 <tr><td><strong>长尾场景</strong></td><td>潜力大 — 常识推理处理未见场景</td><td>差 — 完全依赖训练数据覆盖</td></tr>
 <tr><td><strong>开发效率</strong></td><td>高 — prompt engineering 快速迭代</td><td>低 — 需要大量标注和训练</td></tr>
 <tr><td><strong>硬件需求</strong></td><td>高 — 7B+ 模型需要强大的 NPU</td><td>中 — 轻量模型即可</td></tr>
-</table>
+</table></div>
 
 <div class="info-box">
   <div class="title">驾驶 Agent 面临"安全长尾"问题</div>
@@ -780,12 +781,12 @@ flowchart LR
 
 <p>VLM 驾驶 Agent 的延迟预算取决于其在系统中的角色：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>角色</th><th>VLM 延迟预算</th><th>典型输出长度</th><th>所需推理速度</th><th>当前可行性</th></tr>
 <tr><td><strong>L2+ 辅助 (Advisory)</strong></td><td>&lt;500ms</td><td>~100 tokens</td><td>&gt;200 tok/s</td><td>勉强可行 (INT4 + 3B)</td></tr>
 <tr><td><strong>L3 决策参与</strong></td><td>&lt;100ms</td><td>~50 tokens (JSON)</td><td>&gt;500 tok/s</td><td>当前不可行</td></tr>
 <tr><td><strong>L4 主控决策</strong></td><td>&lt;50ms</td><td>~20 tokens</td><td>&gt;400 tok/s</td><td>当前不可行</td></tr>
-</table>
+</table></div>
 
 <div class="info-box">
   <div class="title">端侧硬件可以支持 VLM 辅助决策，但无法支持实时主控</div>
@@ -831,7 +832,7 @@ flowchart TB
 
 <p>不同功能对通信延迟有不同的容忍度，这决定了该功能应部署在车端、边缘还是云端：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>功能</th><th>延迟容忍</th><th>部署位置</th><th>通信方式</th><th>断网后果</th></tr>
 <tr><td><strong>紧急避障</strong></td><td>&lt;10ms</td><td>车端 (Safety Island)</td><td>无需通信</td><td>无影响</td></tr>
 <tr><td><strong>实时路径规划</strong></td><td>&lt;50ms</td><td>车端 (CPU)</td><td>无需通信</td><td>无影响</td></tr>
@@ -840,7 +841,7 @@ flowchart TB
 <tr><td><strong>高精地图更新</strong></td><td>&lt;500ms</td><td>边缘/云端</td><td>5G</td><td>使用缓存地图</td></tr>
 <tr><td><strong>模型 OTA 更新</strong></td><td>分钟级</td><td>云端</td><td>4G/5G/WiFi</td><td>延迟更新</td></tr>
 <tr><td><strong>车队数据回传</strong></td><td>小时级</td><td>云端</td><td>WiFi (充电时)</td><td>缓存后补传</td></tr>
-</table>
+</table></div>
 
 <h3>13.3 断网降级策略</h3>
 
@@ -871,14 +872,14 @@ flowchart TB
 
 <p>ISO 26262 定义的 <strong>ASIL (Automotive Safety Integrity Level)</strong> 等级从 A 到 D，D 为最严格。ASIL 等级由三个因素的组合决定：<strong>严重度 (Severity)</strong>、<strong>暴露度 (Exposure)</strong>、<strong>可控性 (Controllability)</strong>。</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>ASIL 等级</th><th>典型场景</th><th>失效率要求 (FIT)</th><th>开发要求</th><th>代表功能</th></tr>
 <tr><td><strong>QM</strong></td><td>非安全功能</td><td>无要求</td><td>标准质量管理</td><td>HMI 显示、娱乐系统</td></tr>
 <tr><td><strong>ASIL-A</strong></td><td>低伤害风险</td><td>&lt;1000 FIT</td><td>基本安全流程</td><td>后车灯控制、雨刷</td></tr>
 <tr><td><strong>ASIL-B</strong></td><td>中等伤害风险</td><td>&lt;100 FIT</td><td>较严格验证</td><td>ESC 稳定控制、安全气囊非关键</td></tr>
 <tr><td><strong>ASIL-C</strong></td><td>严重伤害风险</td><td>&lt;10 FIT</td><td>严格验证+测试</td><td>EPS 电动转向、AEB 辅助制动</td></tr>
 <tr><td><strong>ASIL-D</strong></td><td>危及生命</td><td>&lt;1 FIT (10^-8/h)</td><td>最严格全流程</td><td>线控制动、自动驾驶安全监控</td></tr>
-</table>
+</table></div>
 
 <p>其中 FIT = Failure In Time，1 FIT = 10^-9 故障/小时。ASIL-D 的 &lt;1 FIT 意味着<strong>系统在连续运行约 1.14 万年期间最多发生 1 次危险故障</strong>。</p>
 
@@ -920,13 +921,13 @@ flowchart TB
 
 <h3>14.4 Watchdog 机制</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>看门狗类型</th><th>监控对象</th><th>超时时间</th><th>触发动作</th></tr>
 <tr><td><strong>软件 WDT</strong></td><td>应用进程心跳</td><td>50-200ms</td><td>进程重启 / 降级</td></tr>
 <tr><td><strong>硬件 WDT</strong></td><td>CPU/OS 存活</td><td>100-500ms</td><td>系统复位 / 安全停车</td></tr>
 <tr><td><strong>Flow Monitor</strong></td><td>数据流完整性</td><td>帧级 (33-100ms)</td><td>丢帧告警 / 切换备用源</td></tr>
 <tr><td><strong>Deadline Monitor</strong></td><td>任务完成时间</td><td>按任务定义</td><td>跳过当前帧 / 使用上帧结果</td></tr>
-</table>
+</table></div>
 
 <div class="info-box err">
   <div class="title">ASIL-D 意味着 &lt;10 FIT (10^-8 故障/小时)</div>
@@ -944,13 +945,13 @@ flowchart TB
 
 <p>SOTIF 分析的核心框架将场景空间划分为四个区域：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>区域</th><th>已知?</th><th>安全?</th><th>描述</th><th>应对策略</th></tr>
 <tr><td><strong>Area 1</strong></td><td>已知</td><td>安全</td><td>系统能正确处理的常规场景</td><td>标准测试覆盖</td></tr>
 <tr><td><strong>Area 2</strong></td><td>已知</td><td>不安全</td><td>已知的系统局限性 (如大雾时感知失效)</td><td>设计限制 (ODD) + 降级策略</td></tr>
 <tr><td><strong>Area 3</strong></td><td>未知</td><td>不安全</td><td>未知的不安全场景 (最危险)</td><td>持续测试发现 + 数据飞轮</td></tr>
 <tr><td><strong>Area 4</strong></td><td>未知</td><td>安全</td><td>未测试但实际安全的场景</td><td>无需特别关注</td></tr>
-</table>
+</table></div>
 
 <p>SOTIF 的目标是<strong>将 Area 3 (未知不安全场景) 缩小到可接受的水平</strong>。方法包括：系统性场景分析、大规模仿真测试、实车道路测试、以及通过数据飞轮持续发现新的 corner case。</p>
 
@@ -985,13 +986,13 @@ flowchart TB
 
 <p><strong>覆盖度指标</strong>：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>覆盖维度</th><th>指标</th><th>目标</th></tr>
 <tr><td><strong>场景类型覆盖</strong></td><td>覆盖的标准场景数 / 总标准场景数</td><td>&gt;95%</td></tr>
 <tr><td><strong>参数空间覆盖</strong></td><td>测试过的参数组合 / 总参数空间</td><td>&gt;80% (关键区域 100%)</td></tr>
 <tr><td><strong>ODD 边界覆盖</strong></td><td>测试过的 ODD 边界条件 / 总边界条件</td><td>100%</td></tr>
 <tr><td><strong>代码覆盖</strong></td><td>被测试执行的代码行数 / 总代码行数</td><td>&gt;90% (安全关键 100%)</td></tr>
-</table>
+</table></div>
 
 <h3>15.4 HIL/SIL 测试架构</h3>
 
@@ -999,7 +1000,7 @@ flowchart TB
 
 <p><strong>HIL (Hardware-in-the-Loop)</strong>：自动驾驶软件栈运行在真实的域控制器硬件上，传感器数据由仿真器通过高速接口注入。验证的是<strong>真实硬件上的性能和时序</strong>——SIL 中可能不出问题的延迟/内存/调度问题，在 HIL 中会暴露。</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <tr><th>测试级别</th><th>验证内容</th><th>典型覆盖场景数</th><th>执行时间</th><th>成本</th></tr>
 <tr><td><strong>Unit Test</strong></td><td>函数正确性</td><td>数万</td><td>分钟级</td><td>极低</td></tr>
 <tr><td><strong>Module Test</strong></td><td>模块功能和性能</td><td>数千</td><td>小时级</td><td>低</td></tr>
@@ -1008,7 +1009,7 @@ flowchart TB
 <tr><td><strong>HIL</strong></td><td>硬件时序和资源</td><td>数万</td><td>天级</td><td>高</td></tr>
 <tr><td><strong>VIL</strong></td><td>真车动力学响应</td><td>数千</td><td>周级</td><td>很高</td></tr>
 <tr><td><strong>Field Test</strong></td><td>真实世界表现</td><td>百万公里</td><td>月级</td><td>极高</td></tr>
-</table>
+</table></div>
 
 <div class="info-box ok">
   <div class="title">仿真测试是自动驾驶安全验证的基石</div>

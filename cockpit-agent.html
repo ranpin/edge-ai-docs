@@ -8,7 +8,7 @@
 :root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-bg:rgba(255,255,255,.82);--nav-h:52px}
 [data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e;--nav-bg:rgba(15,15,26,.82)}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px;overflow-wrap:break-word}
 .top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);display:flex;align-items:center;padding:0 20px;z-index:1000;background:var(--nav-bg);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
 .top-nav .logo{display:flex;align-items:center;font-weight:800;font-size:15px;letter-spacing:.2px;color:var(--text);margin-right:22px;text-decoration:none;transition:opacity .2s}
 .top-nav .logo::before{content:"";width:9px;height:9px;border-radius:3px;background:var(--accent);margin-right:9px;box-shadow:0 0 0 3px var(--accentL)}
@@ -34,6 +34,7 @@ strong{color:var(--text)}
 .info-box.err{border-left-color:var(--danger)}
 .info-box .title{font-weight:700;font-size:13px;margin-bottom:4px}
 table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+.tbl-wrap{overflow-x:auto}
 th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
 th{background:var(--accentL);color:var(--accentD);font-weight:600}
 tr:nth-child(even){background:var(--bg2)}
@@ -110,7 +111,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 <h3>12.1 端侧 LLM 选型对比</h3>
 <p>在 SA8397P 级别硬件上（Hexagon NPU 约 70 TOPS INT8），可运行的端侧大模型需要兼顾推理速度、模型质量和内存占用。当前座舱场景的首选是 <strong>Qwen3-Omni-4B</strong>——原生支持文本、图像、音频、视频四种模态输入，非常契合座舱多模态交互需求：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>模型</th><th>参数量</th><th>量化精度</th><th>生成速度 (tok/s)</th><th>内存占用</th><th>中文能力</th><th>适用场景</th></tr>
 </thead>
@@ -120,7 +121,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 <tr><td><strong>Qwen3-1.7B</strong></td><td>1.7B</td><td>INT4</td><td>~28</td><td>~1.2 GB</td><td>良好</td><td>轻量级意图识别、低延迟场景</td></tr>
 <tr><td><strong>Llama3.2-3B</strong></td><td>3B</td><td>INT4</td><td>~15</td><td>~2.0 GB</td><td>中等</td><td>多语言场景、海外车型</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <div class="info-box ok">
 <div class="title">选型建议</div>
@@ -202,7 +203,7 @@ sequenceDiagram
 <h3>13.2 Tool Use 设计要点</h3>
 <p>端侧 Agent 的 Tool 体系需要兼顾灵活性和安全性。以下是关键设计考量：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>设计要点</th><th>方案</th><th>说明</th></tr>
 </thead>
@@ -214,7 +215,7 @@ sequenceDiagram
 <tr><td><strong>错误处理</strong></td><td>重试 + 降级 + 告知</td><td>Tool 调用失败时：先重试 1 次 → 尝试降级方案 → 告知用户并建议替代操作。</td></tr>
 <tr><td><strong>并发调度</strong></td><td>DAG 依赖图</td><td>多个 Tool 调用时分析依赖关系，无依赖的并行执行（如上例空调和导航可并行），有依赖的串行执行。</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3>13.3 记忆系统架构</h3>
 <p>端侧 Agent 需要三层记忆系统来支撑个性化和上下文连贯性：</p>
@@ -251,7 +252,7 @@ graph TB
 
 <div class="info-box">
 <div class="title">端侧记忆 vs 云端记忆</div>
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>维度</th><th>端侧记忆</th><th>云端记忆</th></tr>
 </thead>
@@ -263,7 +264,7 @@ graph TB
 <tr><td><strong>跨设备同步</strong></td><td>不支持（或需加密同步）</td><td>原生支持</td></tr>
 <tr><td><strong>数据持久性</strong></td><td>设备更换需迁移</td><td>云端永久保存</td></tr>
 </tbody>
-</table>
+</table></div>
 <p>座舱场景下，端侧记忆是首选方案：驾驶习惯和个人偏好属于高敏感数据，零延迟和离线能力对驾驶安全至关重要。</p>
 </div>
 
@@ -290,14 +291,14 @@ LLM 解析: tool_call: seat_heater(position="driver", level=3)
 系统执行: 座椅加热已开启，等级3（最高）
 TTS 回复: "已为您打开驾驶座加热，调到最高档。"</code></pre>
     <p><strong>技术挑战</strong>：</p>
-    <table>
+    <div class="tbl-wrap"><table>
     <thead><tr><th>挑战</th><th>影响</th><th>应对方案</th></tr></thead>
     <tbody>
     <tr><td><strong>车内噪声鲁棒性</strong></td><td>高速/开窗场景 ASR 识别率下降</td><td>多麦克风波束成形 + 降噪前处理 + 端侧 ASR 模型微调</td></tr>
     <tr><td><strong>KV Cache 管理</strong></td><td>多轮对话内存持续增长</td><td>Sliding Window Attention + KV Cache 压缩（INT8 量化 KV）</td></tr>
     <tr><td><strong>TTFT 首 Token 时间</strong></td><td>用户感知延迟的核心指标</td><td>Prompt Caching + INT4 量化 + 模型预热（常驻内存）</td></tr>
     </tbody>
-    </table>
+    </table></div>
   </div>
 
   <div class="tab-panel" id="p2">
@@ -319,7 +320,7 @@ TTS 输出: "您已连续驾驶超过2小时，检测到疲劳迹象。
 前方5公里是XX服务区，建议您靠边休息。
 需要我导航到服务区吗？"</code></pre>
     <p><strong>分级告警策略</strong>：</p>
-    <table>
+    <div class="tbl-wrap"><table>
     <thead><tr><th>等级</th><th>触发条件</th><th>告警方式</th><th>示例</th></tr></thead>
     <tbody>
     <tr><td><strong>L0 提示</strong></td><td>轻微疲劳迹象</td><td>屏幕提示 + 低音量语音</td><td>"已驾驶1.5小时，注意休息"</td></tr>
@@ -327,7 +328,7 @@ TTS 输出: "您已连续驾驶超过2小时，检测到疲劳迹象。
     <tr><td><strong>L2 警告</strong></td><td>高度疲劳/频繁分心</td><td>强语音 + 座椅振动 + 降温</td><td>"检测到严重疲劳，请立即休息！"</td></tr>
     <tr><td><strong>L3 紧急</strong></td><td>闭眼 &gt; 2s / 车道偏离</td><td>急促警报 + ADAS 介入</td><td>紧急制动辅助 + 双闪 + 减速</td></tr>
     </tbody>
-    </table>
+    </table></div>
   </div>
 
   <div class="tab-panel" id="p3">
@@ -349,7 +350,7 @@ LLM 推理：
 要继续播放《硬地骇客》第24期吗？
 空调已自动调至您偏好的24度。"</code></pre>
     <p><strong>推荐系统设计</strong>：</p>
-    <table>
+    <div class="tbl-wrap"><table>
     <thead><tr><th>推荐类型</th><th>触发条件</th><th>数据来源</th><th>推荐策略</th></tr></thead>
     <tbody>
     <tr><td><strong>通勤推荐</strong></td><td>上下班时间 + 固定地点</td><td>行程记录 + 时间规律</td><td>路线 + 媒体 + 环境</td></tr>
@@ -357,7 +358,7 @@ LLM 推理：
     <tr><td><strong>环境调节</strong></td><td>上车 / 时间变化</td><td>历史温度偏好 + 季节</td><td>自动调节空调/氛围灯</td></tr>
     <tr><td><strong>充电提醒</strong></td><td>电量 &lt; 30% + 回家路线</td><td>充电站数据 + 路线</td><td>推荐沿途充电站</td></tr>
     </tbody>
-    </table>
+    </table></div>
   </div>
 
   <div class="tab-panel" id="p4">
@@ -379,7 +380,7 @@ VLM 融合分析：
 执行: window_control(position="passenger", action="open")
 TTS: "好的，已为您打开副驾车窗。"</code></pre>
     <p><strong>多模态融合策略</strong>：</p>
-    <table>
+    <div class="tbl-wrap"><table>
     <thead><tr><th>模态组合</th><th>场景</th><th>融合方法</th><th>消歧效果</th></tr></thead>
     <tbody>
     <tr><td><strong>语音 + 注视</strong></td><td>"打开这个"+ 看向车窗</td><td>注视区域映射到车辆部件</td><td>解决"这个"的指代歧义</td></tr>
@@ -387,7 +388,7 @@ TTS: "好的，已为您打开副驾车窗。"</code></pre>
     <tr><td><strong>语音 + 注视 + 手势</strong></td><td>"关掉那边的"+ 指向 + 看</td><td>多信号置信度加权融合</td><td>最高消歧精度</td></tr>
     <tr><td><strong>纯手势</strong></td><td>手掌向下压（降低音量）</td><td>预定义手势库直接映射</td><td>无需语音的快速交互</td></tr>
     </tbody>
-    </table>
+    </table></div>
   </div>
 </div>
 

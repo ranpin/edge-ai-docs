@@ -8,7 +8,7 @@
 :root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-bg:rgba(255,255,255,.82);--nav-h:52px}
 [data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e;--nav-bg:rgba(15,15,26,.82)}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px;overflow-wrap:break-word}
 .top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);display:flex;align-items:center;padding:0 20px;z-index:1000;background:var(--nav-bg);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
 .top-nav .logo{display:flex;align-items:center;font-weight:800;font-size:15px;letter-spacing:.2px;color:var(--text);margin-right:22px;text-decoration:none;transition:opacity .2s}
 .top-nav .logo::before{content:"";width:9px;height:9px;border-radius:3px;background:var(--accent);margin-right:9px;box-shadow:0 0 0 3px var(--accentL)}
@@ -34,6 +34,7 @@ strong{color:var(--text)}
 .info-box.err{border-left-color:var(--danger)}
 .info-box .title{font-weight:700;font-size:13px;margin-bottom:4px}
 table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+.tbl-wrap{overflow-x:auto}
 th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
 th{background:var(--accentL);color:var(--accentD);font-weight:600}
 tr:nth-child(even){background:var(--bg2)}
@@ -149,7 +150,7 @@ graph TD
 
 <h3 id="sec-dir">1.2 代码目录结构</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>目录</th><th>职责</th></tr>
 </thead>
@@ -165,11 +166,11 @@ graph TD
 <tr><td><code>src/</code></td><td>所有模块的实现代码（agent、flow、models、rag、runner、runtime、tools 等子目录）</td></tr>
 <tr><td><code>examples/</code></td><td>使用示例</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3 id="sec-platform">1.3 平台支持矩阵</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>平台</th><th>芯片</th><th>推理后端</th><th>构建脚本</th></tr>
 </thead>
@@ -180,7 +181,7 @@ graph TD
 <tr><td><strong>aarch64 SA8295</strong></td><td>SA8295</td><td>QNN（本地）</td><td><code>build_8295_android.sh</code></td></tr>
 <tr><td><strong>aarch64 SA9075</strong></td><td>SA9075P</td><td>QNN（本地）</td><td><code>build_9075_linux.sh</code></td></tr>
 </tbody>
-</table>
+</table></div>
 
 <div class="info-box ok">
 <div class="title">设计原则</div>
@@ -196,7 +197,7 @@ graph TD
 
 <h3 id="sec-mi-api">2.1 核心 API</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>API</th><th>返回类型</th><th>说明</th></tr>
 </thead>
@@ -211,7 +212,7 @@ graph TD
 <tr><td><code>setConfig(config) / getConfig()</code></td><td><code>void / optional&lt;ModelConfig&gt;</code></td><td>设置/获取模型配置参数</td></tr>
 <tr><td><code>is_ready()</code></td><td><code>bool</code></td><td>查询模型是否已就绪</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <div class="info-box">
 <div class="title">回调函数类型</div>
@@ -261,7 +262,7 @@ classDiagram
     Message --> ContentType
 </div></div>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>ContentType</th><th>字段</th><th>说明</th></tr>
 </thead>
@@ -275,13 +276,13 @@ classDiagram
 <tr><td><code>FunctionCall</code></td><td><code>name, arguments, index, id, type</code></td><td>LLM 发起的函数调用</td></tr>
 <tr><td><code>FunctionResponse</code></td><td><code>tool_call_id, name, content</code></td><td>工具调用返回结果</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3 id="sec-mi-config">2.3 ModelConfig 参数</h3>
 
 <p>模型推理参数定义于 <code>aadkapi/model_config.hpp</code>，包含 <code>ModelConfig</code>（全局配置）和 <code>InferParams</code>（单次推理覆写）两个层级。</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>参数</th><th>类型</th><th>默认值</th><th>说明</th></tr>
 </thead>
@@ -298,7 +299,7 @@ classDiagram
 <tr><td><code>enable_jump_forward</code></td><td><code>bool</code></td><td>false</td><td>约束解码跳跃前进优化</td></tr>
 <tr><td><code>config_file_path</code></td><td><code>string</code></td><td>""</td><td>模型特定配置文件路径</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3 id="sec-mi-example">2.4 流式多模态推理代码示例</h3>
 
@@ -360,7 +361,7 @@ flowchart LR
 <h3 id="sec-ms-task">3.2 任务类型与优先级</h3>
 
 <p><strong>四种任务类型</strong>（<code>TaskType</code> 枚举）：</p>
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>TaskType</th><th>值</th><th>说明</th><th>典型场景</th></tr>
 </thead>
@@ -370,10 +371,10 @@ flowchart LR
 <tr><td><code>VISION_DECODE</code></td><td>2</td><td>视觉模型推理</td><td>图像理解、物体检测</td></tr>
 <tr><td><code>AUDIO_DECODE</code></td><td>3</td><td>音频模型推理</td><td>语音编码、ASR</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <p><strong>四种优先级</strong>（<code>PriorityBase</code> 枚举）：</p>
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>优先级</th><th>数值</th><th>适用场景</th></tr>
 </thead>
@@ -383,7 +384,7 @@ flowchart LR
 <tr><td><code>HIGH</code></td><td>30</td><td>车控指令</td></tr>
 <tr><td><code>CRITICAL</code></td><td>40</td><td>紧急安全指令</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <p><strong>综合评分公式</strong>：调度器使用 <code>CompareTask</code> 比较器，基于优先级和等待时间计算综合评分：</p>
 
@@ -394,7 +395,7 @@ flowchart LR
 
 <h3 id="sec-ms-preempt">3.3 抢占机制与 ModelRunner</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>调度操作</th><th>说明</th></tr>
 </thead>
@@ -405,7 +406,7 @@ flowchart LR
 <tr><td><code>StopTask(task_id, scenario_id)</code></td><td>停止指定任务</td></tr>
 <tr><td><code>ListAllTasks()</code></td><td>列出所有任务及其状态</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <p><strong>ModelRunner 单例</strong>（<code>aadkapi/model_runner.h</code>）是调度器的上层封装：</p>
 <ul>
@@ -429,7 +430,7 @@ flowchart LR
 
 <h3 id="sec-ch-zone">4.1 音区枚举 AudioZone</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>枚举值</th><th>zone_id</th><th>说明</th></tr>
 </thead>
@@ -443,10 +444,10 @@ flowchart LR
 <tr><td><code>BackRightZone</code></td><td>32</td><td>BackRightZone（扩展）</td></tr>
 <tr><td><code>AllZone</code></td><td>0xFF</td><td>所有音区</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <p><strong>ChatMessage 三种类型</strong>：</p>
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>类型</th><th>工厂方法</th><th>说明</th></tr>
 </thead>
@@ -455,7 +456,7 @@ flowchart LR
 <tr><td><code>response</code></td><td><code>ChatMessage::response(content, zone, call_id, ts)</code></td><td>模型回复</td></tr>
 <tr><td><code>info</code></td><td><code>ChatMessage::info(content, call_id, ts, zone)</code></td><td>Agent 执行过程中需要加入上下文的系统信息</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3 id="sec-ch-user">4.2 关键人物系统 — UserInfo</h3>
 
@@ -484,7 +485,7 @@ flowchart LR
 
 <h3 id="sec-ch-query">4.3 历史获取策略</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>方法</th><th>参数</th><th>说明</th></tr>
 </thead>
@@ -497,7 +498,7 @@ flowchart LR
 <tr><td><code>removeUserinfoByAlias(alias, remove_history)</code></td><td><code>string, bool</code></td><td>删除关键人物，可选同时删除其对话记录</td></tr>
 <tr><td><code>clear()</code></td><td>-</td><td>清空所有历史记录和 UserInfo</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <div class="info-box warn">
 <div class="title">默认 Token 估算规则</div>
@@ -511,7 +512,7 @@ flowchart LR
 
 <p><code>RagInstance</code>（定义于 <code>aadkapi/rag_instance.hpp</code>）为 Agent 提供可插拔的 RAG（Retrieval-Augmented Generation）能力。通过构造时指定 <code>service_name</code>，内部路由到对应的 <code>RagServiceBase</code> 实现。</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>API</th><th>返回类型</th><th>说明</th></tr>
 </thead>
@@ -521,7 +522,7 @@ flowchart LR
 <tr><td><code>query(query_str)</code></td><td><code>vector&lt;string&gt;</code></td><td>检索与查询相关的知识片段列表</td></tr>
 <tr><td><code>isReady()</code></td><td><code>bool</code></td><td>检查 RAG 服务是否就绪</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <div class="mermaid-wrap"><div class="mermaid">
 flowchart LR
@@ -571,7 +572,7 @@ flowchart LR
 
 <h3>6.1 四种传输类型</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>枚举值</th><th>传输类型</th><th>说明</th><th>适用场景</th></tr>
 </thead>
@@ -581,11 +582,11 @@ flowchart LR
 <tr><td><code>MCP_TRANSPORT_HTTP</code></td><td>HTTP</td><td>HTTP 请求/响应</td><td>RESTful 调用</td></tr>
 <tr><td><code>MCP_TRANSPORT_FUSION</code></td><td>Fusion</td><td>自定义融合协议</td><td>车载系统内部通信</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3>6.2 核心 API</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>API</th><th>说明</th></tr>
 </thead>
@@ -599,7 +600,7 @@ flowchart LR
 <tr><td><code>AddServer(server, path)</code> (static)</td><td>注册 MCP 服务器实例到指定路径</td></tr>
 <tr><td><code>StartServers(config, transport, addr, port)</code> (static)</td><td>批量启动所有已注册的 MCP 服务器</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3>6.3 注册工具代码示例</h3>
 
@@ -659,7 +660,7 @@ stateDiagram-v2
 
 <h3>7.2 A2AServer API</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>API</th><th>说明</th></tr>
 </thead>
@@ -669,11 +670,11 @@ stateDiagram-v2
 <tr><td><code>Stop()</code></td><td>停止 A2A 服务</td></tr>
 <tr><td><code>Append(other)</code></td><td>将其他 A2A Agent 共享同一个 HTTP 服务</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3>7.3 A2ATaskHandler</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>API</th><th>说明</th></tr>
 </thead>
@@ -682,7 +683,7 @@ stateDiagram-v2
 <tr><td><code>AddArtifact(taskId, artifact, isFinal, isAppend)</code></td><td>添加产出物（文本/文件），支持标记是否为最终产出</td></tr>
 <tr><td><code>GetTask(taskId)</code></td><td>查询任务详细信息（JSON 格式）</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3>7.4 多 Agent 协作场景</h3>
 
@@ -735,7 +736,7 @@ flowchart TD
 
 <p>定义于 <code>include/runtime/agent_plugin.h</code>，是所有业务 Agent 必须实现的抽象接口：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>方法</th><th>返回类型</th><th>说明</th></tr>
 </thead>
@@ -745,10 +746,10 @@ flowchart TD
 <tr><td><code>clear_memory()</code></td><td><code>bool</code></td><td>清除对话历史</td></tr>
 <tr><td><code>set_data_dump_flag(flag)</code></td><td><code>void</code></td><td>设置数据录制标志（默认空实现）</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <p><strong>场景 ID 常量</strong>（<code>constant_ids.h</code>）：</p>
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>常量</th><th>ID</th><th>场景</th></tr>
 </thead>
@@ -762,7 +763,7 @@ flowchart TD
 <tr><td><code>WELCOME_MODE_SCENARIO_ID</code></td><td>700</td><td>迎宾模式</td></tr>
 <tr><td><code>BROADCAST_SCENARIO_ID</code></td><td>65535</td><td>广播消息</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3 id="sec-rt-load">8.2 动态加载机制</h3>
 
@@ -837,7 +838,7 @@ flowchart TD
 
 <h3 id="sec-flow-tool">9.2 BaseTool 工具基类</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>属性/方法</th><th>返回类型</th><th>说明</th></tr>
 </thead>
@@ -849,7 +850,7 @@ flowchart TD
 <tr><td><code>run_async(args, context)</code></td><td><code>Task&lt;bool&gt;</code></td><td>异步执行工具，参数为 <code>map&lt;string, any&gt;</code></td></tr>
 <tr><td><code>process_llm_request(context)</code></td><td><code>Task&lt;tuple&gt;</code></td><td>处理 LLM 请求，返回描述文本和 ToolDefinition</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <p><strong>ToolDefinition 结构</strong>（定义于 <code>content.hpp</code>）：</p>
 <pre><code>struct ToolDefinition {
@@ -919,7 +920,7 @@ sequenceDiagram
 
 <h3>10.1 端云分工策略</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>请求类型</th><th>处理方</th><th>原因</th><th>示例</th></tr>
 </thead>
@@ -930,7 +931,7 @@ sequenceDiagram
 <tr><td><strong>知识密集型</strong></td><td>云端</td><td>需要实时联网搜索</td><td>"最近有什么好看的电影" "XX 餐厅评价怎么样"</td></tr>
 <tr><td><strong>多模态理解</strong></td><td>端侧优先，云端增强</td><td>端侧快速响应 + 云端精准分析</td><td>DMS 疲劳检测（端侧）+ 复杂场景分析（云端）</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3>10.2 协同架构设计</h3>
 
@@ -951,7 +952,7 @@ flowchart TB
     style RES fill:#2ecc71,color:#fff
 </div></div>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>协同模式</th><th>工作方式</th><th>延迟</th><th>适用场景</th></tr>
 </thead>
@@ -961,13 +962,13 @@ flowchart TB
 <tr><td><strong>端侧草稿 (Draft-Refine)</strong></td><td>端侧快速生成初稿，云端校验/润色</td><td>中（端侧先显示，云端更新）</td><td>长文本生成、复杂回答</td></tr>
 <tr><td><strong>云端主导 (Cloud-Primary)</strong></td><td>直接转云端处理</td><td>高（依赖网络）</td><td>明确需要大模型或联网的请求</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h3>10.3 离线降级与缓存</h3>
 
 <p>当网络不可用时（隧道、地下车库、偏远地区），端云协同需要优雅降级：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>降级策略</th><th>实现方式</th><th>用户体验</th></tr>
 </thead>
@@ -977,7 +978,7 @@ flowchart TB
 <tr><td><strong>云端结果缓存</strong></td><td>云端返回的结果（路线规划、POI 信息）缓存到本地</td><td>重复查询直接本地返回</td></tr>
 <tr><td><strong>网络恢复后同步</strong></td><td>离线期间的日志和请求在恢复后批量上传</td><td>不丢失数据</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <div class="info-box">
 <div class="title">端云协同与 aadkcore 的集成</div>
@@ -993,7 +994,7 @@ flowchart TB
 
 <h3>11.1 三级安全分级</h3>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>安全等级</th><th>操作类型</th><th>确认要求</th><th>示例工具</th><th>实现方式</th></tr>
 </thead>
@@ -1020,7 +1021,7 @@ flowchart TB
 <td>强制二次确认 + 车辆状态安全检查 + 必要时生物认证</td>
 </tr>
 </tbody>
-</table>
+</table></div>
 
 <h3>11.2 安全检查流水线</h3>
 
@@ -1042,7 +1043,7 @@ flowchart LR
 
 <p>安全检查流水线中的各环节：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>检查环节</th><th>检查内容</th><th>拒绝示例</th></tr>
 </thead>
@@ -1073,13 +1074,13 @@ flowchart LR
 <td>后排乘客尝试 unlock_door → 拒绝：权限不足</td>
 </tr>
 </tbody>
-</table>
+</table></div>
 
 <h3>11.3 Prompt 注入防御</h3>
 
 <p>LLM 存在 Prompt 注入风险——恶意用户可能通过精心构造的输入欺骗模型执行危险操作。座舱场景的防御需要多层保护：</p>
 
-<table>
+<div class="tbl-wrap"><table>
 <thead>
 <tr><th>防御层</th><th>实现方式</th><th>防御目标</th></tr>
 </thead>
@@ -1105,7 +1106,7 @@ flowchart LR
 <td>防止 LLM 幻觉出非法参数值</td>
 </tr>
 </tbody>
-</table>
+</table></div>
 
 <div class="info-box err">
 <div class="title">安全沙箱的核心原则：不信任 LLM 输出</div>

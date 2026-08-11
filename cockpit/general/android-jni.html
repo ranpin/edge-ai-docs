@@ -8,7 +8,7 @@
 :root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--shadow:rgba(0,0,0,.08);--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-bg:rgba(255,255,255,.82);--nav-h:52px}
 [data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e;--shadow:rgba(0,0,0,.3);--nav-bg:rgba(15,15,26,.82)}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px;overflow-wrap:break-word}
 .top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);display:flex;align-items:center;padding:0 20px;z-index:1000;background:var(--nav-bg);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
 .top-nav .logo{display:flex;align-items:center;font-weight:800;font-size:15px;letter-spacing:.2px;color:var(--text);margin-right:22px;text-decoration:none;transition:opacity .2s}
 .top-nav .logo::before{content:"";width:9px;height:9px;border-radius:3px;background:var(--accent);margin-right:9px;box-shadow:0 0 0 3px var(--accentL)}
@@ -38,6 +38,7 @@ strong{color:var(--text)}
 .info-box.err{border-left-color:var(--danger)}
 .info-box .title{font-weight:700;font-size:13px;margin-bottom:4px}
 table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+.tbl-wrap{overflow-x:auto}
 th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
 th{background:var(--accentL);color:var(--accentD);font-weight:600}
 tr:nth-child(even){background:var(--bg2)}
@@ -302,7 +303,7 @@ Java_..._nativeCreate(JNIEnv* env, jclass clazz) { ... }
 <li><strong><code>JNIEnv* env</code></strong>：JNI 环境指针，所有 JNI 操作（转字符串、调方法、抛异常）都通过它。它是「线程局部」的——每个线程有自己的 <code>JNIEnv</code>（回调时至关重要，见 5.3）。</li>
 <li><strong><code>jclass</code></strong>：native 方法是 <code>static</code> 时第二个参数是类（<code>jclass</code>）；非 static 时是实例（<code>jobject</code>）。本项目 native 方法全是 static。</li>
 </ul>
-<table>
+<div class="tbl-wrap"><table>
 <thead><tr><th>Java</th><th>JNI</th><th>C/C++</th></tr></thead>
 <tbody>
 <tr><td><code>boolean</code></td><td><code>jboolean</code></td><td><code>unsigned char</code>（JNI_TRUE/FALSE）</td></tr>
@@ -312,7 +313,7 @@ Java_..._nativeCreate(JNIEnv* env, jclass clazz) { ... }
 <tr><td><code>byte[]</code></td><td><code>jbyteArray</code></td><td>需 <code>GetByteArrayElements</code></td></tr>
 <tr><td><code>Object</code></td><td><code>jobject</code></td><td>不透明句柄</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <!-- ==================== Chapter 5 ==================== -->
 <h2 id="ch5">5. JNI 进阶</h2>
@@ -445,14 +446,14 @@ flowchart TB
 <li><strong>Skel/Stub 模式</strong>：FastRPC 把一次跨处理器调用拆成两半——CPU 侧叫 <strong>Stub</strong>（桩），DSP 侧叫 <strong>Skel</strong>（骨架）。</li>
 </ul>
 <p>这解释了三件 otherwise 很怪的事：</p>
-<table>
+<div class="tbl-wrap"><table>
 <thead><tr><th>现象</th><th>原因</th></tr></thead>
 <tbody>
 <tr><td>加载顺序先 <code>cdsprpc</code> 后 <code>modelinfer</code></td><td>SDK 初始化就要经 FastRPC 跟 DSP 握手，FastRPC 库没加载就握不上</td></tr>
 <tr><td><code>Skel.so</code> 不能 strip</td><td>它在 DSP 侧运行，CPU 链接器看不到它「被用」，strip 掉 DSP 就加载不了</td></tr>
 <tr><td>要设 <code>ADSP_LIBRARY_PATH</code></td><td>DSP 侧 Skel 库不在标准路径，得靠这个环境变量告诉 FastRPC 去哪找</td></tr>
 </tbody>
-</table>
+</table></div>
 <p>更底层的芯片/DSP/SSR 细节见 <a href="hardware.html">Part A: 硬件与系统底层</a>。</p>
 
 <h3>6.2 前台服务 + 自愈（稳定性设计）</h3>
@@ -483,7 +484,7 @@ flowchart TB
 <!-- ==================== Chapter 7 ==================== -->
 <h2 id="ch7">7. 动手练习路径</h2>
 <p>光读不够，建议按这个阶梯亲手做一遍，每一步都可运行验证：</p>
-<table>
+<div class="tbl-wrap"><table>
 <thead><tr><th>阶段</th><th>目标</th><th>关键动作</th></tr></thead>
 <tbody>
 <tr><td><strong>1. 纯 Android</strong></td><td>熟悉工程与生命周期</td><td>New Project（Empty Views，Java，minSdk 33）→ 改 <code>MainActivity</code> 加按钮改文字 → 新建 Service 看 Logcat 生命周期</td></tr>
@@ -492,7 +493,7 @@ flowchart TB
 <tr><td><strong>4. C++ 回调 Java</strong></td><td>异步回调（最难）</td><td>传 Java 回调接口，C++ 里 <code>NewGlobalRef</code> + <code>GetMethodID</code>，开 <code>std::thread</code> 延迟 1 秒后 <code>AttachCurrentThread</code> + <code>CallVoidMethod</code></td></tr>
 <tr><td><strong>5. 读懂 lantu_demo</strong></td><td>融会贯通</td><td>重读 <code>BanmaModelInference.java</code> + <code>modelinfer.cpp</code>，此时每行都应能说出「为什么」</td></tr>
 </tbody>
-</table>
+</table></div>
 <div class="info-box ok">
 <div class="title">小结</div>
 <p>阶段 2–4 是 JNI 的全部核心，<code>lantu_demo</code> 只是在这之上叠加了 NPU/QNN/服务化。把这三阶段做扎实，这个项目的 JNI 部分就没有秘密了。完整架构与实现细节见 <a href="../projects/agent-framework/apk-integration.html">Part G: APK 集成与端侧服务化</a>。</p>
