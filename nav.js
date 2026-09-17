@@ -112,9 +112,10 @@
   // Synchronous shell: logo + empty categories + theme button. The theme button must
   // exist before each page's inline script binds themeBtn, so only .en-cats is filled
   // asynchronously — it is never rebuilt after the fact.
+  var editTarget = sc.getAttribute('data-edit') || active;
   var editHtml = '';
-  if (active && active !== 'index.html' && /\.html$/.test(active)) {
-    editHtml = '<a class="edit-btn" href="' + EDIT_BASE + active + '" target="_blank" rel="noopener" title="在 GitHub 上编辑此页">&#9998;<span>编辑此页</span></a>';
+  if (editTarget && editTarget !== 'index.html' && /\.(html|md)$/.test(editTarget)) {
+    editHtml = '<a class="edit-btn" href="' + EDIT_BASE + editTarget + '" target="_blank" rel="noopener" title="在 GitHub 上编辑此页">&#9998;<span>编辑此页</span></a>';
   }
   nav.innerHTML = '<a class="logo" href="' + base + 'index.html"><span class="en-logo-txt">Edge AI Docs</span></a>' +
     '<div class="en-cats"></div>' +
