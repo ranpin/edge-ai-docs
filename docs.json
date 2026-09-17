@@ -76,7 +76,7 @@
           "docs": [
             {
               "title": "项目总览",
-              "file": "cockpit-agent.html",
+              "file": "cockpit/projects/agent-framework/overview.html",
               "badge": "总览",
               "status": "done",
               "desc": "大模型 Agent 框架项目总览：整体架构、模块划分与文档导读",
