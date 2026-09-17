@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIService 后端集成与重构 — 端侧 AI 学习文档</title>
+<style>
+:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-bg:rgba(255,255,255,.82);--nav-h:52px}
+[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e;--nav-bg:rgba(15,15,26,.82)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px;overflow-wrap:break-word}
+.top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);display:flex;align-items:center;padding:0 20px;z-index:1000;background:var(--nav-bg);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+.top-nav .logo{display:flex;align-items:center;font-weight:800;font-size:15px;letter-spacing:.2px;color:var(--text);margin-right:22px;text-decoration:none;transition:opacity .2s}
+.top-nav .logo::before{content:"";width:9px;height:9px;border-radius:3px;background:var(--accent);margin-right:9px;box-shadow:0 0 0 3px var(--accentL)}
+.top-nav .logo:hover{opacity:.7}
+.top-nav .right{margin-left:auto}
+.theme-btn{background:transparent;border:1px solid var(--border);border-radius:8px;padding:5px 10px;cursor:pointer;font-size:13px;color:var(--text2);transition:color .18s,border-color .18s,background .18s}
+.theme-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accentL)}
+.sidebar{position:fixed;top:var(--nav-h);left:0;bottom:0;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;z-index:900}
+.sidebar a{display:block;padding:4px 16px 4px 20px;text-decoration:none;color:var(--text2);font-size:12px;border-left:3px solid transparent}
+.sidebar a:hover{color:var(--accent);background:var(--accentL)}
+.sidebar a.active{color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.sidebar .toc-part{padding:8px 20px 4px;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px}
+.main{margin-left:var(--sidebar-w);margin-top:var(--nav-h);padding:28px 40px 60px;max-width:900px}
+h1{font-size:26px;font-weight:800;margin-bottom:6px}
+.subtitle{font-size:14px;color:var(--muted);margin-bottom:28px}
+h2{font-size:20px;font-weight:700;margin:36px 0 14px;padding-bottom:6px;border-bottom:2px solid var(--accentL)}
+h3{font-size:16px;font-weight:600;margin:20px 0 10px}
+p{margin-bottom:10px;color:var(--text2)}
+strong{color:var(--text)}
+.info-box{padding:14px 16px;border-radius:7px;margin:14px 0;border-left:4px solid var(--info);background:var(--bg2);font-size:14px}
+.info-box.warn{border-left-color:var(--warning)}
+.info-box.ok{border-left-color:var(--success)}
+.info-box.err{border-left-color:var(--danger)}
+.info-box .title{font-weight:700;font-size:13px;margin-bottom:4px}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+.tbl-wrap{overflow-x:auto}
+th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
+th{background:var(--accentL);color:var(--accentD);font-weight:600}
+tr:nth-child(even){background:var(--bg2)}
+.mermaid-wrap{margin:16px 0;padding:16px;background:var(--bg2);border-radius:7px;overflow-x:auto}
+.chart-wrap{margin:16px 0;background:var(--bg2);border-radius:7px;padding:12px}
+.chart-box{width:100%;height:360px}
+pre{background:var(--bg3);border-radius:7px;padding:14px;overflow-x:auto;font-size:13px;margin:10px 0}
+code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
+:not(pre)>code{background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--accent)}
+ol.steps{margin:10px 0 10px 20px;color:var(--text2)}
+ol.steps li{margin-bottom:6px}
+ol.steps code{font-size:12px}
+@media(max-width:900px){.sidebar{display:none}.main{margin-left:0;padding:20px 16px 60px}}
+@media print{.top-nav,.sidebar,.theme-btn{display:none!important}.main{margin:0;padding:16px;max-width:100%}}
+
+blockquote{border-left:3px solid var(--accent);padding:8px 14px;margin:14px 0;color:var(--text2);background:var(--bg2);border-radius:0 6px 6px 0;font-size:13.5px}
+blockquote p{margin-bottom:4px;color:var(--text2)}
+blockquote strong{color:var(--text)}</style>
+</head>
+<body>
+
+<!-- ===== Top Navigation ===== -->
+<nav class="top-nav"></nav>
+<script src="../../../nav.js" data-active="cockpit/projects/lantu/aiservice-integration.html"></script>
+
+<!-- ===== Sidebar TOC ===== -->
+<aside class="sidebar">
+  <div class="toc-part">AIService 后端集成</div>
+  <a href="#sec-1" class="active">背景简介</a>
+  <a href="#sec-2">核心技术路线</a>
+  <a href="#sec-3">aiservice 后端实现</a>
+  <a href="#sec-4">难点</a>
+</aside>
+
+<!-- ===== Main Content ===== -->
+<main class="main">
+
+<h1>岚图 AI Service 后端集成与重构</h1>
+<h2 id="sec-1">背景简介</h2>
+<p>调整原先 GenAI 推理框架，改为采用岚图自研的 aiservice 推理框架。</p>
+<h2 id="sec-2">核心技术路线</h2>
+<p>增加 aiservice 后端，多后端兼容实现。</p>
+<h2 id="sec-3">aiservice 后端实现</h2>
+<p>通过 http 请求发送，解析输出。</p>
+<p>Agentcore + agent_group 负责消息分发、agent 路由、任务管理、组织数据、预处理后处理等（test、msgdeliver、modelrunner、modelinstance）。</p>
+<p>其中 qnnmodel.cpp 调用 <code>llms.so</code>，使用 Genai 推理框架负责模型推理。</p>
+<p>aiservice.cpp 通过发送 http 请求的方式使用 aiservice 推理框架进行模型的加载和推理，并解析返回的结果。</p>
+<h2 id="sec-4">难点</h2>
+<ol>
+<li>
+<p><strong>效果对齐（请求格式）</strong>：保证发送的请求格式与参考实现一致。三场景请求体形状不同——
+   - Agent100（舱外车辆）：<code>{"body":{"request_id","timestamp","car_signal":{...}}}</code>（有 body 包装）
+   - Agent200（衣着/空调）：<code>{"request_id","timestamp","voice_zone":N}</code>，<strong><code>voice_zone</code> 只读顶层</strong>、没有 body 包装
+   - Agent300（舱外问答）：<code>{"body":{"request_id","camera_id","timestamp","query":...}}</code>
+   - 判据必须抄参考实现 <code>example/src/android_sdk_test.cpp</code> 的 <code>content[...]</code> 赋值，<strong>不能抄 app 校验代码读的位置</strong>（app 那处只是打日志校验，SDK dispatcher 拿不到）；<code>presure</code> 是上游的拼写（一个 s），照抄不要"纠正"。</p>
+</li>
+<li>
+<p><strong>服务端扫描与"模型生效"陷阱</strong>：VoyahAIService（<code>/vendor/bin/</code>，监听 8090）模型扫描根<strong>硬编码 <code>/AI/VLM/models</code></strong>，且<strong>只在启动时扫描</strong>。<code>GET /v1/models</code> 返回 <code>loaded</code> <strong>不等于新模型已生效</strong>——进程只认启动时扫到的目录，旧目录改名后 inode 仍活着会继续服务旧包，唯一硬证据是 <code>/proc/&lt;pid&gt;/maps</code>。</p>
+</li>
+<li>
+<p><strong>跨形态结果不可直接对比</strong>：genai 与 aiservice 用的是<strong>两个不同的模型包</strong>（版本、全部 11 个 prefix KV 缓存、LoRA 权重 md5 均不同），输出差异是<strong>模型 build 不同</strong>而非后端数值差异。不要跨版本移植 prefix KV 来"对齐"——KV 是用特定权重预计算的 prefill 状态，混用等于拿可解释差异换不可解释不一致。</p>
+</li>
+<li>
+<p><strong>服务端无 token 计量</strong>：非流式 <code>usage</code> 恒 0（<code>input_tokens</code> 客户端不可得，本地也无 tokenizer）、<code>max_tokens</code> 被忽略、无 <code>/metrics</code> 端点。但 <strong>1 个 SSE 内容帧 = 1 个 token</strong>，数回调次数即 <code>output_tokens</code>。</p>
+</li>
+<li>
+<p><strong>约束解码（stage3 grammar）缺失</strong>：QNN 后端未实现约束解码，缺 EBNF 时仅 warn 后<strong>静默降级</strong>继续，曾导致舱外结果错乱——这是"结果不对"类问题的高发根因，排查时要先确认 grammar 是否真正生效。</p>
+</li>
+<li>
+<p><strong>SSE 解析与 TTFT 口径</strong>：SSE 开场帧（<code>delta:{"role":"assistant"}</code>）标记的是"服务端已受理"<strong>而非 prefill 完成</strong>，TTFT 可拆为"受理 + prefill"两段；<code>parseSSE</code> 按 <code>\n\n</code> 切帧，对 TCP 粘包免疫。</p>
+</li>
+<li>
+<p><strong>SELinux（APK 侧上机第一坑）</strong>：<code>/AI</code> 标签 <code>u:object_r:AI_file:s0</code>，策略不允许 <code>untrusted_app</code> 域 search/getattr，症状只有 Java 侧一句 <code>Model directory NOT FOUND</code>，极易误判成"模型没放好"。demo 需 <code>setenforce 0</code>（重启失效）；量产岚图 App 是 system/vendor 应用，不受此限。</p>
+</li>
+<li>
+<p><strong>形态解耦（重构）</strong>：<code>ENABLE_QNN_MODEL</code> 一个开关同时管住源码/include/链接/install 四层，aiservice 形态关闭 QNN 后包体 378→222MB；回摆只需改一个 flag。</p>
+</li>
+</ol>
+
+</main>
+
+<!-- ===== Scripts at bottom ===== -->
+<script defer src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+var b=document.getElementById('themeBtn');
+b.onclick=function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('theme',h.dataset.theme)}catch(e){}};
+try{var s=localStorage.getItem('theme');if(s)document.documentElement.dataset.theme=s}catch(e){}
+
+var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.remove('active')});var l=document.querySelector('.sidebar a[href="#'+e.target.id+'"]');if(l)l.classList.add('active')}})},{rootMargin:'-60px 0px -70% 0px'});
+document.querySelectorAll('h2[id],h3[id]').forEach(function(h){obs.observe(h)});
+
+window.addEventListener('load',function(){
+  try{if(typeof mermaid!=='undefined'){mermaid.initialize({startOnLoad:true,theme:document.documentElement.dataset.theme==='dark'?'dark':'default',securityLevel:'loose'})}}catch(e){}
+});
+</script>
+</body>
+</html>
