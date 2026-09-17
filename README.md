@@ -36,9 +36,11 @@
 
 **在线（推荐）**：在任意文档页点右上角「✎ 编辑此页」→ 跳转 GitHub 网页编辑器（已定位到该 `.md`）→ 改完 commit → Actions 约 30 秒自动重建部署。
 
-**本地预览**：
+**本地预览**（仓库私有时也能预览，无需公开）：
 
 ```bash
+./preview.sh            # 一键：构建 + 起服务，打开 http://localhost:8000
+# 或手动分步：
 pip install markdown
 python3 _build/build.py                 # 生成 dist/
 cd dist && python3 -m http.server 8000  # 打开 http://localhost:8000
