@@ -81,7 +81,7 @@ blockquote strong{color:var(--text)}</style>
 <h2 id="sec-1">一、 性能优化细节对比</h2>
 <h3 id="sec-2">1. 上海环境（未加水冷）</h3>
 <blockquote>
-<p><strong>数据情况说明</strong>：上海未水冷对应 <strong>0428 首测报告</strong>（<code>性能测试报告v1.0_20260428-final.xlsx</code>，v0.1 早期模型、device f3467604、3 核）。该报告仅有<strong>场景级整体耗时</strong>，<strong>无逐阶段分解、无单核对照</strong>：car 5770 / animals 5965 / plant 5434 / traffic_sign 5548 / left_child 3810 ms（TTFT 1221~1674ms、TPS 47~54，均未达标，属早期模型）。
+<p><strong>数据情况说明</strong>：上海未水冷对应 <strong>0428 首测报告</strong>（<code>性能测试报告v1.0_20260428-final.xlsx</code>，v0.1 早期模型、3 核测试台架）。该报告仅有<strong>场景级整体耗时</strong>，<strong>无逐阶段分解、无单核对照</strong>：car 5770 / animals 5965 / plant 5434 / traffic_sign 5548 / left_child 3810 ms（TTFT 1221~1674ms、TPS 47~54，均未达标，属早期模型）。
 下表中原 <code>3806 / 6559 ms</code>（3核/单核 舱外端到端）来源更早（疑为 0425 实车摸底或单核内部对比），其<strong>逐阶段 TTFT/TPS/tokens 明细在现有材料中未覆盖</strong>，故标"—"；单核为 4 月前配置（readme：4 月起统一三核），无对应报告。</p>
 </blockquote>
 <h4>舱内遗留问答</h4>
