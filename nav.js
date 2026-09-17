@@ -8,6 +8,7 @@
   if (!sc) return;
   var base = sc.src.replace(/nav\.js(\?.*)?$/, '');
   var active = sc.getAttribute('data-active') || '';
+  var EDIT_BASE = 'https://github.com/ranpin/edge-ai-docs/edit/main/';
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -38,7 +39,9 @@
     '.en-b{flex:none;font-size:10px;font-weight:600;letter-spacing:.3px;color:var(--muted);background:var(--bg3);border:1px solid var(--border);padding:1px 6px;border-radius:5px}',
     '.en-item:hover .en-b,.en-item.active .en-b{color:var(--accent);background:transparent;border-color:transparent}',
     '.en-logo-txt{transition:opacity .2s}',
-    '@media(max-width:640px){.en-logo-txt{display:none}.top-nav .logo::before{margin-right:0}.en-trigger{padding:6px 9px}}'
+    '.edit-btn{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:13px;color:var(--text2);text-decoration:none;margin-right:8px;white-space:nowrap;transition:color .18s,border-color .18s,background .18s}',
+    '.edit-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accentL)}',
+    '@media(max-width:640px){.en-logo-txt{display:none}.top-nav .logo::before{margin-right:0}.en-trigger{padding:6px 9px}.edit-btn span{display:none}.edit-btn{padding:5px 8px}}'
   ].join('\n');
 
   /* Build the category dropdowns from docs.json's `categories` array.
@@ -109,9 +112,13 @@
   // Synchronous shell: logo + empty categories + theme button. The theme button must
   // exist before each page's inline script binds themeBtn, so only .en-cats is filled
   // asynchronously — it is never rebuilt after the fact.
+  var editHtml = '';
+  if (active && active !== 'index.html' && /\.html$/.test(active)) {
+    editHtml = '<a class="edit-btn" href="' + EDIT_BASE + active + '" target="_blank" rel="noopener" title="在 GitHub 上编辑此页">&#9998;<span>编辑此页</span></a>';
+  }
   nav.innerHTML = '<a class="logo" href="' + base + 'index.html"><span class="en-logo-txt">Edge AI Docs</span></a>' +
     '<div class="en-cats"></div>' +
-    '<div class="right"><button type="button" class="theme-btn" id="themeBtn">&#9790; / &#9788;</button></div>';
+    '<div class="right">' + editHtml + '<button type="button" class="theme-btn" id="themeBtn">&#9790; / &#9788;</button></div>';
 
   var mount = nav.querySelector('.en-cats');
   fetch(base + 'docs.json', { cache: 'no-cache' })
