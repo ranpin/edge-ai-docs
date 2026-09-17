@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>效果及性能测试（GenAI 方案） — 端侧 AI 学习文档</title>
+<style>
+:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-bg:rgba(255,255,255,.82);--nav-h:52px}
+[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e;--nav-bg:rgba(15,15,26,.82)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px;overflow-wrap:break-word}
+.top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);display:flex;align-items:center;padding:0 20px;z-index:1000;background:var(--nav-bg);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+.top-nav .logo{display:flex;align-items:center;font-weight:800;font-size:15px;letter-spacing:.2px;color:var(--text);margin-right:22px;text-decoration:none;transition:opacity .2s}
+.top-nav .logo::before{content:"";width:9px;height:9px;border-radius:3px;background:var(--accent);margin-right:9px;box-shadow:0 0 0 3px var(--accentL)}
+.top-nav .logo:hover{opacity:.7}
+.top-nav .right{margin-left:auto}
+.theme-btn{background:transparent;border:1px solid var(--border);border-radius:8px;padding:5px 10px;cursor:pointer;font-size:13px;color:var(--text2);transition:color .18s,border-color .18s,background .18s}
+.theme-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accentL)}
+.sidebar{position:fixed;top:var(--nav-h);left:0;bottom:0;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;z-index:900}
+.sidebar a{display:block;padding:4px 16px 4px 20px;text-decoration:none;color:var(--text2);font-size:12px;border-left:3px solid transparent}
+.sidebar a:hover{color:var(--accent);background:var(--accentL)}
+.sidebar a.active{color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.sidebar .toc-part{padding:8px 20px 4px;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px}
+.main{margin-left:var(--sidebar-w);margin-top:var(--nav-h);padding:28px 40px 60px;max-width:900px}
+h1{font-size:26px;font-weight:800;margin-bottom:6px}
+.subtitle{font-size:14px;color:var(--muted);margin-bottom:28px}
+h2{font-size:20px;font-weight:700;margin:36px 0 14px;padding-bottom:6px;border-bottom:2px solid var(--accentL)}
+h3{font-size:16px;font-weight:600;margin:20px 0 10px}
+p{margin-bottom:10px;color:var(--text2)}
+strong{color:var(--text)}
+.info-box{padding:14px 16px;border-radius:7px;margin:14px 0;border-left:4px solid var(--info);background:var(--bg2);font-size:14px}
+.info-box.warn{border-left-color:var(--warning)}
+.info-box.ok{border-left-color:var(--success)}
+.info-box.err{border-left-color:var(--danger)}
+.info-box .title{font-weight:700;font-size:13px;margin-bottom:4px}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+.tbl-wrap{overflow-x:auto}
+th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
+th{background:var(--accentL);color:var(--accentD);font-weight:600}
+tr:nth-child(even){background:var(--bg2)}
+.mermaid-wrap{margin:16px 0;padding:16px;background:var(--bg2);border-radius:7px;overflow-x:auto}
+.chart-wrap{margin:16px 0;background:var(--bg2);border-radius:7px;padding:12px}
+.chart-box{width:100%;height:360px}
+pre{background:var(--bg3);border-radius:7px;padding:14px;overflow-x:auto;font-size:13px;margin:10px 0}
+code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
+:not(pre)>code{background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--accent)}
+ol.steps{margin:10px 0 10px 20px;color:var(--text2)}
+ol.steps li{margin-bottom:6px}
+ol.steps code{font-size:12px}
+@media(max-width:900px){.sidebar{display:none}.main{margin-left:0;padding:20px 16px 60px}}
+@media print{.top-nav,.sidebar,.theme-btn{display:none!important}.main{margin:0;padding:16px;max-width:100%}}
+
+blockquote{border-left:3px solid var(--accent);padding:8px 14px;margin:14px 0;color:var(--text2);background:var(--bg2);border-radius:0 6px 6px 0;font-size:13.5px}
+blockquote p{margin-bottom:4px;color:var(--text2)}
+blockquote strong{color:var(--text)}</style>
+</head>
+<body>
+
+<!-- ===== Top Navigation ===== -->
+<nav class="top-nav"></nav>
+<script src="../../../nav.js" data-active="cockpit/projects/lantu/effect-performance.html"></script>
+
+<!-- ===== Sidebar TOC ===== -->
+<aside class="sidebar">
+  <div class="toc-part">效果及性能测试</div>
+  <a href="#sec-1" class="active">一、 评测方法与工具</a>
+  <a href="#sec-4">二、 测试数据分布</a>
+  <a href="#sec-6">三、 效果指标 (Accuracy / F1 / mAP)</a>
+  <a href="#sec-10">四、 性能指标 (Latency &amp; Throughput)</a>
+  <a href="#sec-13">五、 系统级监控指标</a>
+  <a href="#sec-15">六、 结合 2026-09-16 节点的复盘建议</a>
+</aside>
+
+<!-- ===== Main Content ===== -->
+<main class="main">
+
+<h1>岚图8397量产项目SDK：效果及性能测试报告（GenAI方案）</h1>
+<blockquote>
+<p><strong>时间背景</strong>：2026-09-16
+<strong>说明</strong>：本文档为上一份《性能优化、存储与稳定性测试报告》的延续，主要补充 GenAI 方案的评测方法、数据分布、效果指标及性能监控体系。已将所有内容重构为标准 Markdown 表格格式，核心逻辑保持不变，留白处待后续实测数据填补。</p>
+</blockquote>
+<hr />
+<h2 id="sec-1">一、 评测方法与工具</h2>
+<h3 id="sec-2">1. 评测方式对比</h3>
+<div class="tbl-wrap"><table>
+<thead>
+<tr>
+<th style="text-align: left;">评测方式</th>
+<th style="text-align: left;">适用场景</th>
+<th style="text-align: left;">优势说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>SDK 方式</strong></td>
+<td style="text-align: left;">算法快速验证阶段</td>
+<td style="text-align: left;">便于直接读取本地 JSON 数据文件进行批量推理，快速验证模型效果与性能基线。</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>APK 方式</strong></td>
+<td style="text-align: left;">完整业务链路与平台对接</td>
+<td style="text-align: left;">集成 AADK 框架，通过 JNI 调用推理服务；与“元启”平台通过 HTTP 对接，便于自动化统计分析与云端评测。</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="sec-3">2. 日志提取命令</h3>
+<p>用于从运行日志中快速过滤出预处理耗时、推理耗时、最终结果等关键信息：</p>
+<pre><code class="language-bash">grep -E &quot;image path:|PERF: ModelRunner::inference|final result|final reply|aadk.*: preprocess time&quot; 0529-1741.log &gt; 0529-1741grep.log
+</code></pre>
+<hr />
+<h2 id="sec-4">二、 测试数据分布</h2>
+<p><strong>数据来源说明：</strong></p>
+<ul>
+<li><strong>舱内数据</strong>：全部为实车采集（确保 OMS 相机翻转、光照等物理环境一致）。</li>
+<li><strong>舱外数据</strong>：包含实车采集、手机采集、合成数据（覆盖多视角与长尾场景）。</li>
+</ul>
+<h3 id="sec-5">舱外问答测试数据集分布表</h3>
+<blockquote>
+<p>数据来源：<code>banma-内部测试</code> 数据集（我方自用主集），按数据工具中的原始采集类别统计；各类别分项之和与选区总数逐一校验一致。</p>
+</blockquote>
+<div class="tbl-wrap"><table>
+<thead>
+<tr>
+<th style="text-align: left;">类别</th>
+<th style="text-align: left;">实采（实车）</th>
+<th style="text-align: left;">手机实采</th>
+<th style="text-align: left;">抠图（合成）</th>
+<th style="text-align: left;">网图</th>
+<th style="text-align: left;">未归类</th>
+<th style="text-align: left;">合计</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>动物</strong></td>
+<td style="text-align: left;">111</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">467</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">2</td>
+<td style="text-align: left;"><strong>580</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>植物</strong></td>
+<td style="text-align: left;">976</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">96</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;"><strong>1072</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>通识</strong></td>
+<td style="text-align: left;">47</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">128</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">24</td>
+<td style="text-align: left;"><strong>199</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>东风（车辆）</strong></td>
+<td style="text-align: left;">70</td>
+<td style="text-align: left;">24</td>
+<td style="text-align: left;">91</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">11</td>
+<td style="text-align: left;"><strong>196</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>岚图（车辆）</strong></td>
+<td style="text-align: left;">123</td>
+<td style="text-align: left;">110</td>
+<td style="text-align: left;">40</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;"><strong>273</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>总计</strong></td>
+<td style="text-align: left;">1327</td>
+<td style="text-align: left;">134</td>
+<td style="text-align: left;">726</td>
+<td style="text-align: left;">96</td>
+<td style="text-align: left;">37</td>
+<td style="text-align: left;"><strong>2320</strong></td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p>注：<code>抠图</code> = 抠出目标贴附背景的合成数据；<code>网图</code> = 网络爬取图片（仅植物）；<code>未归类</code> = 数据工具中"（空）"目录。
+另有一套 <strong><code>岚图测试集数据标注to杨燕</code></strong>（动物 88 / 植物 300 / 5类通识 45 / 东风 66 / 岚图 116 等）是单独提供给甲方岚图做验收评测用的，与本表为两套不同数据集，不并入统计。</p>
+</blockquote>
+<hr />
+<h2 id="sec-6">三、 效果指标 (Accuracy / F1 / mAP)</h2>
+<p><em>注：具体详细评测过程见《测试报告文档》，此处为核心指标汇总。</em></p>
+<h3 id="sec-7">1. 舱内业务效果指标</h3>
+<blockquote>
+<p>数据来源：<strong>0817 测试报告</strong>（最近一份含舱内效果的报告；0828 版仅测舱外）。遗留检测的准确率/召回率按报告混淆矩阵核算：准确率=(TP+TN)/(TP+TN+FP+FN)，召回率=TP/(TP+FN)。</p>
+</blockquote>
+<div class="tbl-wrap"><table>
+<thead>
+<tr>
+<th style="text-align: left;">业务场景</th>
+<th style="text-align: left;">评估指标</th>
+<th style="text-align: left;">测试结果</th>
+<th style="text-align: left;">目标基线</th>
+<th style="text-align: left;">备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>舱内遗留儿童</strong></td>
+<td style="text-align: left;">Accuracy / Recall</td>
+<td style="text-align: left;">准确率 <strong>97.7%</strong>、召回率 <strong>95.4%</strong>（整体 487 样本，TP228/TN248/FP0/FN11）</td>
+<td style="text-align: left;">ACC≥90%、召回优先</td>
+<td style="text-align: left;">涉及安全，需极高召回率；0817 报告 4.2</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>舱内遗留物</strong></td>
+<td style="text-align: left;">Accuracy / Recall</td>
+<td style="text-align: left;">准确率 <strong>99~100%</strong>、召回率 <strong>90~98%</strong>（测试补采大样本，手机/电脑&amp;iPad/水杯/背包/钱包/钥匙 × 前后排）</td>
+<td style="text-align: left;">ACC≥90%</td>
+<td style="text-align: left;">0817 报告 4.2.2；老测试集(4.2.1)同量级</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>舱内衣着识别</strong></td>
+<td style="text-align: left;">分级通过率</td>
+<td style="text-align: left;">无衰减档：颈部 <strong>96.5%</strong>(410/425)、手臂 <strong>100%</strong>(441/441)、上衣厚度 <strong>99.1%</strong>(439/443)</td>
+<td style="text-align: left;">无衰减≥90%</td>
+<td style="text-align: left;">0817 报告 4.1 舱内空调；含 -10/-20/-30pp 衰减档</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="sec-8">2. 舱外问答效果指标</h3>
+<blockquote>
+<p>数据来源：<strong>0828 测试报告</strong>（斑马测试集，4.1 节）。口径为"按难度分级的通过率"：每个功能类别按 <code>无衰减 / -5pp / -10pp / -15pp / -20pp</code> 等难度档分别设定<strong>预期指标阈值</strong>，统计实际通过率并判定通过/不通过。下表取<strong>无衰减（标准难度）档</strong>作为核心结果，并与上一版 0817 对比。</p>
+</blockquote>
+<div class="tbl-wrap"><table>
+<thead>
+<tr>
+<th style="text-align: left;">业务场景/类别</th>
+<th style="text-align: left;">评估指标</th>
+<th style="text-align: left;">测试结果（0828 无衰减档）</th>
+<th style="text-align: left;">目标基线（预期）</th>
+<th style="text-align: left;">备注（0817 对比）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>车辆（岚图、东风）</strong></td>
+<td style="text-align: left;">分级通过率</td>
+<td style="text-align: left;">岚图核心 <strong>95.45%</strong>(189/198) 通过；东风核心 <strong>90.67%</strong>(68/75) 通过</td>
+<td style="text-align: left;">92% / 90%</td>
+<td style="text-align: left;">0817：95.96% / 90.79%，基本持平</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>非核心车辆百强</strong></td>
+<td style="text-align: left;">分级通过率</td>
+<td style="text-align: left;">百强 <strong>94.22%</strong>(571/606)；非百强 <strong>86.87%</strong>(344/396) 均通过</td>
+<td style="text-align: left;">80% / 65%</td>
+<td style="text-align: left;">0817：95.21% / 85.1%</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>动物</strong></td>
+<td style="text-align: left;">分级通过率</td>
+<td style="text-align: left;">动物核心 <strong>97.96%</strong>(288/294) 通过；动物泛化 57.14%(4/7) <strong>不通过</strong></td>
+<td style="text-align: left;">90% / 80%</td>
+<td style="text-align: left;">动物泛化 0817 为 0%，本版有改善但未达标</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>植物</strong></td>
+<td style="text-align: left;">分级通过率</td>
+<td style="text-align: left;">植物核心(-10pp) <strong>90.65%</strong>(533/588)；植物泛化 <strong>89.13%</strong>(41/46) 通过</td>
+<td style="text-align: left;">80%</td>
+<td style="text-align: left;">0817：92.45% / 82.77%</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>交通标识</strong></td>
+<td style="text-align: left;">分级通过率</td>
+<td style="text-align: left;">3类(禁止) <strong>100%</strong>、指示&amp;警告 <strong>100%</strong>；4类 <strong>92.31%</strong>(12/13)</td>
+<td style="text-align: left;">95% / 90% / 90%</td>
+<td style="text-align: left;">4类 -18pp 档 66.7% 未通过（见 bug 清单）</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>其它（通识）</strong></td>
+<td style="text-align: left;">分级通过率</td>
+<td style="text-align: left;">5类通识 <strong>98.54%</strong>(135/137) 通过</td>
+<td style="text-align: left;">80%</td>
+<td style="text-align: left;">0817：96.35%</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p>未通过项与错误归因详见 0828 报告第 5 节"测试问题错误分类汇总"（factory/brand/model/name/type 错误、未识别到目标、图文不符等）与第 6 节 bug 清单（如"岚图车辆 -15pp 1 条未通过""4类交通标志 -18pp 71.43%&lt;72%"）。</p>
+</blockquote>
+<h3 id="sec-9">3. 舱外效果版本演进时间线（0601 → 0828）</h3>
+<blockquote>
+<p>数据来源：banma-内部测试 各期报告 4.1 节"舱外识别（斑马测试集）"，取<strong>无衰减（标准难度）档实际通过率</strong>（括号内为 通过数/样本数）。从 PDF 文字层直接解析（NFKC 归一化 + CJK 部首变体映射）。</p>
+</blockquote>
+<div class="tbl-wrap"><table>
+<thead>
+<tr>
+<th style="text-align: left;">功能类别</th>
+<th style="text-align: left;">0601</th>
+<th style="text-align: left;">0611</th>
+<th style="text-align: left;">0619</th>
+<th style="text-align: left;">0629*</th>
+<th style="text-align: left;">0723</th>
+<th style="text-align: left;">0817</th>
+<th style="text-align: left;">0828</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">车辆核心-岚图</td>
+<td style="text-align: left;">86.5% (179/207)</td>
+<td style="text-align: left;">86.5% (179/207)</td>
+<td style="text-align: left;">94.44% (187/198)</td>
+<td style="text-align: left;">100% (80/80)</td>
+<td style="text-align: left;">91.8% (67/73)</td>
+<td style="text-align: left;">95.96% (190/198)</td>
+<td style="text-align: left;">95.45% (189/198)</td>
+</tr>
+<tr>
+<td style="text-align: left;">车辆核心-东风</td>
+<td style="text-align: left;">86.4% (70/81)</td>
+<td style="text-align: left;">86.4% (70/81)</td>
+<td style="text-align: left;">93.42% (71/76)</td>
+<td style="text-align: left;">100% (32/32)</td>
+<td style="text-align: left;">96.7% (29/30)</td>
+<td style="text-align: left;">90.79% (69/76)</td>
+<td style="text-align: left;">90.67% (68/75)</td>
+</tr>
+<tr>
+<td style="text-align: left;">车辆泛化-百强</td>
+<td style="text-align: left;">95.0% (630/663)</td>
+<td style="text-align: left;">95.0% (630/663)</td>
+<td style="text-align: left;">91.74% (555/605)</td>
+<td style="text-align: left;">100% (98/98)</td>
+<td style="text-align: left;">95.1% (77/81)</td>
+<td style="text-align: left;">95.21% (576/605)</td>
+<td style="text-align: left;">94.22% (571/606)</td>
+</tr>
+<tr>
+<td style="text-align: left;">车辆泛化-非百强</td>
+<td style="text-align: left;">76.9% (307/399)</td>
+<td style="text-align: left;">76.9% (307/399)</td>
+<td style="text-align: left;">78.03% (309/396)</td>
+<td style="text-align: left;">100% (10/10)</td>
+<td style="text-align: left;">90.0% (9/10)</td>
+<td style="text-align: left;">85.1% (337/396)</td>
+<td style="text-align: left;">86.87% (344/396)</td>
+</tr>
+<tr>
+<td style="text-align: left;">动物核心</td>
+<td style="text-align: left;">87.6% (212/242)</td>
+<td style="text-align: left;">87.6% (212/242)</td>
+<td style="text-align: left;">92.16% (282/306)</td>
+<td style="text-align: left;">100% (71/71)</td>
+<td style="text-align: left;">94.4% (67/71)</td>
+<td style="text-align: left;">96.08% (294/306)</td>
+<td style="text-align: left;">97.96% (288/294)</td>
+</tr>
+<tr>
+<td style="text-align: left;">植物核心</td>
+<td style="text-align: left;">80.5% (388/482)</td>
+<td style="text-align: left;">80.5% (388/482)</td>
+<td style="text-align: left;">90.91% (320/352)</td>
+<td style="text-align: left;">100% (156/156)</td>
+<td style="text-align: left;">98.5% (131/133)</td>
+<td style="text-align: left;">95.45% (336/352)</td>
+<td style="text-align: left;">91.51% (345/377)</td>
+</tr>
+<tr>
+<td style="text-align: left;">5类通识</td>
+<td style="text-align: left;">98.5% (135/137)</td>
+<td style="text-align: left;">98.5% (135/137)</td>
+<td style="text-align: left;">98.54% (135/137)</td>
+<td style="text-align: left;">79.49% (31/39)</td>
+<td style="text-align: left;">97.4% (38/39)</td>
+<td style="text-align: left;">96.35% (132/137)</td>
+<td style="text-align: left;">98.54% (135/137)</td>
+</tr>
+<tr>
+<td style="text-align: left;">交通标识核心-禁止</td>
+<td style="text-align: left;">90.91% (10/11)</td>
+<td style="text-align: left;">90.91% (10/11)</td>
+<td style="text-align: left;">100% (11/11)</td>
+<td style="text-align: left;">100% (10/10)</td>
+<td style="text-align: left;">100% (10/10)</td>
+<td style="text-align: left;">100% (11/11)</td>
+<td style="text-align: left;">100% (2/2)</td>
+</tr>
+<tr>
+<td style="text-align: left;">交通标识核心-指示&amp;警告</td>
+<td style="text-align: left;">75% (3/4)</td>
+<td style="text-align: left;">75% (3/4)</td>
+<td style="text-align: left;">100% (5/5)</td>
+<td style="text-align: left;">100% (4/4)</td>
+<td style="text-align: left;">100% (4/4)</td>
+<td style="text-align: left;">100% (5/5)</td>
+<td style="text-align: left;">100% (3/3)</td>
+</tr>
+<tr>
+<td style="text-align: left;">4类交通标识</td>
+<td style="text-align: left;">78.57% (11/14)</td>
+<td style="text-align: left;">78.57% (11/14)</td>
+<td style="text-align: left;">100% (13/13)</td>
+<td style="text-align: left;">100% (13/13)</td>
+<td style="text-align: left;">100% (13/13)</td>
+<td style="text-align: left;">92.31% (12/13)</td>
+<td style="text-align: left;">92.31% (12/13)</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>趋势小结</strong>：动物核心 87.6%→97.96%、车辆泛化-非百强 76.9%→86.87%、植物核心 80.5%→91.51%、车辆核心-岚图 86.5%→95.45% 均稳步提升；5类通识、交通标识长期维持高位。</p>
+<p><strong>口径注意（重要）</strong>：
+- * <strong>0629 为小样本 badcase 复测</strong>（分母多为个位/几十、普遍 100%），非全量评测，不能与全量版本直接比水平。
+- <strong>0601 与 0611 数值完全相同</strong>：0611 报告疑沿用 0601 基线（未重跑全量舱外），需向测试同学核实。
+- <strong>各报告测试集分母不同</strong>（测试集在持续扩充/调整），跨版本应看<strong>通过率趋势</strong>、不宜直接比分母或绝对通过数。</p>
+<hr />
+<h2 id="sec-10">四、 性能指标 (Latency &amp; Throughput)</h2>
+<h3 id="sec-11">速度计算维度定义</h3>
+<div class="tbl-wrap"><table>
+<thead>
+<tr>
+<th style="text-align: left;">性能指标</th>
+<th style="text-align: left;">英文缩写</th>
+<th style="text-align: left;">含义说明</th>
+<th style="text-align: left;">计算起点/终点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>首字延迟</strong></td>
+<td style="text-align: left;">TTFT</td>
+<td style="text-align: left;">Time To First Token</td>
+<td style="text-align: left;">从输入图像/Prompt处理完毕到输出第一个Token的耗时</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>生成速度</strong></td>
+<td style="text-align: left;">TPS</td>
+<td style="text-align: left;">Tokens Per Second</td>
+<td style="text-align: left;">Decode 阶段每秒生成的 Token 数量</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>端到端总耗时</strong></td>
+<td style="text-align: left;">Total</td>
+<td style="text-align: left;">整体流程耗时</td>
+<td style="text-align: left;">包含预处理 + VIT encode + LLM prefill + LLM decode + 后处理</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="sec-12">各业务场景性能指标统计表</h3>
+<blockquote>
+<p>数据来源：<code>performance_test_result.xlsx</code>（<strong>2026-09-02 台架连续跑测</strong>，模型占用 <strong>3 核 NPU</strong>〔0915 起调整为 4 核〕，8 类场景 × 1334 次 = 10672 次推理，识别成功率 100%）。
+口径说明：① TTFT 为 <strong>0601 之后口径</strong>（仅含 LLM prefill，不含图像处理）；② "全流程"行的 TTFT/TPS 是该场景各阶段 TTFT/TPS 的均值，stage 行为逐阶段聚合均值；③ 舱外问答 5 类场景（车辆/动物/植物/交通标识/通识）端到端 Total 在 1770~2001ms，下表取均值。</p>
+</blockquote>
+<div class="tbl-wrap"><table>
+<thead>
+<tr>
+<th style="text-align: left;">业务场景</th>
+<th style="text-align: left;">推理阶段</th>
+<th style="text-align: left;">TTFT (ms)</th>
+<th style="text-align: left;">TPS (tokens/s)</th>
+<th style="text-align: left;">Total (ms)</th>
+<th style="text-align: left;">Output-tokens</th>
+<th style="text-align: left;">备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>舱内遗留儿童</strong></td>
+<td style="text-align: left;">全流程（2 阶段）</td>
+<td style="text-align: left;">480.8</td>
+<td style="text-align: left;">62.8</td>
+<td style="text-align: left;">1506.8</td>
+<td style="text-align: left;">25.7</td>
+<td style="text-align: left;">两次串行推理叠加耗时</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>舱内遗留物</strong></td>
+<td style="text-align: left;">全流程（2 阶段）</td>
+<td style="text-align: left;">512.1</td>
+<td style="text-align: left;">58.3</td>
+<td style="text-align: left;">1490.3</td>
+<td style="text-align: left;">17.3</td>
+<td style="text-align: left;">-</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>舱内衣着识别</strong></td>
+<td style="text-align: left;">单阶段</td>
+<td style="text-align: left;">165.5</td>
+<td style="text-align: left;">113.9</td>
+<td style="text-align: left;">899.5</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">单次推理，无阶段明细</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>舱外问答</strong></td>
+<td style="text-align: left;">第一阶段 (Bbox+粗分类)</td>
+<td style="text-align: left;">548.4</td>
+<td style="text-align: left;">72.1</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">27.6</td>
+<td style="text-align: left;">流式累积输出</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">第二阶段 (精细化识别)</td>
+<td style="text-align: left;">288.6</td>
+<td style="text-align: left;">80.6</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">41.2</td>
+<td style="text-align: left;">约束解码开启</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">第三阶段 (NLG+TTS播报)</td>
+<td style="text-align: left;">145.3</td>
+<td style="text-align: left;">95.1</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">38.3</td>
+<td style="text-align: left;">纯文本推理，无约束解码</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">全流程（3 阶段端到端）</td>
+<td style="text-align: left;">353.5*</td>
+<td style="text-align: left;">80.8*</td>
+<td style="text-align: left;">~1942</td>
+<td style="text-align: left;">104</td>
+<td style="text-align: left;">*行级 TTFT/TPS 为各阶段均值</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p>逐场景端到端 Total（舱外）：通识 1964 / 车辆 1978 / 动物 1770 / 植物 1994 / 交通标识 2001 ms。阶段数随场景自适应：舱外多为 3 阶段（bbox 为空时跳过裁剪则 2 阶段），遗留物/儿童 2 阶段，衣着 1 阶段。</p>
+</blockquote>
+<hr />
+<h2 id="sec-13">五、 系统级监控指标</h2>
+<h3 id="sec-14">温度、功耗与环境监控</h3>
+<blockquote>
+<p>数据来源：<code>performance_test_result.xlsx</code> 的 <code>温度监控数据</code>（161 次采样）、<code>CPU监控数据</code>、<code>内存监控数据</code>/<code>内存分层快照</code>、<code>稳定性报告</code>（均为 2026-09-02 约 6h 连跑）。温度阈值取自《稳定性测试用例》判据（温度 &lt; 60℃）。</p>
+</blockquote>
+<div class="tbl-wrap"><table>
+<thead>
+<tr>
+<th style="text-align: left;">监控维度</th>
+<th style="text-align: left;">监控项</th>
+<th style="text-align: left;">正常阈值/状态</th>
+<th style="text-align: left;">实测数据</th>
+<th style="text-align: left;">备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>温度监控</strong></td>
+<td style="text-align: left;">SA8397 芯片结温 (Junction Temp)</td>
+<td style="text-align: left;"><code>&lt; 60 ℃</code></td>
+<td style="text-align: left;"><strong>36.96 ~ 38.34 ℃</strong>（末值 38.05 ℃）</td>
+<td style="text-align: left;">6h 连跑、水冷台架，远低于阈值，未触发降频</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">模组表面温度</td>
+<td style="text-align: left;"><code>&lt; 60 ℃</code></td>
+<td style="text-align: left;">原始数据为单一温度通道，未单列表面温度</td>
+<td style="text-align: left;">如需区分结温/表面温度需补测点</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>功耗模式</strong></td>
+<td style="text-align: left;">高算力模式 (Active)</td>
+<td style="text-align: left;">正常工作态</td>
+<td style="text-align: left;">—（材料未覆盖）</td>
+<td style="text-align: left;">现有材料无功耗瓦数，仅有 CPU 占用%，待补功率计数据</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">低功耗模式 (Idle/Suspend)</td>
+<td style="text-align: left;">任务打断/模型释放后</td>
+<td style="text-align: left;">—（材料未覆盖）</td>
+<td style="text-align: left;">同上；被动监听态 CPU 占用见下行</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>其它</strong></td>
+<td style="text-align: left;">内存峰值占用 (VmRSS + dma-buf)</td>
+<td style="text-align: left;"><code>&lt; 10.3 GB</code></td>
+<td style="text-align: left;">本测试进程 Total PSS <strong>~1.85~2.14 GB</strong>，6h 无单调增长</td>
+<td style="text-align: left;">整机 DSP 内存 aiservice 10.3GB / genai 7.5GB 见《性能优化细节对比》</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">CPU 平均占用率</td>
+<td style="text-align: left;"><code>&lt; 5% (被动监听)</code></td>
+<td style="text-align: left;">推理进程 <strong>~1~2%</strong>；系统总 <strong>~58~61%</strong>（含车机其他进程）</td>
+<td style="text-align: left;">推理进程符合被动监听低占用；系统值含其他应用</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p>稳定性结论（<code>稳定性报告</code>）：ANR = 0、Java Crash = 0、OOM = 0、Native Crash = 0，6h 连跑通过。</p>
+</blockquote>
+<hr />
+<h2 id="sec-15">六、 结合 2026-09-16 节点的复盘建议</h2>
+<p>将本部分与前一份《性能优化、存储与稳定性测试报告》合并后，整个项目的交付闭环已经非常清晰。针对后续数据填补，建议重点关注以下几点：</p>
+<ol>
+<li><strong>统一性能口径</strong>：
+   前一份报告中提到了“单核 <code>6559 ms</code> vs 3核 <code>3806 ms</code>”，在本报告的“性能指标统计表”中，务必明确标注当前填入的 Total 耗时是基于几核模型跑出的，避免数据打架。</li>
+<li><strong>量化“元启”平台的价值</strong>：
+   APK 方式对接“元启”平台不仅是为了跑分，建议在汇报时补充一句：“通过元启平台实现了每日 CI/CD 自动化回归测试，将评测效率提升了 XX%”。这在 2026 年的大模型车规量产流程中是极具亮点的工程化能力。</li>
+<li><strong>温度与性能的关联分析</strong>：
+   在第五部分的“温度监控”表中，强烈建议将“上海未加水冷”和“北京加水冷”的数据并列填写。如果两者在单次推理下温度差异不大，但<strong>连续推理 10 次后</strong>水冷组的 TPS 没有下降而风冷组 TPS 下降，这就完美证明了水冷方案的必要性。</li>
+<li><strong>日志 grep 命令的规范化</strong>：
+   你提供的 <code>grep</code> 命令非常实用，但在正式文档中，建议将其封装成一个 Python 或 Shell 脚本（如 <code>perf_analyzer.sh</code>），自动解析 log 并输出上述表格中的 TTFT 和 TPS 均值/方差，进一步提升评测自动化程度。</li>
+</ol>
+
+</main>
+
+<!-- ===== Scripts at bottom ===== -->
+<script defer src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+var b=document.getElementById('themeBtn');
+b.onclick=function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('theme',h.dataset.theme)}catch(e){}};
+try{var s=localStorage.getItem('theme');if(s)document.documentElement.dataset.theme=s}catch(e){}
+
+var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.remove('active')});var l=document.querySelector('.sidebar a[href="#'+e.target.id+'"]');if(l)l.classList.add('active')}})},{rootMargin:'-60px 0px -70% 0px'});
+document.querySelectorAll('h2[id],h3[id]').forEach(function(h){obs.observe(h)});
+
+window.addEventListener('load',function(){
+  try{if(typeof mermaid!=='undefined'){mermaid.initialize({startOnLoad:true,theme:document.documentElement.dataset.theme==='dark'?'dark':'default',securityLevel:'loose'})}}catch(e){}
+});
+</script>
+</body>
+</html>

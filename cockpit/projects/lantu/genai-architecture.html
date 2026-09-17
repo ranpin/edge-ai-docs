@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GenAI 方案架构与实现细节 — 端侧 AI 学习文档</title>
+<style>
+:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-bg:rgba(255,255,255,.82);--nav-h:52px}
+[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e;--nav-bg:rgba(15,15,26,.82)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px;overflow-wrap:break-word}
+.top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);display:flex;align-items:center;padding:0 20px;z-index:1000;background:var(--nav-bg);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+.top-nav .logo{display:flex;align-items:center;font-weight:800;font-size:15px;letter-spacing:.2px;color:var(--text);margin-right:22px;text-decoration:none;transition:opacity .2s}
+.top-nav .logo::before{content:"";width:9px;height:9px;border-radius:3px;background:var(--accent);margin-right:9px;box-shadow:0 0 0 3px var(--accentL)}
+.top-nav .logo:hover{opacity:.7}
+.top-nav .right{margin-left:auto}
+.theme-btn{background:transparent;border:1px solid var(--border);border-radius:8px;padding:5px 10px;cursor:pointer;font-size:13px;color:var(--text2);transition:color .18s,border-color .18s,background .18s}
+.theme-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accentL)}
+.sidebar{position:fixed;top:var(--nav-h);left:0;bottom:0;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;z-index:900}
+.sidebar a{display:block;padding:4px 16px 4px 20px;text-decoration:none;color:var(--text2);font-size:12px;border-left:3px solid transparent}
+.sidebar a:hover{color:var(--accent);background:var(--accentL)}
+.sidebar a.active{color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.sidebar .toc-part{padding:8px 20px 4px;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px}
+.main{margin-left:var(--sidebar-w);margin-top:var(--nav-h);padding:28px 40px 60px;max-width:900px}
+h1{font-size:26px;font-weight:800;margin-bottom:6px}
+.subtitle{font-size:14px;color:var(--muted);margin-bottom:28px}
+h2{font-size:20px;font-weight:700;margin:36px 0 14px;padding-bottom:6px;border-bottom:2px solid var(--accentL)}
+h3{font-size:16px;font-weight:600;margin:20px 0 10px}
+p{margin-bottom:10px;color:var(--text2)}
+strong{color:var(--text)}
+.info-box{padding:14px 16px;border-radius:7px;margin:14px 0;border-left:4px solid var(--info);background:var(--bg2);font-size:14px}
+.info-box.warn{border-left-color:var(--warning)}
+.info-box.ok{border-left-color:var(--success)}
+.info-box.err{border-left-color:var(--danger)}
+.info-box .title{font-weight:700;font-size:13px;margin-bottom:4px}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+.tbl-wrap{overflow-x:auto}
+th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
+th{background:var(--accentL);color:var(--accentD);font-weight:600}
+tr:nth-child(even){background:var(--bg2)}
+.mermaid-wrap{margin:16px 0;padding:16px;background:var(--bg2);border-radius:7px;overflow-x:auto}
+.chart-wrap{margin:16px 0;background:var(--bg2);border-radius:7px;padding:12px}
+.chart-box{width:100%;height:360px}
+pre{background:var(--bg3);border-radius:7px;padding:14px;overflow-x:auto;font-size:13px;margin:10px 0}
+code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
+:not(pre)>code{background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--accent)}
+ol.steps{margin:10px 0 10px 20px;color:var(--text2)}
+ol.steps li{margin-bottom:6px}
+ol.steps code{font-size:12px}
+@media(max-width:900px){.sidebar{display:none}.main{margin-left:0;padding:20px 16px 60px}}
+@media print{.top-nav,.sidebar,.theme-btn{display:none!important}.main{margin:0;padding:16px;max-width:100%}}
+
+blockquote{border-left:3px solid var(--accent);padding:8px 14px;margin:14px 0;color:var(--text2);background:var(--bg2);border-radius:0 6px 6px 0;font-size:13.5px}
+blockquote p{margin-bottom:4px;color:var(--text2)}
+blockquote strong{color:var(--text)}</style>
+</head>
+<body>
+
+<!-- ===== Top Navigation ===== -->
+<nav class="top-nav"></nav>
+<script src="../../../nav.js" data-active="cockpit/projects/lantu/genai-architecture.html"></script>
+
+<!-- ===== Sidebar TOC ===== -->
+<aside class="sidebar">
+  <div class="toc-part">GenAI 方案架构总览</div>
+  <a href="#sec-1" class="active">一、 背景简介与系统全景</a>
+  <a href="#sec-4">二、 AgentCore 框架设计</a>
+  <a href="#sec-5">三、 AgentGroup 业务流程</a>
+  <a href="#sec-8">四、 性能优化体系</a>
+  <a href="#sec-13">五、 车机部署测试与评测链路</a>
+  <a href="#sec-16">六、 细节补充说明（后续完善清单）</a>
+</aside>
+
+<!-- ===== Main Content ===== -->
+<main class="main">
+
+<h1>岚图8397量产项目SDK：核心技术架构与优化总结</h1>
+<blockquote>
+<p><strong>文档版本</strong>：V2.0 (富媒体排版)
+<strong>时间背景</strong>：2026-09-16
+<strong>说明</strong>：基于上一阶段项目经历重构。为避免纯表格带来的视觉疲劳，本文档综合运用了<strong>Mermaid流程图、架构图、对比卡片及结构化表格</strong>，以更直观、专业的方式呈现技术细节。</p>
+</blockquote>
+<hr />
+<h2 id="sec-1">一、 背景简介与系统全景</h2>
+<h3 id="sec-2">1. 项目概述</h3>
+<p>基于高通 SA8397 平台，主导 Qwen3-omni-4B 多模态大模型的端侧部署与 Agent 框架研发，成功落地舱内遗留检测、衣着识别、舱外多模态问答等核心量产业务，实现端侧大模型在智能座舱的低功耗、高实时运行。</p>
+<h3 id="sec-3">2. 系统架构拓扑图</h3>
+<div class="mermaid-wrap"><div class="mermaid">
+graph TD
+    %% 硬件层
+    subgraph Hardware [SA8397 硬件平台]
+        CPU[CPU 被动监听/任务调度]
+        NPU[NPU/DSP 算力核心]
+        MEM[内存池 VmRSS + dma-buf]
+    end
+
+    %% 框架层
+    subgraph AgentCore [AgentCore 底层框架]
+        Msg[消息分发与路由]
+        Domain[Agent 分域管理]
+        Task[任务生命周期管理]
+        LoRA[多 LoRA 动态加载/切换]
+        VIT_R[多 VIT 动态路由]
+        Deep[DeepStack 适配]
+    end
+
+    %% 业务层
+    subgraph AgentGroup [AgentGroup 业务编排]
+        Cabin_Left[舱内遗留检测]
+        Cabin_Cloth[舱内衣着识别]
+        Outside_QA[舱外多模态问答 Pipeline]
+    end
+
+    %% 推理引擎层
+    subgraph Inference [推理引擎链路]
+        AIMET[AIMET 量化 INT4]
+        Genie[Genie 闭源 / GenieX 开源]
+    end
+
+    %% 关系连线
+    Hardware <--> AgentCore
+    AgentCore --> AgentGroup
+    AgentGroup --> Inference
+    Inference --> NPU
+  
+    style Hardware fill:#f9f9f9,stroke:#333,stroke-width:2px
+    style AgentCore fill:#e1f5fe,stroke:#0288d1,stroke-width:2px
+    style AgentGroup fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Inference fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+</div></div>
+<hr />
+<h2 id="sec-4">二、 AgentCore 框架设计</h2>
+<p><em>注：AgentCore 负责消息的分发、Agent 分域、任务管理、多推理框架集成以及模型的加载与推理。</em></p>
+<div class="tbl-wrap"><table>
+<thead>
+<tr>
+<th style="text-align: left;">核心能力</th>
+<th style="text-align: left;">技术细节与实现方案</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>多 LoRA 加载与切换</strong></td>
+<td style="text-align: left;">多个场景可能复用同一 LoRA，单场景也可能调用多个 LoRA。支持通过<code>LoRA ID</code>（场景标识）+ <code>LoRA Name</code>（具体模型标识）唯一确认并动态加载目标 LoRA。</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>多 VIT 动态切换</strong></td>
+<td style="text-align: left;">针对不同任务传入的图像分辨率差异，修改底层框架，支持根据输入图片大小动态路由至对应的 VIT 进行 Encode。</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>DeepStack 支持</strong></td>
+<td style="text-align: left;">适配 Qwen3-omni 的 DeepStack 技术，用于缓解深层网络遗忘图像信息的问题，优化模型整体效果。</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>低功耗模式</strong></td>
+<td style="text-align: left;">实现任务打断、模型释放等生命周期管理接口；将 CPU 轮询机制调整为被动监听（Event-driven），大幅降低待机功耗。</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>稳定性兜底</strong></td>
+<td style="text-align: left;">在各个业务节点设计具体的异常捕获与兜底逻辑，避免进程直接 Crash。</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="sec-5">三、 AgentGroup 业务流程</h2>
+<h3 id="sec-6">1. 舱内业务处理逻辑</h3>
+<div class="tbl-wrap"><table>
+<thead>
+<tr>
+<th style="text-align: left;">业务场景</th>
+<th style="text-align: left;">预处理策略</th>
+<th style="text-align: left;">推理逻辑</th>
+<th style="text-align: left;">后处理策略</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>舱内遗留</strong></td>
+<td style="text-align: left;">左右翻转图像（解决 OMS 相机物理镜像问题）</td>
+<td style="text-align: left;">两次串行推理</td>
+<td style="text-align: left;">输出结果映射</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>舱内衣着</strong></td>
+<td style="text-align: left;">左右翻转图像</td>
+<td style="text-align: left;">单次推理</td>
+<td style="text-align: left;">边界值处理（避免输出为空或“未知”）、置信度映射</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="sec-7">2. 舱外问答业务 Pipeline（车辆/动物/植物/交通标识/其它）</h3>
+<p>为了更清晰地展示三阶段的流转关系，采用以下时序流程图：</p>
+<div class="mermaid-wrap"><div class="mermaid">
+sequenceDiagram
+    participant Cam as 后视摄像头
+    participant S1 as 第一阶段(粗分类)
+    participant S2 as 第二阶段(精细化)
+    participant S3 as 第三阶段(NLG)
+    participant TTS as TTS播报
+
+    Note over Cam,S1: 全局策略：开启前缀缓存(Prefix Caching)，提前计算System Prompt
+
+    Cam->>S1: 传入原始图像
+    Note right of S1: 预处理：所有场景先翻转一次<br/>若Bbox为空，用全图+基模(需切LoRA)
+    S1->>S1: 约束解码推理
+    S1-->>S2: 输出：1024x768 Bbox(映射回原图)、粗分类标签、流式累积结果
+
+    Note over S2: 预处理：图像/Bbox翻转回去<br/>(车辆/动物/交通标识反转，植物/通识不反转)<br/>按Bbox裁剪原图(空则跳过)<br/>类别差异化处理(如交通标识缩放10%)
+    S2->>S2: 组织图像+Prompt，约束解码推理
+    S2-->>S3: 输出：细分类标签(name/type/caption)<br/>置信度映射(基于Bbox大小)<br/>标准图像库映射、流式解析
+
+    Note over S3: 无图像处理，纯文本推理<br/>不使用约束解码
+    S3->>S3: 拼接User Query + S2结构化输出作为Prompt
+    S3-->>TTS: 输出：NLG流式文本，用于语音播报
+</div></div>
+<h4>各阶段详细策略拆解表</h4>
+<div class="tbl-wrap"><table>
+<thead>
+<tr>
+<th style="text-align: left;">推理阶段</th>
+<th style="text-align: left;">图像与 Bbox 处理</th>
+<th style="text-align: left;">推理策略与 Prompt 组织</th>
+<th style="text-align: left;">输出与后处理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>第一阶段</strong></td>
+<td style="text-align: left;">1. 后视摄像头所有场景先翻转一次。2. 若 Bbox 为空，使用全图和基模（需调用一次 LoRA 切换逻辑）。3. Bbox 对应 1024x768，需映射回原图坐标。</td>
+<td style="text-align: left;">使用约束解码（Constrained Decoding）。</td>
+<td style="text-align: left;">1. 输出分类标签（粗分类）。2. 流式结果累积输出。</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>第二阶段</strong></td>
+<td style="text-align: left;">1. 后视摄像头图像再翻转回去（车辆/动物/交通标识反转，植物/通识不反转），Bbox 同步翻转。2. 根据一阶段 Bbox（缩放回原图）裁剪，若为空则跳过（如植物）。3. 类别差异化预处理（如交通标识缩放 10%）。</td>
+<td style="text-align: left;">1. 组织图像与 Prompt 进行推理。2. 使用约束解码。</td>
+<td style="text-align: left;">1. 置信度映射（基于 Bbox 框大小）。2. 标准图像库映射（基于输出与图片对应关系）。3. 输出细分类标签（name/type/caption 等），流式解析优化体验。</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>第三阶段</strong></td>
+<td style="text-align: left;">无图像处理。</td>
+<td style="text-align: left;">1. 拼接用户 Query + 二阶段结构化输出作为 User Prompt。2. 纯文本推理，<strong>不使用</strong>约束解码。</td>
+<td style="text-align: left;">得到 NLG 输出，流式输出解析，用于 TTS 播报。</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="sec-8">四、 性能优化体系</h2>
+<h3 id="sec-9">1. 推理技术路线对比卡片</h3>
+<pre><code class="language-text">┌─────────────────────────────────┐   ┌─────────────────────────────────┐
+│          方案 A (闭源生态)         │   │          方案 B (开源生态)         │
+├─────────────────────────────────┤   ├─────────────────────────────────┤
+│  量化框架：AIMET (开源)            │   │  量化框架：AIMET (开源)            │
+│  推理引擎：Genie (闭源)            │   │  推理引擎：GenieX (开源)           │
+│  适用场景：深度定制、极致性能调优     │   │  适用场景：自主可控、灵活二次开发   │
+└─────────────────────────────────┘   └─────────────────────────────────┘
+</code></pre>
+<h3 id="sec-10">2. 端到端时延拆解图</h3>
+<div class="mermaid-wrap"><div class="mermaid">
+graph LR
+    A[输入请求] --> B(预处理)
+    B --> C{模型推理}
+    C --> D(后处理)
+    D --> E[输出响应]
+
+    subgraph 预处理耗时
+    B1[图像 Resize/翻转]
+    B2[消息组织与分发]
+    end
+
+    subgraph 推理耗时
+    C1[VIT Encode]
+    C2[LLM Prefill]
+    C3[LLM Decode]
+    end
+
+    subgraph 后处理耗时
+    D1[输出映射]
+    D2[字段转换]
+    D3[置信度计算]
+    end
+
+    B --- 预处理耗时
+    C --- 推理耗时
+    D --- 后处理耗时
+  
+    style B fill:#ffccbc,stroke:#bf360c
+    style C fill:#c8e6c9,stroke:#1b5e20
+    style D fill:#bbdefb,stroke:#0d47a1
+</div></div>
+<h3 id="sec-11">3. 模型速度优化细节矩阵</h3>
+<div class="tbl-wrap"><table>
+<thead>
+<tr>
+<th style="text-align: left;">优化项</th>
+<th style="text-align: left;">目的及原理</th>
+<th style="text-align: left;">实现方法 / 方案</th>
+<th style="text-align: left;">预期效果 / 备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>模型量化</strong></td>
+<td style="text-align: left;">降低显存占用，提升 NPU/DSP 吞吐率</td>
+<td style="text-align: left;">对 VIT 和 LLM 均进行 INT4 量化（涵盖基模及 4 个 LoRA）</td>
+<td style="text-align: left;">0527 浮点 vs 端侧量化对比：多数场景通过率差 0~6pp（nlg/儿童遗留/遗留物近乎无损），植物 caption 约 −10pp；衣着描述在 0527 版异常塌至 ~0%（详见六.1）</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>开启模型 SSD（存疑，经核查未启用）</strong></td>
+<td style="text-align: left;">经核查 <code>config.json</code> 的 <code>sampler</code> 为 <code>greedy:true / type:basic</code>，即<strong>贪心单模型解码</strong>，未启用推测性采样解码</td>
+<td style="text-align: left;">配置与 aadkcore/agent_group 源码均无 speculative/draft/forecast 解码字段</td>
+<td style="text-align: left;">原“开启 SSD”笔记存疑：既非 Single Shot Detector，也无存储 Swap 证据；建议删除或向模型团队确认所指</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>多 VIT 动态切换</strong></td>
+<td style="text-align: left;">按不同业务场景和推理阶段采用不同大小的 VIT，缩短时延</td>
+<td style="text-align: left;">图像输入 VIT 前进行 Resize，根据大小动态选择<code>1024x768</code> 或 <code>448x448</code> 的 VIT</td>
+<td style="text-align: left;">减少冗余计算量</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>单核改多核</strong></td>
+<td style="text-align: left;">充分利用 SA8397 的多核算力</td>
+<td style="text-align: left;">VIT 和 LLM 均由单核改为三核/四核（导出时配置参数，修改<code>default.json</code>）</td>
+<td style="text-align: left;">吞吐量大幅提升</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>前缀缓存</strong></td>
+<td style="text-align: left;">提前计算 System Prompt，加速 LLM Prefill 阶段</td>
+<td style="text-align: left;">开启框架级 Prefix Caching 支持（已确认 <code>base_model.json: enable_prefix_caching=true</code>）</td>
+<td style="text-align: left;"><strong>已核算</strong>（<code>tokenizer_qwen3.json</code>）：11 个 prefix 的 System Prompt 含 sys_tags 约 <strong>318~959 tokens、均值 ~634</strong>（grounding_sr 640 / general_caption 857 / dress_detect 959 / traffic_caption 318 等），即每次推理可省去这段 prefill；上下文预算 cl2560、max_tokens 512</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>开启 DeepStack</strong></td>
+<td style="text-align: left;">避免深层模型遗忘图像信息（Qwen3-omni 专属优化）</td>
+<td style="text-align: left;">将图像的 Tensor 拼接到 Decode 模型的前几层中</td>
+<td style="text-align: left;">提升多模态对齐效果</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="sec-12">4. 系统级优化亮点面板</h3>
+<blockquote>
+<p>🟢 <strong>CPU 占用优化 (降功耗)</strong></p>
+<ul>
+<li><strong>手段</strong>：将模型配置文件中的 <code>poll</code> 参数修改为 <code>false</code>，由主动轮询调整为被动事件监听。</li>
+<li><strong>收益</strong>：CPU 占用率由 <strong>40% 骤降至 5%</strong>，彻底释放车机系统算力。</li>
+</ul>
+<p>🔵 <strong>内存泄漏排查 (保稳定)</strong></p>
+<ul>
+<li><strong>手段</strong>：
+  1. <code>ps -ef | grep android_test</code> 查看 PID
+  2. <code>pmap -x &lt;pid&gt; &gt; /AI/mem_log.txt</code> 查看 PSS 变化
+  3. <code>tail /AI/mem_log.txt</code> 观察尾部趋势</li>
+<li><strong>结论</strong>：场景切换时的内存波动属于正常的内存池分配与回收机制，PSS 峰值未呈单调递增趋势，排除内存泄漏风险。</li>
+</ul>
+<p>🟠 <strong>系统稳定性防线 (防崩溃)</strong></p>
+<ul>
+<li>设计多处兜底逻辑，避免直接 Crash。</li>
+<li>引入超时重试机制，进程死亡自动重启 (Watchdog)。</li>
+<li>规范异常处理：避免使用 <code>std::runtime_error</code>，日志级别统一设置为 <code>LOG_I()</code>。</li>
+<li>降级策略：异常时传空 JSON 兜底，而非抛出 Error 阻断主线程。</li>
+</ul>
+</blockquote>
+<hr />
+<h2 id="sec-13">五、 车机部署测试与评测链路</h2>
+<h3 id="sec-14">1. 打包部署方案</h3>
+<div class="tbl-wrap"><table>
+<thead>
+<tr>
+<th style="text-align: left;">部署方式</th>
+<th style="text-align: left;">实现路径</th>
+<th style="text-align: left;">适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>SDK 打包</strong></td>
+<td style="text-align: left;">编译生成可执行文件，构建推理对象，支持读取本地 JSON 数据文件进行批量推理。</td>
+<td style="text-align: left;">算法快速验证、离线跑测</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>APK 打包</strong></td>
+<td style="text-align: left;">开发 Android APK，集成 AADK 框架，通过 JNI 调用底层 C++ 推理服务。</td>
+<td style="text-align: left;">实车环境部署、对接“元启”平台</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="sec-15">2. 评测链路构建</h3>
+<p><em>详细评测方法与指标定义见《效果及性能测试报告（GenAI方案）》章节。</em></p>
+<hr />
+<h2 id="sec-16">六、 细节补充说明（后续完善清单）</h2>
+<p>针对当前文档中留白的关键数据，核查/补充状态如下（2026-09-17 更新）：</p>
+<div class="tbl-wrap"><table>
+<thead>
+<tr>
+<th style="text-align: left;">待补充项</th>
+<th style="text-align: left;">核查/补充状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>量化精度与损失评估</strong></td>
+<td style="text-align: left;">✅ 已补：量化方案为 <strong>INT4</strong>（VIT+LLM，基模+4 LoRA）。0527 浮点 vs 端侧对比——多数场景通过率差 <strong>0~6pp</strong>（nlg/儿童遗留/遗留物近乎无损），植物 caption 约 <strong>−10pp</strong>，交通标识 bbox 小幅下降；<strong>衣着描述在 0527 版异常塌至 ~0%（浮点 51.76%），疑为该量化 build 的阶段性回归，后续版本待核</strong>。明细见 <code>云端浮点与端侧量化模型对比测试/z_summary_0527</code>。</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>模型 SSD 释义</strong></td>
+<td style="text-align: left;">✅ 已核查：当前为 <strong>greedy 单模型解码</strong>（<code>config.json</code> sampler <code>greedy:true/type:basic</code>），<strong>未启用推测性采样解码</strong>；配置与 aadkcore/agent_group 源码均无 speculative/draft/forecast 字段。既非 Single Shot Detector，也无存储 Swap 证据。原“开启 SSD”笔记存疑，建议删除或向模型团队确认所指。</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>前缀缓存 Token 数</strong></td>
+<td style="text-align: left;">✅ 已核算：用 <code>tokenizer_qwen3.json</code> 对 11 个 prefix 的 system_prompt（含 <code>&lt;|fim_prefix|&gt;system…&lt;|fim_suffix|&gt;</code> sys_tags）逐条统计——<strong>318~959 tokens、均值 ~634</strong>。映射：dwsr=grounding_sr 640 / dwbs=grounding_base 623 / znzs-car 617 / znzs-sign 318 / znzs-animal 543 / znzs-plant 482 / znzs-general 857 / znzs-nlg=assistant 770 / cnyb-left=incar_item_detect 486 / cnyb-cloth=dress_detect 959 / cnyb-child=person_desc 414。即每次推理可省去这段 prefill（上下文预算 cl2560）。</td>
+</tr>
+</tbody>
+</table></div>
+
+</main>
+
+<!-- ===== Scripts at bottom ===== -->
+<script defer src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+var b=document.getElementById('themeBtn');
+b.onclick=function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('theme',h.dataset.theme)}catch(e){}};
+try{var s=localStorage.getItem('theme');if(s)document.documentElement.dataset.theme=s}catch(e){}
+
+var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.remove('active')});var l=document.querySelector('.sidebar a[href="#'+e.target.id+'"]');if(l)l.classList.add('active')}})},{rootMargin:'-60px 0px -70% 0px'});
+document.querySelectorAll('h2[id],h3[id]').forEach(function(h){obs.observe(h)});
+
+window.addEventListener('load',function(){
+  try{if(typeof mermaid!=='undefined'){mermaid.initialize({startOnLoad:true,theme:document.documentElement.dataset.theme==='dark'?'dark':'default',securityLevel:'loose'})}}catch(e){}
+});
+</script>
+</body>
+</html>

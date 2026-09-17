@@ -147,6 +147,88 @@
               ]
             }
           ]
+        },
+        {
+          "name": "岚图 8397 座舱 VLM 端侧量产",
+          "period": "2026 至今",
+          "docs": [
+            {
+              "title": "GenAI 方案架构总览",
+              "file": "cockpit/projects/lantu/genai-architecture.html",
+              "badge": "总览",
+              "status": "done",
+              "desc": "Qwen3-omni-4B 端侧部署整体架构：AIMET INT4 量化、多 VIT 动态切换、单核改多核、前缀缓存、DeepStack，及三阶段推理链路",
+              "tags": [
+                "Qwen3-omni",
+                "INT4",
+                "前缀缓存",
+                "架构"
+              ]
+            },
+            {
+              "title": "AIService 后端集成与重构",
+              "file": "cockpit/projects/lantu/aiservice-integration.html",
+              "badge": "后端",
+              "status": "done",
+              "desc": "从 GenAI 切换到岚图自研 aiservice 推理框架：多后端兼容、请求格式对齐、跨形态不可比、SSE 解析、SELinux 等 8 大难点",
+              "tags": [
+                "aiservice",
+                "多后端",
+                "SSE",
+                "SELinux"
+              ]
+            },
+            {
+              "title": "效果及性能测试",
+              "file": "cockpit/projects/lantu/effect-performance.html",
+              "badge": "评测",
+              "status": "done",
+              "desc": "数据集分布、舱内/舱外效果指标、0601→0828 版本演进时间线、逐场景+逐阶段性能、温度/CPU/内存监控",
+              "tags": [
+                "效果评测",
+                "性能",
+                "时间线",
+                "监控"
+              ]
+            },
+            {
+              "title": "性能优化与稳定性",
+              "file": "cockpit/projects/lantu/perf-optimization.html",
+              "badge": "优化",
+              "status": "done",
+              "desc": "上海未水冷 vs 北京水冷对比、单核→3核 42% 提速、aiservice vs genai 存储占用、稳定性与消融实验设计",
+              "tags": [
+                "水冷",
+                "多核优化",
+                "内存",
+                "稳定性"
+              ]
+            },
+            {
+              "title": "两方案端到端对比",
+              "file": "cockpit/projects/lantu/genai-vs-aiservice.html",
+              "badge": "对比",
+              "status": "done",
+              "desc": "GenAI 与 AIService 两方案端到端总耗时对比参考",
+              "tags": [
+                "GenAI",
+                "AIService",
+                "端到端"
+              ]
+            },
+            {
+              "title": "运维及安全",
+              "file": "cockpit/projects/lantu/ops-security.html",
+              "badge": "运维",
+              "status": "done",
+              "desc": "设备安装、系统升级、OTA 与模型加密方案（打包工具/load 进程/访问控制设计）",
+              "tags": [
+                "OTA",
+                "模型加密",
+                "运维"
+              ]
+            }
+          ]
         }
       ]
     },
