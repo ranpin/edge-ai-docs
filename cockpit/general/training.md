@@ -279,7 +279,7 @@ swift export \
 > [!NOTE]
 > **量化与推理优化**
 >
-> 模型量化（PTQ/QAT/混合精度）、AIMET 工具、KV Cache 优化、投机采样等推理优化技术已整合到独立文档 → [**Part 3: 推理优化**](infer.html)
+> 模型量化（PTQ/QAT/混合精度）、AIMET 工具、KV Cache 优化、投机采样等推理优化技术已整合到独立文档 → [**推理优化**](infer.html)
 
 ## 4. LLM 知识蒸馏与模型压缩
 

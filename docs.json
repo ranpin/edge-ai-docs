@@ -132,19 +132,6 @@
                 "Profiler",
                 "排障"
               ]
-            },
-            {
-              "title": "APK 集成与端侧服务化",
-              "file": "cockpit/projects/agent-framework/apk-integration.html",
-              "badge": "Part 6",
-              "status": "done",
-              "desc": "lantu_demo 宿主 APK：三层架构、JNI 桥接、NanoHTTPD 本地服务、多模态协议转换、前台服务自愈、QNN Skel 打包、上车部署脚本",
-              "tags": [
-                "APK",
-                "JNI",
-                "NanoHTTPD",
-                "自愈"
-              ]
             }
           ]
         },
@@ -179,9 +166,22 @@
               ]
             },
             {
+              "title": "APK 集成与端侧服务化",
+              "file": "cockpit/projects/lantu/apk-integration.html",
+              "badge": "Part 3",
+              "status": "done",
+              "desc": "lantu_demo 宿主 APK：三层架构、JNI 桥接、NanoHTTPD 本地服务、多模态协议转换、前台服务自愈、QNN Skel 打包、上车部署脚本",
+              "tags": [
+                "APK",
+                "JNI",
+                "NanoHTTPD",
+                "自愈"
+              ]
+            },
+            {
               "title": "效果及性能测试",
               "file": "cockpit/projects/lantu/effect-performance.html",
-              "badge": "Part 3",
+              "badge": "Part 4",
               "status": "done",
               "desc": "数据集分布、舱内/舱外效果指标、0601→0828 版本演进时间线、逐场景+逐阶段性能、温度/CPU/内存监控",
               "tags": [
@@ -194,7 +194,7 @@
             {
               "title": "性能优化与稳定性",
               "file": "cockpit/projects/lantu/perf-optimization.html",
-              "badge": "Part 4",
+              "badge": "Part 5",
               "status": "done",
               "desc": "上海未水冷 vs 北京水冷对比、单核→3核 42% 提速、aiservice vs genai 存储占用、稳定性与消融实验设计",
               "tags": [
@@ -207,7 +207,7 @@
             {
               "title": "两方案端到端对比",
               "file": "cockpit/projects/lantu/genai-vs-aiservice.html",
-              "badge": "Part 5",
+              "badge": "Part 6",
               "status": "done",
               "desc": "GenAI 与 AIService 两方案端到端总耗时对比参考",
               "tags": [
@@ -219,7 +219,7 @@
             {
               "title": "运维及安全",
               "file": "cockpit/projects/lantu/ops-security.html",
-              "badge": "Part 6",
+              "badge": "Part 7",
               "status": "done",
               "desc": "设备安装、系统升级、OTA 与模型加密方案（打包工具/load 进程/访问控制设计）",
               "tags": [

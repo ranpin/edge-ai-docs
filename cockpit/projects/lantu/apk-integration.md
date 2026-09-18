@@ -1,11 +1,11 @@
-# 6. APK 集成与端侧服务化
+# 3. APK 集成与端侧服务化
 
 *lantu\_demo 宿主 APK  |  Qwen3-Omni-4B + LoRA · JNI 桥接 · 本地 HTTP 服务 · 前台服务自愈*
 
 > [!TIP]
 > **本篇讲什么**
 >
-> 前面的 Part 2~5 聚焦 **native SDK 本身**（QNN 部署、aadkcore 核心框架、agent\_group 场景 Agent、调试工具链）。本篇切换到 **应用层视角**：这些 `.so` 如何被一个可安装、可常驻、可被座舱其他组件调用的 **Android APK**（`lantu_demo`，包名 `com.example.myapplication`）封装起来，并以 **本地 HTTP 服务**的形式对外提供大模型推理能力。这是从「SDK 能跑」到「产品能交付」的最后一公里。
+> 前面两篇 [GenAI 方案架构总览](genai-architecture.html) 与 [AIService 后端集成与重构](aiservice-integration.html) 讲的是**两种并列的推理后端**。本篇切换到 **应用层视角**：这些 `.so` 如何被一个可安装、可常驻、可被座舱其他组件调用的 **Android APK**（`lantu_demo`，包名 `com.example.myapplication`）封装起来，并以 **本地 HTTP 服务**的形式对外提供大模型推理能力。**APK 是通用宿主**——GenAI / AIService 两种后端共用同一套 APK 框架，只需替换其中集成的 native `.so`（本篇以 GenAI 后端的 `.so` 为例）。这是从「SDK 能跑」到「产品能交付」的最后一公里。
 
 ## 1. 定位与整体架构
 
@@ -102,7 +102,7 @@ flowchart TB
 
 | 分类 | 关键库 | 说明 |
 | :--- | :--- | :--- |
-| **业务 SDK** | `libandroid_sdk.so`、`libagent_group.so`、`libvoyah_ai_client.so`、`libaadkcore.so`、`libaisa.so`、`libqualla.so` | banma/voyah 推理与 Agent 框架（对应 Part 3/4 的 aadkcore + agent\_group） |
+| **业务 SDK** | `libandroid_sdk.so`、`libagent_group.so`、`libvoyah_ai_client.so`、`libaadkcore.so`、`libaisa.so`、`libqualla.so` | banma/voyah 推理与 Agent 框架（即 [aadkcore](../agent-framework/agent-core.html) + [agent\_group](../agent-framework/agent-group.html)） |
 | **LLM 引擎** | `libllms.so`、`libGenie.so`、`libflash_attn.so` | 大模型推理内核与 FlashAttention 加速 |
 | **QNN / NPU 后端** | `libQnnHtp.so`、`libQnnHtpV81Skel.so`、`libQnnHtpV81Stub.so`、`libQnnHtpV81CalculatorStub.so`、`libQnnCpu.so`、`libQnnGenAiTransformer(Model).so`、`libqnn_backend.so` | 高通 QNN 框架 + HTP（Hexagon Tensor Processor）后端；`V81Skel` 运行在 DSP 侧 |
 | **系统 / FastRPC** | `libcdsprpc.so`（系统库，经 `<uses-native-library>` 声明） | FastRPC 通道，Host（APK）↔ cDSP 跨处理器调用 |
@@ -470,4 +470,4 @@ flowchart LR
 > [!NOTE]
 > **与本篇相关的其他文档**
 >
-> QNN 框架与 ISP 数据流见 [Part 2: 设备部署](deploy.html)；aadkcore / agent\_group 内部实现见 [Part 3](agent-core.html) / [Part 4](agent-group.html)；排障工具链（mini-dm、Snapdragon Profiler、tombstone 分析）见 [Part 5: 调试与工具链](debug.html)；硬件底层（SA8397P、Hexagon、FastRPC、Hypervisor）见 [硬件与系统底层](../../general/hardware.html)；想从零理解本篇涉及的 Android 四大组件与 JNI 原理，见 [Android 开发 & JNI 基础](../../general/android-jni.html)。
+> QNN 框架与 ISP 数据流见 [设备部署](../agent-framework/deploy.html)；aadkcore / agent\_group 内部实现见 [aadkcore 核心框架](../agent-framework/agent-core.html) / [场景 Agent 应用](../agent-framework/agent-group.html)；排障工具链（mini-dm、Snapdragon Profiler、tombstone 分析）见 [调试与工具链](../agent-framework/debug.html)；硬件底层（SA8397P、Hexagon、FastRPC、Hypervisor）见 [硬件与系统底层](../../general/hardware.html)；想从零理解本篇涉及的 Android 四大组件与 JNI 原理，见 [Android 开发 & JNI 基础](../../general/android-jni.html)。
