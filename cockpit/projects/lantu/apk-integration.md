@@ -6,6 +6,11 @@
 > **本篇讲什么**
 >
 > 前面两篇 [GenAI 方案架构总览](genai-architecture.html) 与 [AIService 后端集成与重构](aiservice-integration.html) 讲的是**两种并列的推理后端**。本篇切换到 **应用层视角**：这些 `.so` 如何被一个可安装、可常驻、可被座舱其他组件调用的 **Android APK**（`lantu_demo`，包名 `com.example.myapplication`）封装起来，并以 **本地 HTTP 服务**的形式对外提供大模型推理能力。**APK 是通用宿主**——GenAI / AIService 两种后端共用同一套 APK 框架，只需替换其中集成的 native `.so`（本篇以 GenAI 后端的 `.so` 为例）。这是从「SDK 能跑」到「产品能交付」的最后一公里。
+>
+> **代码基线**：`lantu_apk` 仓库（GenAI 形态分支 `sdk-genai-qnn246`、AIService 形态分支 `sdk-aiservice`）。核心文件：
+>
+> - Java：`app/src/main/java/com/example/myapplication/{MyApplication,TestInjectService,TestHttpEndpoint,BanmaModelInference,NativeEnv}.java`
+> - C++：`app/src/main/cpp/modelinfer.cpp`、`include/{data_message,model_inference}.h`
 
 ## 1. 定位与整体架构
 
@@ -76,9 +81,9 @@ flowchart TB
 | `MyApplication` | Application | 进程级初始化：按序加载 native 库、设置 `ADSP_LIBRARY_PATH`（早于任何 Activity/Service） |
 | `MainActivity` | Activity (Launcher) | 界面入口；初始化 `BanmaModelInference` 并拉起前台服务（UI 推理路径默认注释，仅作演示） |
 | `TestInjectService` | Service (foreground) | 常驻前台服务；持有推理实例与 HTTP 端点；请求队列串行处理；`START_STICKY` 自愈 |
-| `TestHttpEndpoint` | NanoHTTPD | HTTP 服务核心（约 2000 行）：协议解析/转换、类型判定、图片提取、同步/SSE 响应、超时自愈 |
-| `BanmaModelInference` | JNI 封装 | `AutoCloseable`；暴露 `init / requestNpuPermission / inference / inferenceWithImage`，内部持有 native handle |
-| `NativeEnv` | 工具类 | `ADSP_LIBRARY_PATH` 的**唯一构造点**，避免多处路径字面量不一致 |
+| `TestHttpEndpoint` | NanoHTTPD | HTTP 服务核心（约 2200 行）：协议解析/转换、类型判定、图片提取、同步/SSE 响应、超时自愈 |
+| `BanmaModelInference` | JNI 封装 | `AutoCloseable`；暴露 `init / inference / inferenceWithImage / close`，内部持有 native handle |
+| `NativeEnv` | 工具类 | `ADSP_LIBRARY_PATH` 的**唯一构造点**，避免多处路径字面量不一致（仅 GenAI 形态用，见 3.2） |
 | `TaskScheduler` | 单例 | 8 线程异步池 + 单线程调度池（daemon 线程） |
 | `StreamingInputStream` | InputStream | 用 `BlockingQueue` 桥接生产者-消费者，支撑 SSE 流式输出 |
 | `ScenarioReplyHandler` | interface | 回调契约 `onReply(String result, boolean isFinished)` |
@@ -90,11 +95,19 @@ flowchart TB
 
 | 文件 | 作用 |
 | :--- | :--- |
-| `modelinfer.cpp` | 5 个 JNI 函数实现：`nativeCreate / nativeDestroy / nativeInit / nativeRequestNpuPermission / nativeInference`；负责 Java↔C++ 类型转换、构造 `banma::DataMessage`、注册跨线程回调 |
+| `modelinfer.cpp` | **4 个** JNI 函数实现：`nativeCreate / nativeDestroy / nativeInit / nativeInference`；负责 Java↔C++ 类型转换、构造 `banma::DataMessage`、注册跨线程回调 |
 | `CMakeLists.txt` | 定义 `modelinfer` 共享库；include `vllm_sdk` 头文件；链接 `aadkcore`、`log`、`android_sdk` |
 | `include/data_message.h` | `banma::DataMessage / ImageInfo / AudioInfo / MsgType / RequestType / ImageFormat` 等数据结构与场景 ID 宏定义 |
-| `include/model_inference.h` | `banma::ModelInference` 类接口：`init / inference_msg / requestNpuAccess / registerProfilingCallback / stopInferenceTask / releaseModelResources` |
-| `include/VoyahAIProxy.hpp` | NPU 资源管理与性能监控抽象接口（`requestNpuAccess / syncNpuProfileToServer / registerNpuResourceEventCallback`） |
+| `include/model_inference.h` | `banma::ModelInference` 类接口：`init / inference_msg / stopInferenceTask / releaseModelResources` |
+
+> [!NOTE]
+> **NPU 资源 / profile 接口已停用删除**
+>
+> 早期 SDK 有一套 NPU 资源管理与性能监控接口（`requestNpuAccess` / `syncNpuProfileToServer` / `registerProfilingCallback`，对应 `VoyahAIProxy.hpp`）。2026-08 需求变更后**全部停用删除**：
+>
+> - app 不再 `createProxy()`、不连 UDS `/tmp/voyah_qnn_service.sock`、不占服务端 client_id 槽位
+> - `modelinfer.cpp` 因此从 5 个 JNI 函数减到 4 个，`VoyahAIProxy.hpp` 整个移除
+> - 这同时根治了服务端槽位泄漏导致的第 6 次启动即退问题（背景见 [AIService 后端集成与重构](aiservice-integration.html) 的难点 5.8）
 
 ### 2.3 Native SDK 与依赖（预编译 .so）
 
@@ -116,6 +129,21 @@ flowchart TB
 ## 3. 进程级初始化（MyApplication）
 
 底层库的加载与环境变量设置被刻意放在 `MyApplication.onCreate()`，而非某个 Activity。原因：进程可能由 `MainActivity`（用户点击图标）或 `TestInjectService`（`START_STICKY` 被系统单独拉起）两种方式触发——无论哪种，`Application.onCreate()` 都最先执行，保证底层环境一定就绪。
+
+> [!IMPORTANT]
+> **本节 3.1~3.2 是 GenAI 形态专属**
+>
+> 本篇以 GenAI 形态为例，**GenAI 形态进程内直接跑 QNN/DSP**，所以要：
+>
+> - 加载 `cdsprpc`、设 `ADSP_LIBRARY_PATH`
+> - 打包 QNN `.so`（jniLibs 共 37 个）
+>
+> **AIService 形态进程内没有 QNN/DSP**（推理走 HTTP 到 `VoyahAIService`），上述全部停用：
+>
+> - `MyApplication` 里 `loadLibrary("cdsprpc")` 与 `ADSP_LIBRARY_PATH` 均注释掉，标 `[DISABLED 2026-08-24] 进程内没有 QNN/DSP，ADSP_LIBRARY_PATH 无消费者`
+> - jniLibs 仅 10 个 `.so`
+>
+> **应用层（Java 类、JNI 桥接、HTTP 服务、前台服务自愈）两形态完全一致**，差异只在 native 依赖与这段初始化。
 
 ### 3.1 加载顺序
 
@@ -150,10 +178,14 @@ nativeLibDir                      // APK 自身 jniLibs 解压目录
 SDK 约定模型放在固定绝对路径，APK 不做拷贝（模型体积大，随 APK 打包不现实）：
 
 ```
+// TestInjectService.java:81
 String modelPath = "/AI/vllm_sdk/models";   // SDK 从该目录查找 qwen3-omni-4b/model.json
 infer.init(modelPath, nativeLibraryDir);
-infer.requestNpuPermission("vllm");          // 向资源管理方申请 NPU 访问权限
 ```
+
+> [!NOTE]
+> - 早期的 `infer.requestNpuPermission("vllm")` 已随 NPU 接口停用一并删除（见 2.2）
+> - AIService 形态下 `init()` 只读配置、不载模型，约 **25ms** 返回；模型由 `VoyahAIService` 启动时扫描 `/AI/VLM/models` 装载（见 [AIService 后端集成与重构](aiservice-integration.html)）
 
 ## 4. 前台服务与自愈（TestInjectService）
 
@@ -181,7 +213,7 @@ infer.requestNpuPermission("vllm");          // 向资源管理方申请 NPU 访
 
 ```mermaid
 flowchart LR
-    A["onCreate()"] --> B["initializeComponents()new BanmaModelInferenceinit() 重试 3 次requestNpuPermission()"]
+    A["onCreate()"] --> B["initializeComponents()new BanmaModelInferenceinit() 重试 3 次"]
     B --> C["startHttpEndpoint()NanoHTTPD :8080start(30000, false)"]
     C --> D["startForegroundService()创建通知渠道startForeground()"]
     style A fill:#4361ee,color:#fff
@@ -220,7 +252,7 @@ flowchart TB
     IMG --> V{"fastjson 校验 JSON 合法?"}
     V -->|否| EBAD["400 + 错误 JSON（拦截在进 C++ 之前）"]
     V -->|是| ST{"stream ?"}
-    ST -->|false| SYNC["handleInjectRequestSync()串行锁 + CompletableFuture.get(60s)"]
+    ST -->|false| SYNC["handleInjectRequestSync()串行锁 + CompletableFuture.get(35s)"]
     ST -->|true| SSE["handleInjectRequestStream()StreamingInputStream + text/event-stream"]
 
     style S fill:#4361ee,color:#fff
@@ -391,7 +423,7 @@ stateDiagram-v2
 ```mermaid
 flowchart TB
     REQ["推理请求"] --> LOCK["进入 requestProcessingLock（全局串行）"]
-    LOCK --> WAIT["等待 SDK 回调超时阈值 60s"]
+    LOCK --> WAIT["等待 SDK 回调超时阈值 35s"]
     WAIT -->|正常返回| OK["计数清零返回结果"]
     WAIT -->|超时| INC["连续超时计数 +1"]
     INC --> Q1{"CRASH_FOR_TOMBSTONE?"}
@@ -407,12 +439,17 @@ flowchart TB
     style TOMB fill:#f39c12,color:#fff
 ```
 
-| 开关 | 默认 | 语义 |
-| :--- | :--- | :--- |
-| `SYNC_TIMEOUT_MS` | 60 000 | 合法长生成实测 ≤15s，取 60s 留余量；既不误杀又能识别 native 卡死 |
-| `MAX_CONSECUTIVE_TIMEOUTS` | 2 | 连续超时阈值；取 2 避免单次偶发慢请求误触发重启 |
-| `SELF_HEAL_ENABLED` | true | 生产自愈：达阈值即 `killProcess`，靠 `START_STICKY` 干净重启 |
-| `CRASH_FOR_TOMBSTONE` | false | 诊断取证：超时即 SIGABRT 让 debuggerd 抓全线程 native 栈，**取证后不自动拉起**（优先级最高） |
+| 开关 | 当前值（诊断态） | 生产态 | 语义 |
+| :--- | :--- | :--- | :--- |
+| `SYNC_TIMEOUT_MS` | 35 000 | — | 同步超时阈值；合法长生成实测 ≤15s，取 35s 留余量，既不误杀又能识别 native 卡死 |
+| `MAX_CONSECUTIVE_TIMEOUTS` | 2 | 2 | 连续超时阈值；取 2 避免单次偶发慢请求误触发重启 |
+| `SELF_HEAL_ENABLED` | false | **true** | 生产自愈：达阈值即 `killProcess`，靠 `START_STICKY` 干净重启 |
+| `CRASH_FOR_TOMBSTONE` | **true** | false | 诊断取证：超时即 SIGABRT 让 debuggerd 抓全线程 native 栈，**取证后不自动拉起**（优先级最高） |
+
+> [!WARNING]
+> **当前两分支均为诊断态，发版前须切回生产组合**
+>
+> 代码注释明确：当前 `CRASH_FOR_TOMBSTONE=true / SELF_HEAL_ENABLED=false` 是**诊断态**（抓一份 tombstone 就停，不自动拉起）。发版前务必改回生产组合 `SELF_HEAL_ENABLED=true / CRASH_FOR_TOMBSTONE=false`。优先级：`CRASH_FOR_TOMBSTONE` > `SELF_HEAL_ENABLED` > keep-alive。
 
 > [!CAUTION]
 > **crash ≠ 可靠自愈**
