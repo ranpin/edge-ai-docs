@@ -308,4 +308,4 @@ TTS: "好的，已为您打开副驾车窗。"
 > [!NOTE]
 > **LLM 推理优化**
 >
-> KV Cache 优化、TTFT 优化、投机采样、约束解码、推理引擎对比等内容已整合到独立文档 → [**Part 3: 推理优化**](cockpit/general/infer.html)
+> KV Cache 优化、TTFT 优化、投机采样、约束解码、推理引擎对比等内容已整合到独立文档 → [**推理优化**](../../general/infer.html)
