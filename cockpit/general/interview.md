@@ -2,7 +2,7 @@
 
 *基于 Qualcomm SA8397P 平台 · 51 道精选题 · 覆盖硬件/训练/部署/Agent/系统设计/面试方法论*
 
-## 一、硬件与系统 — 概念辨析题
+## 1. 硬件与系统 — 概念辨析题
 
 <details markdown="1">
 <summary>**Q1: DSP 和 CPU 在 AI 推理中的核心区别是什么？为什么座舱场景优先选择 DSP？** · `初级`</summary>
@@ -94,7 +94,7 @@ SSR（Subsystem Restart）是 Qualcomm 平台上的子系统故障恢复机制�
 
 </details>
 
-## 二、算法与训练题
+## 2. 算法与训练题
 
 <details markdown="1">
 <summary>**Q11: 为座舱端侧部署选择 AI 模型时，核心评估指标有哪些？** · `初级`</summary>
@@ -177,7 +177,7 @@ SWIFT（Scalable lightWeight Infrastructure for Fine-Tuning，modelscope/ms-swif
 
 </details>
 
-## 三、部署与优化题
+## 3. 部署与优化题
 
 <details markdown="1">
 <summary>**Q20: 请完整描述一个模型从训练到在 SA8397P 上运行的 QNN 部署流水线。** · `中级`</summary>
@@ -260,7 +260,7 @@ FastRPC 超时 是座舱 AI 开发中常见的问题，表现为推理调用阻�
 
 </details>
 
-## 四、Agent 与大模型题
+## 4. Agent 与大模型题
 
 <details markdown="1">
 <summary>**Q29: 如何为座舱选择合适的端侧大语言模型？评估标准是什么？** · `初级`</summary>
@@ -343,7 +343,7 @@ Speculative Decoding（投机解码）的核心思想是用一个小而快的 dr
 
 </details>
 
-## 五、综合系统设计题
+## 5. 综合系统设计题
 
 <details markdown="1">
 <summary>**Q38: 请设计一个完整的 DMS 系统，从传感器选型到量产部署。** · `高级`</summary>
@@ -381,7 +381,7 @@ Speculative Decoding（投机解码）的核心思想是用一个小而快的 dr
 
 </details>
 
-## 六、系统设计答题框架
+## 6. 系统设计答题框架
 
 <details markdown="1">
 <summary>**Q42: 面试中遇到系统设计题，应该用怎样的结构化思路作答？** · `中级`</summary>
@@ -442,7 +442,7 @@ Speculative Decoding（投机解码）的核心思想是用一个小而快的 dr
 
 </details>
 
-## 七、项目经验包装
+## 7. 项目经验包装
 
 <details markdown="1">
 <summary>**Q45: 如何在面试中介绍「端侧 AI Agent 框架」项目经验？** · `中级`</summary>
@@ -499,7 +499,7 @@ Speculative Decoding（投机解码）的核心思想是用一个小而快的 dr
 
 </details>
 
-## 八、行为面试准备
+## 8. 行为面试准备
 
 <details markdown="1">
 <summary>**Q48: 「请介绍一个你主导的技术方案，说说你是如何推动落地的。」** · `中级`</summary>

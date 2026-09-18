@@ -1,10 +1,10 @@
-# Part 4: 场景 Agent 应用
+# 4. 场景 Agent 应用
 
 *Chapters 1-8 — 架构总览、车辆控制 Agent、主动视觉 Agent、闲聊 Agent、GUI Agent、其他场景 Agent、Prompt 模板工程、数据通路*
 
-## 1. agent\_group 架构总览
+## 4.1 agent\_group 架构总览
 
-### 1.1 插件集合定位
+### 4.1.1 插件集合定位
 
 `agent_group` 是基于 aadkcore `AgentPlugin` 接口实现的场景 Agent 插件库，编译产物为 `libagent_group.so`。它通过 `extern "C"` 导出工厂函数 `get_supported_agents` 和 `create_dispatcher`，供 AgentRuntime 在运行时动态加载和实例化各场景 Agent。每个 Agent 对应一个唯一的 `scenario_id`，由 MsgDispacher 根据消息中的 scenario\_id 路由到对应的 Dispatcher 实例。
 
@@ -24,7 +24,7 @@ graph LR
     style D fill:#f39c12,color:#fff
 ```
 
-### 1.2 Scenario ID 分配表
+### 4.1.2 Scenario ID 分配表
 
 所有 scenario\_id 统一定义在 `aadkcore/include/runtime/constant_ids.h` 中，保证跨模块一致性：
 
@@ -50,7 +50,7 @@ graph LR
 >
 > scenario\_id 400 和 500 存在条件编译复用：在 `ENABLE_PORSCHE` 模式下分别用于 RainDection 和 SportMode；在 `ENABLE_DEVICEAI_BASE` 模式下通过 `#define GUI_AGENT_SCENARIO_ID 400` 和 `#define CAR_SENTINEL_AGENT_SCENARIO_ID 500` 重新映射给 GuiAgent 和 CarSentinel。
 
-### 1.3 条件编译体系
+### 4.1.3 条件编译体系
 
 agent\_factory.cpp 通过多级条件编译宏控制 Agent 的编译包含，实现不同车型和功能的灵活裁剪：
 
@@ -70,7 +70,7 @@ agent\_factory.cpp 通过多级条件编译宏控制 Agent 的编译包含，实
 | `FEATURE_WELCOME_MODE` | 迎宾模式独立开关 | WelcomeModeDispatcher |
 | `FEATURE_VIDEO_CHAT` | 视频聊天独立开关 | VideoChatDispatcher |
 
-### 1.4 runtime\_config.json 配置
+### 4.1.4 runtime\_config.json 配置
 
 运行时通过 `runtime_config.json` 选择当前平台和模型配置，支持 Orin 和 8397 两套硬件：
 
@@ -81,11 +81,11 @@ agent\_factory.cpp 通过多级条件编译宏控制 Agent 的编译包含，实
 
 每个平台分别配置 `model_config`（基础推理）和 `active_model_config`（主动视觉推理）两套模型参数文件。`current_runtime` 字段决定当前激活的平台。
 
-## 2. 车辆控制 Agent -- CarControlDispatcher
+## 4.2 车辆控制 Agent -- CarControlDispatcher
 
 `CarControlDispatcher`（scenario\_id=1002）是座舱中使用频率最高的 Agent，负责将用户的自然语言指令转化为结构化的车辆控制命令，并通过 MCP 协议下发执行。
 
-### 2.1 核心流程
+### 4.2.1 核心流程
 
 ```mermaid
 sequenceDiagram
@@ -114,7 +114,7 @@ sequenceDiagram
     CC->>TTS: generate_model_result() -> TTS 回复
 ```
 
-### 2.2 意图分类枚举
+### 4.2.2 意图分类枚举
 
 CarControlDispatcher 定义了 `TypeClass` 枚举，LLM 输出解析后根据结果分类路由：
 
@@ -126,7 +126,7 @@ CarControlDispatcher 定义了 `TypeClass` 枚举，LLM 输出解析后根据结
 | `SUMMARY` | 3 | 总结摘要 | 生成文本摘要 |
 | `CHAT` | 4 | 普通闲聊 | 路由到 ChitchatDispatcher 处理 |
 
-### 2.3 车控技能精华表
+### 4.2.3 车控技能精华表
 
 技能定义在 `car_control.yaml` 的 `car_skills` 部分，共 30+ 项技能。以下为核心技能摘要：
 
@@ -155,7 +155,7 @@ CarControlDispatcher 定义了 `TypeClass` 枚举，LLM 输出解析后根据结
 | `door_child_lock_control` | 儿童锁 | door\_position[后排左/右], state | 默认双侧锁定 |
 | `cant_control` | 不可控 | args 为空 | 需求不在技能表内时触发 |
 
-### 2.4 Prompt 模板设计
+### 4.2.4 Prompt 模板设计
 
 CarControlDispatcher 的 Prompt 由 `car_control.yaml` 中的多段模板拼接而成：
 
@@ -173,7 +173,7 @@ CarControlDispatcher 的 Prompt 由 `car_control.yaml` 中的多段模板拼接�
 >
 > system\_prompt 严格要求输出格式为 `{"speak":"回复内容","cmd":[{"name":"技能名","args":{...}}]}`。这种约束使得 LLM 输出可以直接进行 JSON 解析，无需额外的后处理提取逻辑。配合端侧推理引擎的 EBNF 语法约束解码，可进一步保证输出格式的合规性。
 
-### 2.5 乘客感知规则
+### 4.2.5 乘客感知规则
 
 CarControlDispatcher 通过 `PassengerInfo` 结构体（含 pos/occupancy/gender/age 字段）实现精细化乘客感知。`parse_passenger_info()` 解析车辆上报的乘客信息，`get_passenger_infos()` 将其格式化注入 Prompt：
 
@@ -187,11 +187,11 @@ CarControlDispatcher 通过 `PassengerInfo` 结构体（含 pos/occupancy/gender
 
 此外，`voice_zone_map_` 将音区编码映射到位置名称（1=主驾, 2=副驾, 4=左后, 8=右后, 16=中左, 32=中右），`direction_map_` 将指向信息（right/left/up）映射到目标位置，实现基于语音源和手势指向的精准控制。
 
-## 3. 主动视觉 Agent -- ActiveVisionDispatcher
+## 4.3 主动视觉 Agent -- ActiveVisionDispatcher
 
 `ActiveVisionDispatcher`（scenario\_id=300）基于 VLM（Vision-Language Model）实现车内场景的主动感知与智能交互，覆盖上车到下车的全生命周期。
 
-### 3.1 六大场景模式
+### 4.3.1 六大场景模式
 
 | 模式 | mode 值 | 触发条件 | 核心功能 | 关键方法 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -204,7 +204,7 @@ CarControlDispatcher 通过 `PassengerInfo` 结构体（含 pos/occupancy/gender
 
 此外，`handle_intelligent_cockpit_request()` 实现自动座舱场景，包括吃东西、睡觉、阅读、玩电子产品等行为检测，并联动阅读灯和空调等车控设备。对应的 task\_id 列表为：`xz_front_behavior`, `xz_rear_behavior`, `xz_front_temp`, `xz_rear_dangerous_behavior`。
 
-### 3.2 VLM 多模态推理流程
+### 4.3.2 VLM 多模态推理流程
 
 ```mermaid
 graph LR
@@ -222,7 +222,7 @@ graph LR
     style E fill:#f39c12,color:#fff
 ```
 
-### 3.3 多 LoRA 架构
+### 4.3.3 多 LoRA 架构
 
 ActiveVisionDispatcher 通过 `use_multi_lora_` 标志支持同一基础 VLM 模型搭配不同场景 LoRA 适配器。同一个 Qwen2.5-VL 基座模型通过 `addLora` / `switchLora` 接口切换不同场景的微调权重，避免为每个场景单独加载完整模型。
 
@@ -231,7 +231,7 @@ ActiveVisionDispatcher 通过 `use_multi_lora_` 标志支持同一基础 VLM 模
 >
 > `front_behavior_images_` 和 `rear_behavior_images_` 各维护一个容量为 4 的 `FixedQueue`，缓存连续帧图像。VLM 推理时将多帧输入一起送入模型，利用时序信息提升行为识别的准确性（如区分短暂动作和持续行为）。
 
-### 3.4 安全通知频率控制与自适应车控联动
+### 4.3.4 安全通知频率控制与自适应车控联动
 
 为避免重复打扰用户，ActiveVisionDispatcher 通过 `safety_notify_duration_ = 8000`（8 秒）控制同类安全告警的最小通知间隔。`last_safety_notify_timestamp_` 记录上次通知时间戳。
 
@@ -244,11 +244,11 @@ ActiveVisionDispatcher 通过 `use_multi_lora_` 标志支持同一基础 VLM 模
 
 `is_exit_reminder_enabled_` 标志控制下车提醒功能的开关，当启用时在送宾场景中触发遗留物检测。
 
-## 4. 闲聊 Agent 与对话管理
+## 4.4 闲聊 Agent 与对话管理
 
 `ChitchatDispatcher`（scenario\_id=1003）负责处理非车控类的自然语言对话，提供陪伴式聊天体验。
 
-### 4.1 核心架构
+### 4.4.1 核心架构
 
 ChitchatDispatcher 同样继承自 `AgentPlugin`，核心组件包括：
 
@@ -259,11 +259,11 @@ ChitchatDispatcher 同样继承自 `AgentPlugin`，核心组件包括：
 | `prompt_manager_` | `shared_ptr<PromptManager>` | Prompt 模板加载与管理 |
 | `data_dumper_` | `unique_ptr<DataDump>` | 推理数据录制 |
 
-### 4.2 多轮对话上下文管理
+### 4.4.2 多轮对话上下文管理
 
 `ChatHistory` 维护对话历史，`process_history()` 将历史记录转换为模型输入的 `MessageList` 格式。`history_to_string()` 用于调试日志和数据录制。`clear_memory()` 接口支持清空对话历史重新开始。
 
-### 4.3 Prompt 特性
+### 4.4.3 Prompt 特性
 
 闲聊 Prompt（`chitchat.yaml`）的 system\_prompt 包含丰富的角色设定：
 
@@ -274,15 +274,15 @@ ChitchatDispatcher 同样继承自 `AgentPlugin`，核心组件包括：
 - VIP 用户识别：`system_prompt_vipuser` 段注入已注册乘客名称
 - 说话人位置感知：`system_prompt_seat` 段注入当前说话人座位
 
-### 4.4 与车控 Agent 的意图路由关系
+### 4.4.4 与车控 Agent 的意图路由关系
 
 ChitchatDispatcher 自身也定义了与 CarControlDispatcher 相同的 `TypeClass` 枚举（REJECTED/CAR\_CONTROL/ONLINE\_SEARCH/SUMMARY/CHAT）。当车控 Agent 将用户请求分类为 `CHAT` 类型时，消息会被路由到闲聊 Agent 进行处理，形成意图路由闭环。
 
-## 5. GUI Agent
+## 4.5 GUI Agent
 
 `GuiAgentDispatcher`（scenario\_id=400，仅 `ENABLE_DEVICEAI_BASE` 模式）负责车机 UI 操作理解与自动化，将用户的语音指令映射到具体的 UI 控件操作。
 
-### 5.1 核心数据结构
+### 4.5.1 核心数据结构
 
 `GuiInfo` 结构体封装了 GUI 操作的完整上下文：
 
@@ -294,7 +294,7 @@ ChitchatDispatcher 自身也定义了与 CarControlDispatcher 相同的 `TypeCla
 | `viewtrees` | json | 当前界面 View Tree 结构化描述 |
 | `screenshots` | string | 当前界面截图（Base64） |
 
-### 5.2 id\_table.yaml 映射
+### 4.5.2 id\_table.yaml 映射
 
 `id_table.yaml` 定义了数字 ID 到页面 URL 的映射表（共 200+ 条），用于将 VLM 识别的 UI 控件 ID 映射到实际的应用页面地址。映射格式为 `ID: page://domain/element_id`，覆盖 SystemUI、SmartCar、AirCondition 等多个应用域。
 
@@ -307,7 +307,7 @@ page://systemui.alios.cn/systemui_TT34:
   ...
 ```
 
-### 5.3 端到端流程
+### 4.5.3 端到端流程
 
 ```mermaid
 sequenceDiagram
@@ -331,7 +331,7 @@ sequenceDiagram
 
 `QueryState` 枚举（kInit/kFinished）和 `query_state_map_` 用于追踪每个查询的生命周期，`QUERY_TIMEOUT = 10000`（10秒）为查询超时阈值。
 
-## 6. 其他场景 Agent
+## 4.6 其他场景 Agent
 
 | Agent 名称 | 类名 | scenario\_id | 编译条件 | 核心功能 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -349,9 +349,9 @@ sequenceDiagram
 >
 > CarSentinelDispatcher 在岚图项目中标注为 "lantu not use"。部分 Agent（如 ProactiveSpeech、VideoChat）的 include 已被注释掉，处于暂停开发或未启用状态。
 
-## 7. Prompt 模板工程
+## 4.7 Prompt 模板工程
 
-### 7.1 YAML 模板结构
+### 4.7.1 YAML 模板结构
 
 所有 Agent 的 Prompt 模板存放在 `agent_group/data/template/` 目录下，采用 YAML 格式。典型的模板文件结构如下：
 
@@ -377,7 +377,7 @@ car_skills:                     # 技能定义段
 
 模板通过 `PromptManager` 加载，运行时通过字符串替换注入动态内容。
 
-### 7.2 占位符替换机制
+### 4.7.2 占位符替换机制
 
 | 占位符 | 说明 | 替换来源 | 示例 |
 | :--- | :--- | :--- | :--- |
@@ -395,7 +395,7 @@ car_skills:                     # 技能定义段
 
 替换由 `replaceLocationPlaceholder()`、`replacePlaceholder()` 和 `replaceSystemPlaceholder()` 三个方法协作完成，按顺序替换不同类别的占位符。
 
-### 7.3 多场景 Prompt 模板对比
+### 4.7.3 多场景 Prompt 模板对比
 
 | 维度 | 车辆控制 (car\_control.yaml) | 闲聊 (chitchat.yaml) | 主动视觉 (active\_vision.yaml) | GUI Agent (gui\_agent.yaml) |
 | :--- | :--- | :--- | :--- | :--- |
@@ -411,9 +411,9 @@ car_skills:                     # 技能定义段
 >
 > **约束解码友好设计**：车控 Agent 的 Prompt 严格定义 JSON 输出 Schema，配合端侧推理引擎的 EBNF 语法约束，可在解码阶段强制保证输出格式合规。关键要素包括：(1) 明确声明输出格式和字段类型；(2) 列举所有合法参数值范围；(3) 提供 cant\_control 兜底路径。这比自由文本 + 正则提取的方案可靠性高出一个量级。
 
-## 8. 数据通路与 Fusion 通信
+## 4.8 数据通路与 Fusion 通信
 
-### 8.1 DataTransport 机制
+### 4.8.1 DataTransport 机制
 
 `agent_runtime_main.cpp` 是 agent\_group 进程的入口，它创建 `DataTransportServer` 和 `DataTransportClient` 实例，封装到 `AgentRuntime` 中运行：
 
@@ -436,7 +436,7 @@ ProcessWait();  // 信号等待 (SIGINT/SIGTERM/SIGSEGV/SIGABRT)
 | 消息路由 | `MsgDispacher` | `BaseMsgDeliver` | 根据 scenario\_id 将消息分发到对应的 Dispatcher |
 | 运行时 | `AgentRuntime` | aadkcore | 管理 Server/Client 生命周期，连接 Server 回调和 Dispatcher |
 
-### 8.2 数据流全景
+### 4.8.2 数据流全景
 
 ```mermaid
 graph TB
@@ -462,7 +462,7 @@ graph TB
 
 消息出站流程：Dispatcher 处理完毕后，通过 `SendResultNotification()` 将结果回传给 `DataTransportServer`，再通过 Fusion IPC 返回外部系统。对于需要流式输出的场景（如 GUI Agent 和 ActiveVision），使用 `StreamProcessor` + `stream_callback_handler` 实现分段推送。
 
-### 8.3 消息录制与回放
+### 4.8.3 消息录制与回放
 
 每个 Dispatcher 都内置了 `DataDump` 实例，通过 `set_data_dump_flag()` 控制数据录制开关。录制的内容包括：
 

@@ -1,12 +1,12 @@
-# Part 3: aadkcore 核心框架
+# 3. aadkcore 核心框架
 
 *Chapters 1-9 — 架构总览、统一模型接口、模型调度、对话管理、RAG、MCP、A2A、运行时与插件、LLM Flow*
 
-## 1. aadkcore 架构总览
+## 3.1 aadkcore 架构总览
 
 **aadkcore** 是自研的端侧多平台 AI Agent 核心引擎，采用 C++17 编写，编译产物为 `libaadkcore.so`。框架的核心目标是：**一套代码，屏蔽底层推理后端差异，统一 Agent 开发范式**，支持 x86 云端、Jetson Orin、高通 SA8397P 等多种平台。
 
-### 1.1 分层架构
+### 3.1.1 分层架构
 
 ```mermaid
 graph TD
@@ -50,7 +50,7 @@ graph TD
     style PLATFORM fill:#2ecc71,color:#fff
 ```
 
-### 1.2 代码目录结构
+### 3.1.2 代码目录结构
 
 | 目录 | 职责 |
 | :--- | :--- |
@@ -65,7 +65,7 @@ graph TD
 | `src/` | 所有模块的实现代码（agent、flow、models、rag、runner、runtime、tools 等子目录） |
 | `examples/` | 使用示例 |
 
-### 1.3 平台支持矩阵
+### 3.1.3 平台支持矩阵
 
 | 平台 | 芯片 | 推理后端 | 构建脚本 |
 | :--- | :--- | :--- | :--- |
@@ -80,11 +80,11 @@ graph TD
 >
 > 上层 Agent 代码通过 `aadkapi/` 中的统一接口（ModelInstance、ChatHistory 等）开发，无需感知底层推理后端差异。切换平台只需更换构建脚本和模型文件，Agent 业务逻辑代码零修改。
 
-## 2. 统一模型接口 — ModelInstance
+## 3.2 统一模型接口 — ModelInstance
 
 `ModelInstance`（定义于 `aadkapi/model_instance.hpp`）是面向 Agent 开发者的核心模型交互类。它封装了单个 LLM 模型实例，提供流式/非流式生成、多模态输入、LoRA 热加载等能力，屏蔽 Lape / QNN / Bailian 后端差异。
 
-### 2.1 核心 API
+### 3.2.1 核心 API
 
 | API | 返回类型 | 说明 |
 | :--- | :--- | :--- |
@@ -104,7 +104,7 @@ graph TD
 > `StreamCallback = function<void(const string& content, bool is_finished, void* user_data)>` — 流式回调，每生成一个 token 调用一次，`is_finished` 为 true 表示生成结束。  
 > `CompletionCallback = function<void(const string& content, void* user_data)>` — 非流式回调，生成完成后一次性返回。
 
-### 2.2 多模态消息类型系统
+### 3.2.2 多模态消息类型系统
 
 消息类型定义于 `aadkapi/content.hpp`，采用 `std::variant` 实现多模态内容的类型安全表示。
 
@@ -157,7 +157,7 @@ classDiagram
 | `FunctionCall` | `name, arguments, index, id, type` | LLM 发起的函数调用 |
 | `FunctionResponse` | `tool_call_id, name, content` | 工具调用返回结果 |
 
-### 2.3 ModelConfig 参数
+### 3.2.3 ModelConfig 参数
 
 模型推理参数定义于 `aadkapi/model_config.hpp`，包含 `ModelConfig`（全局配置）和 `InferParams`（单次推理覆写）两个层级。
 
@@ -175,7 +175,7 @@ classDiagram
 | `enable_jump_forward` | `bool` | false | 约束解码跳跃前进优化 |
 | `config_file_path` | `string` | "" | 模型特定配置文件路径 |
 
-### 2.4 流式多模态推理代码示例
+### 3.2.4 流式多模态推理代码示例
 
 ```
 // 1. 创建模型实例
@@ -210,11 +210,11 @@ model.streamGenerate(
 );
 ```
 
-## 3. 模型调度器 — ModelScheduler
+## 3.3 模型调度器 — ModelScheduler
 
 端侧场景下，多个 Agent（车控、闲聊、主动语音等）可能并发请求同一个 LLM 模型。`ModelScheduler`（定义于 `include/runtime/model_scheduler.h`）提供基于优先级的任务队列和抢占调度，确保高优先级任务及时响应。
 
-### 3.1 调度架构
+### 3.3.1 调度架构
 
 ```mermaid
 flowchart LR
@@ -231,7 +231,7 @@ flowchart LR
     style M fill:#2ecc71,color:#fff
 ```
 
-### 3.2 任务类型与优先级
+### 3.3.2 任务类型与优先级
 
 **四种任务类型**（`TaskType` 枚举）：
 
@@ -260,7 +260,7 @@ score = priority * weight_priority + wait_time_ms * weight_wait * 0.001
 // 等待越久，score 越高，避免低优先级任务饥饿
 ```
 
-### 3.3 抢占机制与 ModelRunner
+### 3.3.3 抢占机制与 ModelRunner
 
 | 调度操作 | 说明 |
 | :--- | :--- |
@@ -282,11 +282,11 @@ score = priority * weight_priority + wait_time_ms * weight_wait * 0.001
 >
 > 每个任务完成后返回 `TaskResponse`，包含：`task_id`（任务ID）、`status`（error\_code 枚举）、`ttft`（首 token 延迟 ms）、`input_tokens`、`output_tokens`、`tokens_per_second`（吞吐量），可用于性能监控和调优。
 
-## 4. 多音区对话管理 — ChatHistory
+## 3.4 多音区对话管理 — ChatHistory
 
 车载座舱场景下，不同座位的乘员可能同时与 AI 助手对话。`ChatHistory`（定义于 `aadkapi/chat_history.hpp`）实现了按音区隔离的对话历史管理，支持关键人物识别与指代消歧。
 
-### 4.1 音区枚举 AudioZone
+### 3.4.1 音区枚举 AudioZone
 
 | 枚举值 | zone\_id | 说明 |
 | :--- | :--- | :--- |
@@ -307,7 +307,7 @@ score = priority * weight_priority + wait_time_ms * weight_wait * 0.001
 | `response` | `ChatMessage::response(content, zone, call_id, ts)` | 模型回复 |
 | `info` | `ChatMessage::info(content, call_id, ts, zone)` | Agent 执行过程中需要加入上下文的系统信息 |
 
-### 4.2 关键人物系统 — UserInfo
+### 3.4.2 关键人物系统 — UserInfo
 
 ```mermaid
 flowchart LR
@@ -331,7 +331,7 @@ flowchart LR
 
 核心方法 `detectUserInfo(message)` 从用户 query 中检测是否包含人物信息；`addQuery()` 在添加 query 时可自动触发关键人物识别，并返回识别结果和历史对话。
 
-### 4.3 历史获取策略
+### 3.4.3 历史获取策略
 
 | 方法 | 参数 | 说明 |
 | :--- | :--- | :--- |
@@ -348,7 +348,7 @@ flowchart LR
 >
 > `getHistoryByTokenLimit` 在不传入自定义 token\_counter 时，使用默认估算：中文字符 1:1（一个中文字 = 1 token），英文 1.3:1。如需精确计数，可传入与实际 tokenizer 对齐的计数函数。
 
-## 5. RAG 知识增强
+## 3.5 RAG 知识增强
 
 `RagInstance`（定义于 `aadkapi/rag_instance.hpp`）为 Agent 提供可插拔的 RAG（Retrieval-Augmented Generation）能力。通过构造时指定 `service_name`，内部路由到对应的 `RagServiceBase` 实现。
 
@@ -387,7 +387,7 @@ if (rag.isReady()) {
 }
 ```
 
-## 6. MCP 工具协议
+## 3.6 MCP 工具协议
 
 MCP（Model Context Protocol）是 LLM 与外部工具的标准通信协议。`McpServer`（定义于 `aadkapi/tools/mcp/mcp_server.hpp`）实现了 MCP 服务端，支持将车辆控制 API、导航 API 等外部能力暴露为 LLM 可调用的 Tool。
 
@@ -404,7 +404,7 @@ flowchart LR
     style MS fill:#f39c12,color:#fff
 ```
 
-### 6.1 四种传输类型
+### 3.6.1 四种传输类型
 
 | 枚举值 | 传输类型 | 说明 | 适用场景 |
 | :--- | :--- | :--- | :--- |
@@ -413,7 +413,7 @@ flowchart LR
 | `MCP_TRANSPORT_HTTP` | HTTP | HTTP 请求/响应 | RESTful 调用 |
 | `MCP_TRANSPORT_FUSION` | Fusion | 自定义融合协议 | 车载系统内部通信 |
 
-### 6.2 核心 API
+### 3.6.2 核心 API
 
 | API | 说明 |
 | :--- | :--- |
@@ -426,7 +426,7 @@ flowchart LR
 | `AddServer(server, path)` (static) | 注册 MCP 服务器实例到指定路径 |
 | `StartServers(config, transport, addr, port)` (static) | 批量启动所有已注册的 MCP 服务器 |
 
-### 6.3 注册工具代码示例
+### 3.6.3 注册工具代码示例
 
 ```
 // 创建 MCP Server
@@ -457,11 +457,11 @@ mcp_server->AddTool(tool_param,
 mcp_server->Start(McpServer::MCP_TRANSPORT_FUSION, "car_mcp");
 ```
 
-## 7. A2A 协议
+## 3.7 A2A 协议
 
 A2A（Agent-to-Agent）是多 Agent 间通信标准，遵循 [a2a-protocol.org](https://a2a-protocol.org) 规范。`A2AServer`（定义于 `aadkapi/a2a/a2a_server.h`）实现了 A2A 服务端，支持 Agent 间的任务委托、状态同步和结果传递。
 
-### 7.1 任务状态机
+### 3.7.1 任务状态机
 
 ```mermaid
 stateDiagram-v2
@@ -481,7 +481,7 @@ stateDiagram-v2
     rejected --> [*]
 ```
 
-### 7.2 A2AServer API
+### 3.7.2 A2AServer API
 
 | API | 说明 |
 | :--- | :--- |
@@ -490,7 +490,7 @@ stateDiagram-v2
 | `Stop()` | 停止 A2A 服务 |
 | `Append(other)` | 将其他 A2A Agent 共享同一个 HTTP 服务 |
 
-### 7.3 A2ATaskHandler
+### 3.7.3 A2ATaskHandler
 
 | API | 说明 |
 | :--- | :--- |
@@ -498,7 +498,7 @@ stateDiagram-v2
 | `AddArtifact(taskId, artifact, isFinal, isAppend)` | 添加产出物（文本/文件），支持标记是否为最终产出 |
 | `GetTask(taskId)` | 查询任务详细信息（JSON 格式） |
 
-### 7.4 多 Agent 协作场景
+### 3.7.4 多 Agent 协作场景
 
 ```mermaid
 sequenceDiagram
@@ -523,7 +523,7 @@ sequenceDiagram
     SA-->>U: "空调已设置为 24°C，导航已开始"
 ```
 
-## 8. Agent 运行时与插件机制
+## 3.8 Agent 运行时与插件机制
 
 aadkcore 的运行时分为两层：`SystemRuntime` 负责消息接收与路由；`AgentRuntime` 负责 Agent 生命周期管理。业务 Agent 通过插件机制（`AgentPlugin`）以动态库形式加载。
 
@@ -542,7 +542,7 @@ flowchart TD
     style D fill:#f39c12,color:#fff
 ```
 
-### 8.1 AgentPlugin 插件接口
+### 3.8.1 AgentPlugin 插件接口
 
 定义于 `include/runtime/agent_plugin.h`，是所有业务 Agent 必须实现的抽象接口：
 
@@ -566,7 +566,7 @@ flowchart TD
 | `WELCOME_MODE_SCENARIO_ID` | 700 | 迎宾模式 |
 | `BROADCAST_SCENARIO_ID` | 65535 | 广播消息 |
 
-### 8.2 动态加载机制
+### 3.8.2 动态加载机制
 
 `libaadkcore.so` 运行时通过 `dlopen` 加载业务 Agent 动态库（如 `libagent_group.so`），通过约定的 `extern "C"` 工厂函数获取 Agent 列表并创建实例。
 
@@ -607,11 +607,11 @@ extern "C" void create_dispatcher(int scenario_id, const char* data_path,
 extern "C" void destroy_dispatcher(std::unique_ptr<AgentPlugin> plugin);
 ```
 
-## 9. LLM Flow 与 Tool 系统
+## 3.9 LLM Flow 与 Tool 系统
 
 `BaseLlmFlow`（定义于 `include/flow/base_llm_flow.hpp`）实现了 LLM 推理流水线的标准模式，负责预处理、调用模型、后处理和 Tool 调用循环。`BaseTool`（定义于 `include/tools/base_tool.hpp`）定义了工具的统一抽象接口。
 
-### 9.1 BaseLlmFlow 流水线
+### 3.9.1 BaseLlmFlow 流水线
 
 ```mermaid
 flowchart TD
@@ -636,7 +636,7 @@ flowchart TD
 - `basic::request_processor` — 基础请求构建
 - `instructions::request_processor` — 将 Agent 的 instructions 注入到请求中
 
-### 9.2 BaseTool 工具基类
+### 3.9.2 BaseTool 工具基类
 
 | 属性/方法 | 返回类型 | 说明 |
 | :--- | :--- | :--- |
@@ -665,7 +665,7 @@ struct ToolParameters {
 
 LLM 根据所有注册 Tool 的 `ToolDefinition` 生成结构化的 `FunctionCall`，Flow 引擎解析后调用对应 Tool 的 `run_async()`，结果通过 `FunctionResponse` 回传给 LLM 继续推理。
 
-### 9.3 端到端调用链
+### 3.9.3 端到端调用链
 
 ```mermaid
 sequenceDiagram
@@ -709,11 +709,11 @@ sequenceDiagram
 >
 > aadkcore 将 Agent 开发中的共性能力（模型调度、对话管理、Tool 调用、RAG、A2A 协作）下沉到框架层，业务 Agent 开发者只需关注：(1) 编写 `AgentPlugin` 实现业务逻辑；(2) 注册 `BaseTool` 连接外部能力；(3) 编写 `instructions` 定义 Agent 行为。框架负责调度、流水线、协议对接等基础设施工作。
 
-## 10. 端云协同架构
+## 3.10 端云协同架构
 
 纯端侧 Agent 受限于模型能力和知识范围，纯云端 Agent 受限于延迟和离线可用性。端云协同是座舱 Agent 的最优架构——端侧处理低延迟、高隐私的请求，云端处理复杂推理和知识密集型任务。
 
-### 10.1 端云分工策略
+### 3.10.1 端云分工策略
 
 | 请求类型 | 处理方 | 原因 | 示例 |
 | :--- | :--- | :--- | :--- |
@@ -723,7 +723,7 @@ sequenceDiagram
 | **知识密集型** | 云端 | 需要实时联网搜索 | "最近有什么好看的电影" "XX 餐厅评价怎么样" |
 | **多模态理解** | 端侧优先，云端增强 | 端侧快速响应 + 云端精准分析 | DMS 疲劳检测（端侧）+ 复杂场景分析（云端） |
 
-### 10.2 协同架构设计
+### 3.10.2 协同架构设计
 
 ```mermaid
 flowchart TB
@@ -749,7 +749,7 @@ flowchart TB
 | **端侧草稿 (Draft-Refine)** | 端侧快速生成初稿，云端校验/润色 | 中（端侧先显示，云端更新） | 长文本生成、复杂回答 |
 | **云端主导 (Cloud-Primary)** | 直接转云端处理 | 高（依赖网络） | 明确需要大模型或联网的请求 |
 
-### 10.3 离线降级与缓存
+### 3.10.3 离线降级与缓存
 
 当网络不可用时（隧道、地下车库、偏远地区），端云协同需要优雅降级：
 
@@ -765,11 +765,11 @@ flowchart TB
 >
 > 在 aadkcore 框架中，端云协同可以通过 **A2A 协议** 实现：端侧 Agent 作为 A2A Client 向云端 Agent（A2A Server）发送子任务。SystemRuntime 的 HTTP Server 模式可以接收云端的回调结果。路由决策可以在 `BaseLlmFlow` 的 pipeline 中实现——在 Prefill 之前通过轻量意图分类（Qwen3-1.7B 或规则引擎）决定请求走向。
 
-## 11. 安全沙箱机制
+## 3.11 安全沙箱机制
 
 座舱 Agent 的 Tool 调用直接控制车辆硬件（空调、车窗、车门、车灯），安全沙箱是防止 LLM 幻觉或 Prompt 注入导致危险操作的最后防线。
 
-### 11.1 三级安全分级
+### 3.11.1 三级安全分级
 
 | 安全等级 | 操作类型 | 确认要求 | 示例工具 | 实现方式 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -777,7 +777,7 @@ flowchart TB
 | **L2 可逆** | 可逆操作，影响车辆状态 | 语音确认（"好的，帮您调到22度"） | 调空调、开车窗、调音量、切歌 | Tool 执行前插入确认回复，等待用户未反对后执行 |
 | **L3 不可逆/高危** | 不可逆或涉及安全 | 二次确认 + 条件检查（车速、档位） | 打开车门、发送消息、支付 | 强制二次确认 + 车辆状态安全检查 + 必要时生物认证 |
 
-### 11.2 安全检查流水线
+### 3.11.2 安全检查流水线
 
 ```mermaid
 flowchart LR
@@ -805,7 +805,7 @@ flowchart LR
 | **频率限制** | 防止短时间内重复执行相同操作 | 1 秒内连续 5 次 set\_ac\_temperature → 拒绝：操作频率异常 |
 | **用户权限** | 根据 scenario\_id 判断请求来源的权限 | 后排乘客尝试 unlock\_door → 拒绝：权限不足 |
 
-### 11.3 Prompt 注入防御
+### 3.11.3 Prompt 注入防御
 
 LLM 存在 Prompt 注入风险——恶意用户可能通过精心构造的输入欺骗模型执行危险操作。座舱场景的防御需要多层保护：
 

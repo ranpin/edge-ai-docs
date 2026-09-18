@@ -1,10 +1,10 @@
-# Part 2: 设备部署
+# 2. 设备部署
 
 *基于 Qualcomm SA8397P 平台  |  QNN 框架 · ISP 数据流 · 多模型调度 · Context Binary*
 
-## 1. QNN 推理框架
+## 2.1 QNN 推理框架
 
-### 1.1 QNN 架构分层
+### 2.1.1 QNN 架构分层
 
 Qualcomm Neural Network (QNN) 是高通推出的下一代统一 AI 推理框架，取代早期的 SNPE。QNN 采用分层架构，上层应用通过统一 API 调用底层不同硬件加速器：
 
@@ -28,7 +28,7 @@ flowchart TB
     style C4 fill:#f39c12,color:#fff
 ```
 
-### 1.2 完整部署流水线
+### 2.1.2 完整部署流水线
 
 从训练框架到端侧运行的完整部署流水线：
 
@@ -49,7 +49,7 @@ flowchart LR
     style H fill:#e74c3c,color:#fff
 ```
 
-### 1.3 推理框架对比
+### 2.1.3 推理框架对比
 
 以下雷达图展示了 QNN、SNPE 和 TFLite 在六个关键维度上的对比（满分 10 分）：
 
@@ -64,7 +64,7 @@ flowchart LR
 | 易用性 | 6 | 8 | 9 |
 | 车规认证 | 10 | 5 | 1 |
 
-### 1.4 推理框架详细对比
+### 2.1.4 推理框架详细对比
 
 | 维度 | QNN | SNPE (旧版) | TFLite |
 | :--- | :--- | :--- | :--- |
@@ -77,9 +77,9 @@ flowchart LR
 | **维护状态** | 活跃开发中 | 维护模式，不再新增功能 | 活跃开发中 |
 | **推荐场景** | 新项目首选 | 仅限已有项目维护 | 跨平台/非高通场景 |
 
-## 2. ISP 与端到端数据流
+## 2.2 ISP 与端到端数据流
 
-### 2.1 ISP 处理流水线
+### 2.2.1 ISP 处理流水线
 
 图像信号处理器 (ISP) 是摄像头原始数据到可用图像的桥梁。SA8397P 内置 Spectra ISP，完整处理流水线如下：
 
@@ -100,7 +100,7 @@ flowchart LR
     style I fill:#2ecc71,color:#fff
 ```
 
-### 2.2 端到端延迟分解
+### 2.2.2 端到端延迟分解
 
 从摄像头捕获到最终 GPU 渲染输出的全链路延迟分解（瀑布图）：
 
@@ -114,7 +114,7 @@ xychart-beta
     bar [2, 3, 0.1, 12.9, 2, 4]
 ```
 
-### 2.3 Zero-Copy 数据通路
+### 2.2.3 Zero-Copy 数据通路
 
 > [!TIP]
 > **Zero-Copy 路径：消除 CPU 内存拷贝瓶颈**
@@ -129,9 +129,9 @@ xychart-beta
 >
 > **性能收益**：整条数据通路中 **无任何 CPU memcpy 操作**，端到端延迟减少约 3~5ms，功耗降低约 15%。ION Buffer 的物理地址连续性还确保了 DMA 传输的高效性。
 
-## 3. 多模型调度与优化
+## 2.3 多模型调度与优化
 
-### 3.1 单帧多模型调度时序
+### 2.3.1 单帧多模型调度时序
 
 在智能座舱的一帧处理中，多个 AI 模型需要协同工作。以下甘特图展示了典型的单帧处理时序（总帧周期 33ms @30fps）：
 
@@ -159,7 +159,7 @@ gantt
     AR 渲染 + HUD 显示     :gpu, 16, 20
 ```
 
-### 3.2 调度策略对比
+### 2.3.2 调度策略对比
 
 | 调度策略 | 描述 | 帧延迟 | HTP 利用率 | 适用场景 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -168,7 +168,7 @@ gantt
 | **并行调度** | 无依赖模型分配到不同 HTP 核心并行执行 | 最低 (~20ms) | 高 (~85%) | 多模型、低延迟要求 |
 | **Context Binary 共享** | 多个模型编译为一个 Context Binary，共享中间 Buffer | 最低 (~18ms) | 最高 (~90%) | 固定模型组合、量产部署 |
 
-### 3.3 Context Binary 与车规要求
+### 2.3.3 Context Binary 与车规要求
 
 > [!NOTE]
 > **为什么车载量产始终选择 Context Binary？**
@@ -192,11 +192,11 @@ gantt
 >
 > AIMET 量化工具、推理引擎对比等内容已整合到独立文档 → [**Part 3: 推理优化**](../../general/infer.html)
 
-## 4. 集成部署方式
+## 2.4 集成部署方式
 
 aadkcore 框架支持三种集成部署方式，分别适用于不同平台和场景。三种方式共享同一套核心库（`libaadkcore.so` + `libagent_group.so`），差异在于运行载体、通信方式和集成深度。
 
-### 4.1 部署方式总览
+### 2.4.1 部署方式总览
 
 ```mermaid
 flowchart TB
@@ -227,7 +227,7 @@ flowchart TB
 | **构建脚本** | `build_8397_linux.sh` | `build_8397_android.sh` | `build_8397_android.sh` |
 | **设备安装路径** | `/opt/agentcore/` | `/AI/vllm_sdk/` | APK 内 + `/AI/vllm_sdk/` |
 
-### 4.2 Service 部署（systemd 服务）
+### 2.4.2 Service 部署（systemd 服务）
 
 Service 部署是 SA8397P Linux 平台的标准量产方案。`system_agent` 作为系统服务由 systemd 托管，开机自启、异常自动重启，通过 Fusion（DataTransport）或 HTTP 与外部客户端通信。
 
@@ -331,7 +331,7 @@ WantedBy=multi-user.target
 | `--upload 1` | 0 (关闭) | 启用推理数据上传到远端服务器 |
 | `--dual 1` | 0 (关闭) | 启用 SA8397P 双实例模式（双 NPU 核心） |
 
-### 4.3 可执行文件部署（vllm\_sdk）
+### 2.4.3 可执行文件部署（vllm\_sdk）
 
 可执行文件部署主要用于 SA8397P Android 平台的**开发调试和功能验证**。通过 NDK 交叉编译生成 `android_test` 可执行文件，adb push 到设备后直接运行，无需 APK 集成，方便快速迭代。
 
@@ -406,7 +406,7 @@ export LD_LIBRARY_PATH=/AI/vllm_sdk/lib:$GENAI_THIRTY_LIB
 >
 > `ADSP_LIBRARY_PATH` 是 Hexagon DSP 加载 skeleton 库的搜索路径，必须包含 QNN 后端库目录。`GENAI_THIRTY_LIB` 指向 QNN 库目录，用于 GenAI SDK 定位 HTP/CPU/GPU 后端。如果这两个变量配置错误，会导致 QNN 后端加载失败，模型推理报 `AEE_ECONNREFUSED` 错误。
 
-### 4.4 APK 集成 SO
+### 2.4.4 APK 集成 SO
 
 APK 集成是 SA8397P Android 平台的**量产部署方案**。Android 应用通过 JNI 加载 `libandroid_sdk.so`，调用 `ModelInference` C++ 接口完成模型推理。核心 SO 库打包在 APK 内，模型权重和 QNN 后端库部署在设备文件系统。
 
@@ -529,7 +529,7 @@ model.inference_msg(msg, true, [](const std::string& result, bool is_finished) {
 >
 > 调试时可通过 Android 系统属性控制数据录制：`adb shell setprop persist.aadk.data_dump 1` 开启，设为 0 关闭。
 
-### 4.5 模型配置与多 LoRA
+### 2.4.5 模型配置与多 LoRA
 
 aadkcore 通过 `runtime_config.json` 实现多平台自动切换，通过 `multi_lora_runtime_config.json` 支持同一基础模型加载多个 LoRA 适配器。
 
@@ -603,9 +603,9 @@ flowchart LR
 >
 > 多 LoRA 架构通过 `scene_id` 自动路由到对应的 LoRA 适配器。基础模型权重常驻 NPU 内存，LoRA 增量权重按需加载。切换 LoRA 仅需替换增量权重（通常 < 100MB），无需重新加载基础模型（~2.5GB），切换延迟在毫秒级。这使得同一个 4B 参数基础模型能同时服务闲聊、车内物品检测、着装识别、车外问答等多个场景。
 
-## 5. OTA 模型更新
+## 2.5 OTA 模型更新
 
-### 5.1 更新策略分级
+### 2.5.1 更新策略分级
 
 端侧模型的 OTA 更新需要根据更新内容和风险等级选择不同策略：
 
@@ -617,7 +617,7 @@ flowchart LR
 | **模型整体更新** | 完整 Context Binary | 2-3 GB | 高 | 月/季度级 | 全量回归测试 |
 | **框架更新** | libaadkcore.so + libagent\_group.so | 50-100 MB | 高 | 版本发布 | 全量回归 + 兼容性测试 |
 
-### 5.2 安全更新流程
+### 2.5.2 安全更新流程
 
 ```mermaid
 flowchart TB
@@ -644,9 +644,9 @@ flowchart TB
 >
 > (1) **绝不在行驶中更新**：模型切换瞬间推理服务中断，必须在停车且充电状态下执行；(2) **A/B 分区保障回滚**：新模型写入备用分区，冒烟测试通过后才切换，失败自动回滚；(3) **签名校验防篡改**：防止恶意模型注入；(4) **版本兼容性**：新 LoRA 必须与当前基座模型版本兼容，版本号在 runtime\_config.json 中管理。
 
-## 6. 性能基准测试
+## 2.6 性能基准测试
 
-### 6.1 基准测试方法论
+### 2.6.1 基准测试方法论
 
 端侧 LLM 的性能基准测试必须遵循严格的方法论，否则测试结果无法反映量产环境的真实性能：
 
@@ -659,7 +659,7 @@ flowchart TB
 | **统计方法** | 报告单次或平均值 | 报告 P50/P90/P99 分位数，至少 100 次测试 |
 | **内存状态** | 首次推理（KV Cache 为空） | 测试多轮对话后的推理（KV Cache 累积增长后） |
 
-### 6.2 标准测试 Checklist
+### 2.6.2 标准测试 Checklist
 
 ```bash
 # 性能基准测试标准流程
@@ -697,7 +697,7 @@ cat /sys/class/thermal/thermal_zone*/temp      # 测试后温度
 cat /proc/$(pidof system_agent)/status | grep VmRSS  # 内存
 ```
 
-### 6.3 关键性能指标
+### 2.6.3 关键性能指标
 
 | 指标 | 定义 | 目标值 | 测量方法 |
 | :--- | :--- | :--- | :--- |
@@ -708,11 +708,11 @@ cat /proc/$(pidof system_agent)/status | grep VmRSS  # 内存
 | **吞吐量** | 单位时间处理的 token 总数 | > 10 tok/s | Profiling 回调统计 |
 | **内存峰值** | 推理过程中 RSS 最大值 | < 4 GB | /proc/PID/status 监控 |
 
-## 7. ONNX → QNN 转换陷阱
+## 2.7 ONNX → QNN 转换陷阱
 
 从训练框架（PyTorch）到端侧部署（QNN）的模型转换链路为 `PyTorch → ONNX → QNN IR → Context Binary`，每一步都可能引入问题。以下是实际项目中遇到的常见陷阱：
 
-### 7.1 ONNX 导出阶段
+### 2.7.1 ONNX 导出阶段
 
 | 陷阱 | 现象 | 原因 | 解决方案 |
 | :--- | :--- | :--- | :--- |
@@ -721,7 +721,7 @@ cat /proc/$(pidof system_agent)/status | grep VmRSS  # 内存
 | **opset 版本不匹配** | ONNX 模型验证通过但 QNN 转换报错 | 使用了过高的 opset\_version，QNN 不支持 | 导出时指定 opset\_version=17 或 QNN SDK 支持的版本 |
 | **控制流算子** | 包含 if/loop 的模型无法转换 | QNN 不支持动态控制流 | 使用 torch.jit.trace 替代 torch.jit.script；或拆分为多个子模型 |
 
-### 7.2 QNN 转换阶段
+### 2.7.2 QNN 转换阶段
 
 | 陷阱 | 现象 | 原因 | 解决方案 |
 | :--- | :--- | :--- | :--- |
@@ -730,7 +730,7 @@ cat /proc/$(pidof system_agent)/status | grep VmRSS  # 内存
 | **Layout 转换遗漏** | 推理速度远低于预期 | 模型为 NCHW 格式，HTP 原生支持 NHWC，运行时隐式 transpose | 转换时指定 --input\_layout NHWC；或在 ONNX 阶段插入 transpose 节点 |
 | **Context Binary 不兼容** | 加载失败 `QnnContext_createFromBinary failed` | Context Binary 是硬件绑定的——在 SA8295P 上编译的不能在 SA8397P 上运行 | 针对目标硬件重新生成 Context Binary；使用正确的 SOC 参数 |
 
-### 7.3 LLM 特有的转换陷阱
+### 2.7.3 LLM 特有的转换陷阱
 
 | 陷阱 | 原因 | 解决方案 |
 | :--- | :--- | :--- |
