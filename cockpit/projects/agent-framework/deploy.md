@@ -1,6 +1,19 @@
 # 2. 设备部署
 
-*基于 Qualcomm SA8397P 平台  |  QNN 框架 · ISP 数据流 · 多模型调度 · Context Binary*
+*基于 Qualcomm SA8397P 平台  |  QNN 框架 · ISP 数据流 · 多模型调度 · Context Binary*
+
+> [!TIP]
+> **本篇讲什么**
+>
+> Qwen3-Omni-4B 在 SA8397P 上的**设备部署**全链路：
+>
+> - QNN 推理框架：架构分层、完整部署流水线、与其他推理框架对比
+> - ISP 与端到端数据流：ISP 处理流水线、延迟分解、Zero-Copy 数据通路
+> - 多模型调度与优化：单帧多模型调度时序、调度策略、Context Binary 与车规要求
+> - 集成部署方式：Service / 可执行文件 / APK 集成 SO / 模型配置与多 LoRA
+> - OTA 模型更新、性能基准测试、ONNX→QNN 转换陷阱
+>
+> **代码基线**：aadkcore 仓库，构建脚本 `build_8397_android.sh` / `build_8397_linux.sh` / `build_8295_android.sh` / `build_9075_linux.sh`。
 
 ## 1. QNN 推理框架
 

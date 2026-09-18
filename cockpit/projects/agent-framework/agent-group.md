@@ -1,6 +1,17 @@
 # 4. 场景 Agent 应用
 
-*Chapters 1-8 — 架构总览、车辆控制 Agent、主动视觉 Agent、闲聊 Agent、GUI Agent、其他场景 Agent、Prompt 模板工程、数据通路*
+*agent\_group 场景 Agent 插件库 · 基于 aadkcore AgentPlugin 接口 · `libagent_group.so`*
+
+> [!TIP]
+> **本篇讲什么**
+>
+> agent\_group（基于 aadkcore `AgentPlugin` 接口的场景 Agent 插件库，编译为 `libagent_group.so`、运行时动态加载）的各场景实现：
+>
+> - 架构总览（插件定位、Scenario ID 分配、条件编译体系、runtime\_config）
+> - 车辆控制 Agent、主动视觉 Agent、闲聊 Agent、GUI Agent、其他场景 Agent
+> - Prompt 模板工程、数据通路与 Fusion 通信
+>
+> **代码基线**：agent\_group 仓库 `src/`（`car_control_agent` / `active_vision_agent` / `chit_chat_agent` / `gui_agent` / `agent_factory` / `fusion` / `common` 等）。
 
 ## 1. agent\_group 架构总览
 

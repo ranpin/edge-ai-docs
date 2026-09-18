@@ -1,6 +1,19 @@
 # 5. 调试与工具链
 
-*Chapter 16 — 调试工具全景、排障决策树、FastRPC 排障、性能优化清单*
+*端侧 AI 部署调试 · 精度 / 性能 / 稳定性排查 · 工具链与方法论*
+
+> [!TIP]
+> **本篇讲什么**
+>
+> 端侧 AI 模型在 SA8397P 上的部署调试工具链与排障方法论：
+>
+> - 调试工具全景（工具总览、排障决策树、FastRPC 排障、性能优化清单）
+> - LLM 精度调试（量化精度损失定位、量化敏感层分析）
+> - 内存与 OOM 排障（内存构成、KV Cache OOM、内存监控预警）
+> - Crash 分析与案例（常见 Crash 类型、DSP Crash 分析流程、典型案例）
+> - 日志与监控体系（aadkcore 日志、aadk\_monitor 健康监控、性能 Profiling）
+>
+> **代码基线**：aadkcore 仓库 `src/log`、`src/runtime`；工具链 mini-dm / Snapdragon Profiler / `dmabuf_dump` / `dumpsys meminfo` 等。
 
 ## 1. 调试工具全景
 

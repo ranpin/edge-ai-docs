@@ -1,6 +1,19 @@
 # 3. aadkcore 核心框架
 
-*Chapters 1-9 — 架构总览、统一模型接口、模型调度、对话管理、RAG、MCP、A2A、运行时与插件、LLM Flow*
+*自研端侧多平台 AI Agent 核心引擎 · C++17 · `libaadkcore.so`*
+
+> [!TIP]
+> **本篇讲什么**
+>
+> aadkcore 的完整架构与核心 API：
+>
+> - 架构总览（分层架构、代码目录结构、平台支持矩阵）
+> - 统一模型接口 ModelInstance、模型调度器 ModelScheduler
+> - 多音区对话管理 ChatHistory、RAG 知识增强
+> - MCP 工具协议、A2A 协议、Agent 运行时与插件机制
+> - LLM Flow 与 Tool 系统、端云协同架构、安全沙箱机制
+>
+> **代码基线**：aadkcore 仓库 `src/`（`agent` / `models` / `runner` / `runtime` / `rag` / `a2a` / `flow` / `tools` / `memory` / `session` 等模块）。
 
 ## 1. aadkcore 架构总览
 
