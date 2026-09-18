@@ -2,9 +2,9 @@
 
 *以 Qwen3-Omni-4B 为例  |  量化 · AIMET · KV Cache · 多核绑定 · 前缀缓存 · 投机采样 · 约束解码*
 
-## 3.1 模型量化基础
+## 1. 模型量化基础
 
-### 3.1.1 PTQ 与 QAT 流程
+### 1.1 PTQ 与 QAT 流程
 
 模型量化是端侧部署的关键步骤，将 FP32 模型转换为低精度 (INT8/INT4) 以加速推理。两种主要方法是 **训练后量化 (PTQ)** 和 **量化感知训练 (QAT)**：
 
@@ -34,7 +34,7 @@ flowchart TB
     style Q5 fill:#2ecc71,color:#fff
 ```
 
-### 3.1.2 PTQ 与 QAT 对比
+### 1.2 PTQ 与 QAT 对比
 
 | 维度 | PTQ (训练后量化) | QAT (量化感知训练) |
 | :--- | :--- | :--- |
@@ -46,7 +46,7 @@ flowchart TB
 | **QNN 工具** | qnn-onnx-converter + 校准参数 | AIMET (AI Model Efficiency Toolkit) |
 | **推荐优先级** | 优先尝试，快速验证 | PTQ 精度不达标时使用 |
 
-### 3.1.3 混合精度策略
+### 1.3 混合精度策略
 
 > [!TIP]
 > **Best Practice: 混合精度量化策略**
@@ -62,9 +62,9 @@ flowchart TB
 >
 > 使用 QNN 的 `--input_list` 和 `--param_quantizer` 选项可以为不同算子指定不同的量化精度。AIMET 也支持通过敏感度分析自动推荐混合精度配置。
 
-## 3.2 AIMET 量化工具
+## 2. AIMET 量化工具
 
-### 3.2.1 AIMET 概述
+### 2.1 AIMET 概述
 
 **AIMET (AI Model Efficiency Toolkit)** 是高通创新中心 (Qualcomm Innovation Center) 开源的模型优化工具包，专注于**模型量化与压缩**。在端侧 AI 项目中，AIMET 是连接训练框架（PyTorch/TensorFlow）与 QNN 部署的关键桥梁——它提供了比通用量化工具更精细的量化控制能力，特别适合**精度敏感的安全关键场景**（如 DMS 疲劳检测）。
 
@@ -86,7 +86,7 @@ flowchart LR
     style F fill:#2ecc71,color:#fff
 ```
 
-### 3.2.2 AIMET 核心技术
+### 2.2 AIMET 核心技术
 
 | 技术 | 原理 | 适用场景 | 精度收益 |
 | :--- | :--- | :--- | :--- |
@@ -98,7 +98,7 @@ flowchart LR
 | **QAT (量化感知训练)** | 在训练中插入 FakeQuant 节点，使用 STE (Straight-Through Estimator) 估计梯度，让模型学习适应量化噪声 | PTQ 精度不达标时的最终手段，需要完整训练集和训练时间 | 精度损失通常 < 0.5% |
 | **模型压缩 (SVD / Channel Pruning)** | SVD 分解大权重矩阵为低秩近似；通道剪枝移除不重要的卷积通道 | 模型参数量过大，需要结构性压缩 | 压缩 2~4x，精度损失 0.5~1.5% |
 
-### 3.2.3 AIMET 量化工作流
+### 2.3 AIMET 量化工作流
 
 以 DMS 人脸关键点模型的 PTQ 优化为例，展示 AIMET 的典型工作流：
 
@@ -163,7 +163,7 @@ quantsim.export(
 # → 下一步: qnn-onnx-converter 转换为 QNN 模型
 ```
 
-### 3.2.4 AIMET 敏感度分析与混合精度
+### 2.4 AIMET 敏感度分析与混合精度
 
 AIMET 支持逐层敏感度分析，自动识别量化敏感层并推荐混合精度配置：
 
@@ -201,7 +201,7 @@ analyzer.analyze(
 > * **导出格式**：AIMET 导出的 ONNX + .encodings 文件可被 `qnn-onnx-converter` 直接识别，量化参数无缝传递
 > * **敏感度分析报告**：对精度损失超过 0.5% 的层，优先尝试 INT16 而非 QAT，开发成本更低
 
-### 3.2.5 AIMET vs 其他量化工具对比
+### 2.5 AIMET vs 其他量化工具对比
 
 | 维度 | AIMET | QNN Converter 内置量化 | PyTorch 原生量化 | ONNX Runtime 量化 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -224,9 +224,9 @@ analyzer.analyze(
 >
 > 如果 QNN Converter 内置的 PTQ 精度已达标（精度损失 < 1%），可以跳过 AIMET 直接部署。AIMET 是精度不够时的"精准手术刀"。
 
-## 3.3 KV Cache 优化
+## 3. KV Cache 优化
 
-### 3.3.1 KV Cache 优化策略
+### 3.1 KV Cache 优化策略
 
 KV Cache 是 LLM 推理中内存占用的主要来源。标准 Transformer 每个 token 都需要保存 Key 和 Value 向量，内存随序列长度线性增长。以下是主要优化策略：
 
@@ -255,7 +255,7 @@ graph TB
 | **GQA / MQA** | 多个 Query Head 共享一组 KV Head | GQA 减少 4-8 倍 | 几乎无损 | 新一代模型原生支持 |
 | **PagedAttention** | 按页（block）分配 KV 内存，类似操作系统虚拟内存 | 减少碎片，提高利用率 | 无损 | 多并发请求、长序列 |
 
-### 3.3.2 Qwen3-Omni-4B KV Cache 内存估算
+### 3.2 Qwen3-Omni-4B KV Cache 内存估算
 
 以 Qwen3-Omni-4B 为例，KV Cache 内存随上下文长度的增长：
 
@@ -271,9 +271,9 @@ graph TB
 >
 > 在 SA8397P 上部署 Qwen3-Omni-4B，推荐组合：**GQA (原生支持) + KV INT8 量化 + Sliding Window (1024)**。这套组合可以将 KV Cache 内存控制在 100~200 MB 以内，为模型权重和其他运行时数据留出充足内存空间。
 
-## 3.4 推理引擎对比
+## 4. 推理引擎对比
 
-### 3.4.1 LLM 推理引擎性能对比
+### 4.1 LLM 推理引擎性能对比
 
 在端侧部署 Qwen3-Omni-4B INT4 模型时，不同推理引擎的性能差异显著：
 
@@ -298,9 +298,9 @@ graph TB
 >
 > 在 SA8397P 平台上，**QNN-LLM** 是性能最优选择：生成速度最快（18 tok/s）、TTFT 最低（500ms）、内存最省（1.6 GB）。其核心优势来自 Hexagon NPU 原生算子优化和 Context Binary 编译加速。如需跨平台兼容性，**MLC-LLM** 是次优选择。
 
-## 3.5 ViT+LLM 多核绑定
+## 5. ViT+LLM 多核绑定
 
-### 3.5.1 Qwen3-Omni 多模态架构
+### 5.1 Qwen3-Omni 多模态架构
 
 Qwen3-Omni-4B 是一个原生多模态模型，其架构包含 **ViT 视觉编码器**（Vision Transformer）和 **LLM 语言解码器** 两个主要计算模块。在标准部署中，两者共享同一个 HTP 核心，导致计算资源无法充分利用：
 
@@ -318,7 +318,7 @@ flowchart LR
     style E fill:#2ecc71,color:#fff
 ```
 
-### 3.5.2 单核串行 vs 多核并行
+### 5.2 单核串行 vs 多核并行
 
 在标准的单核串行执行中，ViT 编码和 LLM 解码必须依次完成，导致 HTP 利用率不足。通过将 ViT 和 LLM 分别绑定到不同的 HTP 核心，可以实现流水线并行执行：
 
@@ -345,7 +345,7 @@ gantt
     LLM Decode (Token 1-5)   :md1, 20, 30
 ```
 
-### 3.5.3 多核绑定实现
+### 5.3 多核绑定实现
 
 SA8397P 的 Hexagon NPU 包含多个 HTP 核心。通过 QNN 的 `core_affinity` 参数，可以将不同模型绑定到指定核心：
 
@@ -376,7 +376,7 @@ ion_buf.flags = ION_FLAG_CACHED;
 ioctl(ion_fd, ION_IOC_ALLOC, &ion_buf);
 ```
 
-### 3.5.4 流水线优化细节
+### 5.4 流水线优化细节
 
 多核绑定的核心收益在于 **Prefill 阶段的重叠执行**：当 LLM 在对第 N 帧的视觉 token 做 KV 计算时，ViT 可以同时预处理第 N+1 帧的图像。核间通信通过 **共享 VTCM（Vector Tightly-Coupled Memory）或 ION Buffer** 实现，延迟极低（< 0.1ms）。
 
@@ -393,9 +393,9 @@ ioctl(ion_fd, ION_IOC_ALLOC, &ion_buf);
 >
 > 多核绑定需要确认目标平台的 HTP 核心数量。SA8397P 通常具备 2 个 HTP 核心，支持上述双核方案。部分低端平台可能仅有 1 个 HTP 核心，此时无法使用此优化。此外，两个模型同时运行会增加总内存占用和功耗，需根据散热预算评估可行性。
 
-## 3.6 前缀缓存 (Prefix Caching)
+## 6. 前缀缓存 (Prefix Caching)
 
-### 3.6.1 问题背景
+### 6.1 问题背景
 
 在座舱 Agent 场景中，每次用户请求都携带一段固定的 **System Prompt**（包含工具定义、人设描述、安全规则等），通常占 200~500 个 token。标准推理流程中，这段相同的前缀每次都要重新做 Prefill 计算 KV Cache，造成大量重复计算：
 
@@ -406,7 +406,7 @@ ioctl(ion_fd, ION_IOC_ALLOC, &ion_buf);
    = 浪费 60~80% 的 Prefill 时间
 ```
 
-### 3.6.2 前缀缓存原理
+### 6.2 前缀缓存原理
 
 ```mermaid
 flowchart TB
@@ -425,7 +425,7 @@ flowchart TB
     style H fill:#4361ee,color:#fff
 ```
 
-### 3.6.3 实现方案
+### 6.3 实现方案
 
 ```python
 import hashlib
@@ -482,7 +482,7 @@ class PrefixKVCache:
         return kv
 ```
 
-### 3.6.4 多轮对话的前缀缓存
+### 6.4 多轮对话的前缀缓存
 
 前缀缓存不仅适用于 System Prompt，还可以扩展到多轮对话中——前几轮对话的 KV Cache 也可以缓存复用：
 
@@ -502,9 +502,9 @@ class PrefixKVCache:
 > * 如果工具集合动态变化（如联网后新增云端工具），应将稳定的本地工具放在前面，动态工具放在后面
 > * 在 SA8397P 上，缓存 500 token 前缀的 KV Cache 约占用 50~80 MB 内存（INT8 量化 + GQA），可以常驻
 
-## 3.7 投机采样 (Speculative Decoding)
+## 7. 投机采样 (Speculative Decoding)
 
-### 3.7.1 核心思想
+### 7.1 核心思想
 
 标准自回归解码中，每个 token 必须等前一个 token 生成完毕才能开始——Decode 阶段是严格串行的，受限于内存带宽。**投机采样**利用一个小型"草稿模型"(Draft Model) 快速生成 K 个候选 token，然后由大型"目标模型"(Target Model) 在一次前向传播中并行验证这 K 个 token，从而将多步串行解码压缩为一步并行验证：
 
@@ -530,7 +530,7 @@ sequenceDiagram
     Note right of Output: 本轮净产出: 3 个有效 token + 1 个重采样 token
 ```
 
-### 3.7.2 验证与接受机制
+### 7.2 验证与接受机制
 
 投机采样的数学保证：最终输出的分布与直接使用目标模型采样完全一致（无损采样）。验证过程如下：
 
@@ -541,7 +541,7 @@ sequenceDiagram
 - 若随机数 ≥ 接受概率 → **拒绝**该 token，从修正分布 `max(0, p_target - p_draft)` 重新采样
 - 拒绝后，后续草稿 token 全部丢弃
 
-### 3.7.3 端侧配置方案
+### 7.3 端侧配置方案
 
 | 参数 | 端侧推荐 (SA8397P) | 云端推荐 | 说明 |
 | :--- | :--- | :--- | :--- |
@@ -553,7 +553,7 @@ sequenceDiagram
 | **总内存** | ~3.7 GB | ~12 GB | SA8397P LPDDR5 可承载 |
 | **典型接受率** | 70~85% | 75~90% | 同族模型接受率更高 |
 
-### 3.7.4 加速效果分析
+### 7.4 加速效果分析
 
 理论加速比公式：`Speedup = K / (1 + K * (1 - alpha))`，其中 alpha 为接受率。实际加速效果受草稿模型推理速度、验证开销等因素影响：
 
@@ -568,7 +568,7 @@ xychart-beta
     line [1.35, 1.5, 1.65, 1.8, 2, 2.25, 2.55]
 ```
 
-### 3.7.5 Token Tree Verification
+### 7.5 Token Tree Verification
 
 进阶方案中，草稿模型不是生成单一序列，而是生成一棵 **Token 树**（Tree-structured Speculation）。每个位置扩展 2~3 个候选分支，目标模型通过一次前向传播验证整棵树，选取最长的有效路径。这种方法在同等接受率下，可以进一步提升每轮迭代的有效 token 产出。
 
@@ -582,9 +582,9 @@ xychart-beta
 >
 > 座舱场景中，Function Calling 输出格式固定、可预测性强，接受率通常较高（>80%），非常适合投机采样。
 
-## 3.8 约束解码 (Constrained Decoding)
+## 8. 约束解码 (Constrained Decoding)
 
-### 3.8.1 问题背景
+### 8.1 问题背景
 
 座舱 Agent 需要 LLM 输出结构化的 JSON 来调用 Function Calling API，例如：
 
@@ -594,7 +594,7 @@ xychart-beta
 
 然而 LLM 本质是基于概率的自由生成，可能产出格式错误的输出——缺少引号、括号不匹配、字段名拼写错误等。每次输出格式错误都意味着一次失败的交互和额外的重试成本（20~30% 的请求可能需要重试）。
 
-### 3.8.2 约束解码原理
+### 8.2 约束解码原理
 
 约束解码的核心思想：在每一步 token 生成时，根据已生成的内容和目标格式规则，**遮蔽 (mask) 所有不合法的 token**，只允许生成合法的 token。这确保了输出一定符合预定格式。
 
@@ -616,7 +616,7 @@ stateDiagram-v2
     note right of IN_VALUE: 值类型由 Schema 约束
 ```
 
-### 3.8.3 三种主要方法
+### 8.3 三种主要方法
 
 | 方法 | 原理 | 表达能力 | 性能开销 | 典型实现 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -624,7 +624,7 @@ stateDiagram-v2
 | **有限状态机 (FSM)** | 预定义状态转移图（如上图），跟踪当前解码位置处于哪个状态，仅允许合法转移对应的 token | 中等，适合正则可描述的格式 | ~8% 推理开销 | Outlines FSM, lm-format-enforcer |
 | **上下文无关文法 (CFG)** | 用 BNF/GBNF 定义完整语法规则，使用下推自动机跟踪解析栈，精确控制每一步可生成的 token | 最强，支持递归嵌套结构 | ~10~15% 推理开销 | llama.cpp GBNF, guidance |
 
-### 3.8.4 座舱 Function Calling 约束示例
+### 8.4 座舱 Function Calling 约束示例
 
 以下 GBNF 语法定义了座舱 Function Calling 的输出格式约束：
 
@@ -644,7 +644,7 @@ ws          ::= [ \t\n]*
 
 使用此语法约束后，LLM 在 `func-name` 位置只能生成预定义的 6 个函数名之一，杜绝了函数名拼错或幻觉生成不存在工具的问题。
 
-### 3.8.5 约束解码效果评估
+### 8.5 约束解码效果评估
 
 | 指标 | 无约束 | JSON Schema 引导 | FSM | GBNF 语法 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -663,9 +663,9 @@ ws          ::= [ \t\n]*
 >
 > **推荐策略**：LLM 先生成一个 `action_type` token 判断是 "tool\_call" 还是 "text\_reply"。若为 tool\_call，启用 GBNF 约束；若为 text\_reply，关闭约束自由生成。
 
-## 3.9 TTFT 端到端优化
+## 9. TTFT 端到端优化
 
-### 3.9.1 TTFT 延迟分解
+### 9.1 TTFT 延迟分解
 
 Time-To-First-Token (TTFT) 是用户感知延迟的核心指标。以 Qwen3-Omni-4B 在 SA8397P 上的多模态 Function Calling 场景为例，TTFT 可分解为以下阶段：
 
@@ -677,7 +677,7 @@ Time-To-First-Token (TTFT) 是用户感知延迟的核心指标。以 Qwen3-Omni
 | **输出格式化** | ~500 ms | 生成结构化 JSON (Function Call) 的剩余 token |
 | **总计 (基线)** | **~3000 ms** | 从输入到第一个有效输出 |
 
-### 3.9.2 优化技术栈
+### 9.2 优化技术栈
 
 前文介绍的各项优化技术，可以按层级组合形成完整的优化栈：
 
@@ -697,7 +697,7 @@ flowchart TB
     style F fill:#4361ee,color:#fff
 ```
 
-### 3.9.3 优化前后 TTFT 对比
+### 9.3 优化前后 TTFT 对比
 
 **Qwen3-Omni-4B TTFT 优化瀑布 (SA8397P)**（TTFT）
 
@@ -709,7 +709,7 @@ xychart-beta
     bar [3000, 1800, 1400, 900, 700, 600, 600]
 ```
 
-### 3.9.4 优化路线图
+### 9.4 优化路线图
 
 | 优化阶段 | 技术 | TTFT 效果 | 累计 TTFT | 实施成本 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -731,9 +731,9 @@ xychart-beta
 >
 > **注意**：以上 TTFT 数据为典型 Function Calling 场景估算值（System Prompt 300 tokens + 用户输入 50 tokens + 图像 1 帧）。实际数值因模型版本、Prompt 长度、硬件温度等因素有所浮动。
 
-## 3.10 量化方案对比
+## 10. 量化方案对比
 
-### 3.10.1 Qwen3-Omni-4B 量化精度-速度分布
+### 10.1 Qwen3-Omni-4B 量化精度-速度分布
 
 不同量化精度方案在 SA8397P 平台上的推理性能与质量损失关系。选择量化方案时需要综合考虑生成速度、精度损失和内存占用三个维度。散点图中气泡大小表示推荐程度：
 
@@ -748,7 +748,7 @@ xychart-beta
 | 14 | 2.2 | 8 | INT4-GPTQ | ~2.5GB |
 | 18 | 5 | 4 | INT3-GPTQ | ~1.8GB |
 
-### 3.10.2 量化方案选型指南
+### 10.2 量化方案选型指南
 
 | 量化方案 | 生成速度 | Perplexity 增幅 | 内存占用 | 推荐场景 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -764,9 +764,9 @@ xychart-beta
 >
 > 座舱 Function Calling 场景推荐 **INT4-AWQ**：生成速度 ~10 tok/s 满足实时交互需求（用户感知 < 2 秒），Perplexity 增幅仅 1.5% 对工具调用准确率影响极小，内存占用 2.5 GB 在 SA8397P 上可承载。INT4-AWQ 相比 INT4-GPTQ 在质量上略优（AWQ 针对重要权重保留更多精度），是目前端侧 LLM 部署的最佳平衡点。
 
-## 3.11 Prefill/Decode 阶段分析
+## 11. Prefill/Decode 阶段分析
 
-### 3.11.1 两阶段本质差异
+### 11.1 两阶段本质差异
 
 LLM 自回归推理分为两个计算特性截然不同的阶段。理解这一区分是所有推理优化的基础：
 
@@ -794,7 +794,7 @@ LLM 自回归推理分为两个计算特性截然不同的阶段。理解这一�
   Decode:  batch = 1             → AI = 4
 ```
 
-### 3.11.2 Roofline 模型分析
+### 11.2 Roofline 模型分析
 
 Roofline 模型（Williams et al., 2009）将硬件的峰值算力和内存带宽统一在一张图上。通过对比任务的算术强度与硬件的 **Knee Point**（计算/带宽比），可判断任务是 Compute-bound 还是 Memory-bound。
 
@@ -825,7 +825,7 @@ Roofline 模型（Williams et al., 2009）将硬件的峰值算力和内存带�
 - 座舱典型场景 System Prompt ~300 tokens + 用户输入 ~50 tokens → S≈350，Prefill 为 Compute-bound
 - 短 Prompt 场景（S < 258）Prefill 也是 Memory-bound，此时前缀缓存的带宽节省更为关键
 
-### 3.11.3 Decode 带宽瓶颈量化分析
+### 11.3 Decode 带宽瓶颈量化分析
 
 Decode 阶段每生成一个 token 都必须读取全部模型权重，因此生成速度的理论上限可以精确推算：
 
@@ -853,7 +853,7 @@ Decode 理论上限 = DDR 有效带宽 ÷ 每 token 读取数据量
 >
 > 根本原因是**内存带宽差距**。A100 GPU 拥有 ~2 TB/s HBM 带宽，是 SA8397P DDR 的约 30 倍。端侧优化的本质是**减少每 token 读取的数据量**——INT4 量化将权重减半、GQA 将 KV 头数从 28 减至 4（读取量降至 1/7）、KV Cache INT8 量化再减半。这些技术叠加后端侧 ~10 tok/s 的生成速度才成为可能。
 
-### 3.11.4 Prefill / Decode 分阶段优化策略
+### 11.4 Prefill / Decode 分阶段优化策略
 
 | 优化手段 | Prefill 收益 | Decode 收益 | 原理说明 |
 | :--- | :--- | :--- | :--- |
@@ -870,9 +870,9 @@ Decode 理论上限 = DDR 有效带宽 ÷ 每 token 读取数据量
 >
 > "Prefill 是 Compute-bound，Decode 是 Memory-bound"几乎是 LLM 推理优化面试的必问题。回答时需要：(1) 从算术强度角度定量分析；(2) 结合具体硬件参数推算 Knee Point；(3) 说明不同优化技术分别解决哪个阶段的瓶颈。避免只说结论不给推导。
 
-## 3.12 Continuous Batching
+## 12. Continuous Batching
 
-### 3.12.1 静态批处理的局限
+### 12.1 静态批处理的局限
 
 传统静态批处理（Static Batching）要求同一 batch 内所有请求同时开始、同时结束。由于 LLM 生成长度不固定，短请求必须等待最长请求完成才能释放资源：
 
@@ -885,7 +885,7 @@ Decode 理论上限 = DDR 有效带宽 ÷ 每 token 读取数据量
 
 在座舱多音区场景中，驾驶员和副驾可能在不同时刻发起语音指令。静态批处理要么串行处理（延迟高），要么整 batch 等待（NPU 利用率低，短请求被拖慢）。
 
-### 3.12.2 Continuous Batching 原理
+### 12.2 Continuous Batching 原理
 
 Continuous Batching（Yu et al., 2022, Orca）将调度粒度从**请求级别**细化到**迭代级别**：每完成一次 Decode 迭代后重新调度——已完成的请求立即释放 KV Cache，新到达的请求可以插入当前 batch 执行 Prefill。
 
@@ -917,7 +917,7 @@ flowchart TB
 | **实现复杂度** | 低 | 高（需动态 KV Cache 管理） |
 | **适合场景** | 离线 batch 推理 | 在线实时服务 |
 
-### 3.12.3 座舱多音区调度
+### 12.3 座舱多音区调度
 
 在 aadkcore 框架中，`ModelScheduler` 负责多请求的调度。座舱场景的 Continuous Batching 有其特殊性：
 
@@ -934,7 +934,7 @@ flowchart TB
 >
 > 云端 vLLM 的 Continuous Batching 面对数百并发请求，重点是**吞吐量最大化**。端侧座舱通常同时只有 2-4 个请求，Continuous Batching 的核心价值不在吞吐量，而在**降低短请求的排队延迟**和**支持优先级抢占**。例如，副驾正在闲聊时驾驶员发出紧急车控指令，Continuous Batching 允许车控请求在下一迭代立即加入，而非等闲聊生成完毕。
 
-### 3.12.4 KV Cache 动态管理
+### 12.4 KV Cache 动态管理
 
 Continuous Batching 的核心挑战是 KV Cache 的动态分配与回收。传统方式按最大序列长度预分配 KV Cache，导致严重的内存浪费。PagedAttention（Kwon et al., 2023, vLLM）将 KV Cache 按固定大小的**页（Page）**分配，类似操作系统的虚拟内存管理：
 
@@ -946,9 +946,9 @@ Continuous Batching 的核心挑战是 KV Cache 的动态分配与回收。传�
 
 在端侧座舱场景中，由于并发请求数少（2-4 个），动态连续分配通常已能满足需求。但当引入前缀缓存（多请求共享 System Prompt 的 KV Cache）时，PagedAttention 的页级共享机制可以显著减少 KV Cache 的重复存储。
 
-## 3.13 FlashAttention 端侧适配
+## 13. FlashAttention 端侧适配
 
-### 3.13.1 标准 Attention 的内存瓶颈
+### 13.1 标准 Attention 的内存瓶颈
 
 标准 Self-Attention 的计算公式为 `Attention(Q,K,V) = softmax(QK^T / √d) · V`。其中间结果 `QK^T` 是一个 **N×N** 的注意力得分矩阵（N=序列长度），必须完整存储后才能进行 softmax：
 
@@ -961,7 +961,7 @@ Continuous Batching 的核心挑战是 KV Cache 的动态分配与回收。传�
 
 当 N×N 注意力矩阵无法放入片上高速缓存（VTCM）时，必须写回 DDR 再读回——Prefill 阶段的大量带宽被注意力矩阵的读写消耗，而非用于有效计算。这正是 FlashAttention 要解决的问题。
 
-### 3.13.2 FlashAttention 分块计算原理
+### 13.2 FlashAttention 分块计算原理
 
 FlashAttention（Dao et al., 2022）的核心思想：将 Q、K、V 分块（tiling），每次只加载一小块到片上 SRAM（端侧即 VTCM），在片上完成 `QK^T → softmax → ×V` 的全流程，**避免将 N×N 注意力矩阵写回 DDR**。
 
@@ -985,7 +985,7 @@ flowchart TB
 
 **Online Softmax** 是 FlashAttention 的关键技术：标准 softmax 需要看到所有 N 个元素才能计算归一化分母，但通过维护 running max 和 running sum，可以在逐块处理时增量更新 softmax 结果，无需存储完整的 N×N 矩阵。
 
-### 3.13.3 VTCM 分块大小计算
+### 13.3 VTCM 分块大小计算
 
 SA8397P Hexagon DSP 的 VTCM 约 4MB。FlashAttention 每次迭代需要在 VTCM 中同时存放以下数据（以 INT8 计算为例）：
 
@@ -1017,7 +1017,7 @@ SA8397P Hexagon DSP 的 VTCM 约 4MB。FlashAttention 每次迭代需要在 VTCM
 >
 > 上述计算表明，即使采用 Br=Bc=256 的较大分块 + 双缓冲 + 4 头并行，VTCM 占用仅 ~1.5MB，4MB VTCM 完全可以承载。实际实现中可以进一步增大分块尺寸以提高计算效率，或留出空间给 HVX 向量寄存器和临时变量。
 
-### 3.13.4 FlashAttention vs 标准 Attention 对比
+### 13.4 FlashAttention vs 标准 Attention 对比
 
 | 维度 | 标准 Attention | FlashAttention |
 | :--- | :--- | :--- |
@@ -1029,7 +1029,7 @@ SA8397P Hexagon DSP 的 VTCM 约 4MB。FlashAttention 每次迭代需要在 VTCM
 | **Prefill 加速比** | — | N=512 约 1.5-2x，N=2048 约 2-4x |
 | **实现复杂度** | 低（标准矩阵乘法） | 高（分块调度 + Online Softmax + 双缓冲） |
 
-### 3.13.5 端侧实践
+### 13.5 端侧实践
 
 在 aadkcore 的 vllm\_sdk 构建产物中，`libflash_attn.so`（约 31MB）即为 FlashAttention 的端侧实现库。该库针对 Hexagon HVX/HMX 指令集优化，在 HTP 上执行分块注意力计算。
 
