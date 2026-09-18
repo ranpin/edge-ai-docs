@@ -29,6 +29,30 @@ ALERT2VARIANT = {'NOTE': '', 'TIP': 'ok', 'IMPORTANT': 'warn', 'WARNING': 'warn'
 def md_to_html_fragment(text):
     return markdown.markdown(text, extensions=['tables', 'fenced_code', 'sane_lists'])
 
+def normalize_list_indent(md_text):
+    """python-markdown(sane_lists) 需 4 空格才识别嵌套列表；把 1~3 空格缩进的列表项
+    归一为 4 空格（含引用块内的列表），跳过代码块。源 md 仍可用常见的 2 空格嵌套写法。"""
+    lines = md_text.split('\n')
+    out, in_code = [], False
+    for ln in lines:
+        if ln.lstrip().startswith('```'):
+            in_code = not in_code
+            out.append(ln); continue
+        if in_code:
+            out.append(ln); continue
+        bq = re.match(r'^(\s*(?:>\s?)+)(.*)$', ln)
+        if bq and bq.group(2):
+            prefix, content = bq.group(1), bq.group(2)
+            m = re.match(r'^(\s{1,3})([-*]\s+|\d+\.\s+)', content)
+            if m:
+                content = '    ' + m.group(2) + content[m.end():]
+            out.append(prefix + content); continue
+        m = re.match(r'^(\s{1,3})([-*]\s+|\d+\.\s+)', ln)
+        if m:
+            ln = '    ' + m.group(2) + ln[m.end():]
+        out.append(ln)
+    return '\n'.join(out)
+
 def convert_alerts(md_text):
     lines = md_text.split('\n')
     out, i = [], 0
@@ -69,6 +93,7 @@ def render(md_text):
     def stash(m):
         mermaids.append(m.group(1)); return f'\n\n@@MM{len(mermaids)-1}@@\n\n'
     md_text = re.sub(r'```mermaid\n(.*?)```', stash, md_text, flags=re.DOTALL)
+    md_text = normalize_list_indent(md_text)
     md_text = convert_alerts(md_text)
     md_text = convert_details(md_text)
     body = markdown.markdown(md_text, extensions=['tables', 'fenced_code', 'sane_lists'])
