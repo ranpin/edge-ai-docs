@@ -2,7 +2,7 @@
 
 *32 道精选面试题 — 覆盖平台选型、算法训练、部署控制、Agent 大模型与系统设计*
 
-## 一、平台选型与基础
+## 1. 平台选型与基础
 
 <details markdown="1">
 <summary>**Q1: Jetson Orin vs Qualcomm QRB5165 vs RK3588 选型决策** · `中级`</summary>
@@ -58,7 +58,7 @@ ROS2 提供了 Managed Node（也称 Lifecycle Node）机制，通过定义明�
 
 </details>
 
-## 二、算法与训练
+## 2. 算法与训练
 
 <details markdown="1">
 <summary>**Q7: Sim2Real gap 如何缩小** · `高级`</summary>
@@ -150,7 +150,7 @@ VLA 的关键设计之一是**动作如何表征与解码**，它直接决定延
 
 </details>
 
-## 三、部署与实时控制
+## 3. 部署与实时控制
 
 <details markdown="1">
 <summary>**Q17: TensorRT 优化全流程** · `中级`</summary>
@@ -206,7 +206,7 @@ Dynamic Shape 是指模型输入尺寸在推理时可能变化的情况，如不
 
 </details>
 
-## 四、Agent 与大模型
+## 4. Agent 与大模型
 
 <details markdown="1">
 <summary>**Q23: Embodied Agent 与传统状态机架构的对比** · `中级`</summary>
@@ -262,7 +262,7 @@ Speculative Decoding（推测解码）使用一个小型 draft 模型快速生�
 
 </details>
 
-## 五、系统设计题
+## 5. 系统设计题
 
 <details markdown="1">
 <summary>**Q29: 设计人形机器人的端到端感知-决策-执行系统** · `高级`</summary>

@@ -1,4 +1,4 @@
-# Part 6: APK 集成与端侧服务化
+# 6. APK 集成与端侧服务化
 
 *lantu\_demo 宿主 APK  |  Qwen3-Omni-4B + LoRA · JNI 桥接 · 本地 HTTP 服务 · 前台服务自愈*
 
@@ -7,9 +7,9 @@
 >
 > 前面的 Part 2~5 聚焦 **native SDK 本身**（QNN 部署、aadkcore 核心框架、agent\_group 场景 Agent、调试工具链）。本篇切换到 **应用层视角**：这些 `.so` 如何被一个可安装、可常驻、可被座舱其他组件调用的 **Android APK**（`lantu_demo`，包名 `com.example.myapplication`）封装起来，并以 **本地 HTTP 服务**的形式对外提供大模型推理能力。这是从「SDK 能跑」到「产品能交付」的最后一公里。
 
-## 1. 定位与整体架构
+## 6.1 定位与整体架构
 
-### 1.1 APK 的角色
+### 6.1.1 APK 的角色
 
 `lantu_demo` 不是一个独立训练或推理引擎，而是一个 **宿主容器（host）**。它的职责是：
 
@@ -23,7 +23,7 @@
 
 它承载的模型是 **Qwen3-Omni-4B**（INT4 量化 + 场景 LoRA），模型文件不打包进 APK，而是放在车机固定路径 `/AI/vllm_sdk/models` 下，由 SDK 在 init 阶段读取（见 第 3 节）。
 
-### 1.2 端到端调用链
+### 6.1.2 端到端调用链
 
 一次完整的推理请求，从座舱组件发起到拿到结果，穿越三个层次：
 
@@ -65,9 +65,9 @@ flowchart TB
 >
 > 座舱内跨域调用方语言/进程各异（Android 应用、Linux 服务、Python 评测脚本），HTTP + JSON 是最大公约数：无需共享接口定义、跨语言、便于用 `curl` 直接联调与自动化评测。代价是序列化开销，但相对大模型动辄数百毫秒到数秒的推理耗时，HTTP 开销可忽略。
 
-## 2. 三层结构详解
+## 6.2 三层结构详解
 
-### 2.1 Android 应用层（Java）
+### 6.2.1 Android 应用层（Java）
 
 全部位于 `app/src/main/java/com/example/myapplication/`，各组件职责如下：
 
@@ -84,7 +84,7 @@ flowchart TB
 | `ScenarioReplyHandler` | interface | 回调契约 `onReply(String result, boolean isFinished)` |
 | `AssetFolderCopier` | 工具类 | 按 App 版本号把 `assets/` 下的小模型拷贝到 `filesDir`（备用路径，主链路用 `/AI`） |
 
-### 2.2 JNI 桥接层（C++）
+### 6.2.2 JNI 桥接层（C++）
 
 位于 `app/src/main/cpp/`，由 CMake 编译为 `libmodelinfer.so`：
 
@@ -96,7 +96,7 @@ flowchart TB
 | `include/model_inference.h` | `banma::ModelInference` 类接口：`init / inference_msg / requestNpuAccess / registerProfilingCallback / stopInferenceTask / releaseModelResources` |
 | `include/VoyahAIProxy.hpp` | NPU 资源管理与性能监控抽象接口（`requestNpuAccess / syncNpuProfileToServer / registerNpuResourceEventCallback`） |
 
-### 2.3 Native SDK 与依赖（预编译 .so）
+### 6.2.3 Native SDK 与依赖（预编译 .so）
 
 全部位于 `app/src/main/jniLibs/arm64-v8a/`（**仅 arm64-v8a**，由 `abiFilters` 限定）。按功能归类：
 
@@ -113,11 +113,11 @@ flowchart TB
 >
 > `build.gradle` 中显式声明 `doNotStrip "**/libQnnHtpV81Skel.so"`。Skel（skeleton）库运行在 Hexagon DSP 侧，其符号在 Host 端「看起来没用」，但被 strip 掉会导致 DSP 侧加载失败、推理直接起不来。这是 APK 集成 QNN 时最典型的坑之一。
 
-## 3. 进程级初始化（MyApplication）
+## 6.3 进程级初始化（MyApplication）
 
 底层库的加载与环境变量设置被刻意放在 `MyApplication.onCreate()`，而非某个 Activity。原因：进程可能由 `MainActivity`（用户点击图标）或 `TestInjectService`（`START_STICKY` 被系统单独拉起）两种方式触发——无论哪种，`Application.onCreate()` 都最先执行，保证底层环境一定就绪。
 
-### 3.1 加载顺序
+### 6.3.1 加载顺序
 
 ```
 // MyApplication.onCreate()
@@ -130,7 +130,7 @@ System.loadLibrary("modelinfer");  // 2. 再加载 JNI 桥接库（依赖 cdsprp
 >
 > `libmodelinfer.so` 链接了 `libandroid_sdk`/`aadkcore` 等，它们在初始化时会通过 FastRPC 与 cDSP 通信。若 `libcdsprpc.so` 尚未加载，DSP 通道不可用，后续 init 会失败。因此必须**先 cdsprpc，后 modelinfer**。
 
-### 3.2 ADSP\_LIBRARY\_PATH
+### 6.3.2 ADSP\_LIBRARY\_PATH
 
 Hexagon DSP 侧的 Skel 库不在标准 linker 路径里，需要通过环境变量 `ADSP_LIBRARY_PATH` 告诉 FastRPC 去哪找。该路径串由 `NativeEnv.buildAdspLibraryPath()` 统一构造：
 
@@ -145,7 +145,7 @@ nativeLibDir                      // APK 自身 jniLibs 解压目录
 
 设置通过 `Os.setenv("ADSP_LIBRARY_PATH", ..., true)` 完成。C++ 侧 `nativeInit` 在调用 SDK `init()` 前会**用同值再设一次**作为兜底（正常路径下 `MyApplication` 已设过），两侧字面量必须保持一致——这正是把它收敛到 `NativeEnv` 单一构造点的原因。
 
-### 3.3 模型路径
+### 6.3.3 模型路径
 
 SDK 约定模型放在固定绝对路径，APK 不做拷贝（模型体积大，随 APK 打包不现实）：
 
@@ -155,11 +155,11 @@ infer.init(modelPath, nativeLibraryDir);
 infer.requestNpuPermission("vllm");          // 向资源管理方申请 NPU 访问权限
 ```
 
-## 4. 前台服务与自愈（TestInjectService）
+## 6.4 前台服务与自愈（TestInjectService）
 
 推理能力需要常驻、且要在进程被系统回收后自动恢复，因此核心逻辑放在一个 **前台服务**里，而非 Activity。
 
-### 4.1 前台服务声明
+### 6.4.1 前台服务声明
 
 ```
 <!-- AndroidManifest.xml -->
@@ -177,7 +177,7 @@ infer.requestNpuPermission("vllm");          // 向资源管理方申请 NPU 访
 >
 > ① Android 14（API 34）起前台服务必须声明具体的 `foregroundServiceType` 及对应权限，这里用 `dataSync`。② `<uses-native-library>` 声明对系统库 `libcdsprpc.so` 的依赖（`required="false"` 表示缺失也不阻止安装，由运行期 `loadLibrary` 兜底报错）。
 
-### 4.2 onCreate 三步走
+### 6.4.2 onCreate 三步走
 
 ```mermaid
 flowchart LR
@@ -194,15 +194,15 @@ flowchart LR
 
 **START\_STICKY**：`onStartCommand()` 返回 `START_STICKY`，服务被系统杀死后会被重新创建（重新走 `onCreate`），这是「自愈重启」能成立的系统级前提（见 第 8 节）。
 
-### 4.3 请求队列（串行化）
+### 6.4.3 请求队列（串行化）
 
 服务内维护 `ConcurrentLinkedQueue<RequestTask>` + `isProcessing` 标志 + `triggerLock`，保证队列处理串行触发；实际执行交给 `TaskScheduler` 线程池。每个任务用 `CompletableFuture<String>` 回传结果。（注：HTTP 层自身还有一把 `requestProcessingLock` 串行锁，二者共同确保同一时刻只有一个推理在跑——NPU 是独占资源。）
 
-## 5. HTTP 服务层（TestHttpEndpoint）
+## 6.5 HTTP 服务层（TestHttpEndpoint）
 
 这是整个 APK 最核心、代码量最大的类（约 2000 行），基于 `NanoHTTPD` 实现，监听 `0.0.0.0:8080`。
 
-### 5.1 请求处理管线
+### 6.5.1 请求处理管线
 
 只接受 `POST /inject` 与 `POST /v1/chat/completions` 两个端点，其余返回 404。`serve()` 的处理流程：
 
@@ -235,7 +235,7 @@ flowchart TB
 >
 > ① **body 必须读满**：按 `Content-Length` 循环 `read()` 直到读满，否则抛 `Incomplete body read`——避免半截 JSON 流入 native 层导致崩溃。② **进 C++ 前先校验 JSON**：用 fastjson 试解析，非法则直接返回 400，**绝不让坏数据进入 SDK**（native 崩溃无法被 Java try/catch 捕获）。
 
-### 5.2 协议解析与转换
+### 6.5.2 协议解析与转换
 
 调用方来源多样，payload 存在多种历史格式。`serve()` 先判定是否需要转换为标准 `messages` 数组：
 
@@ -245,7 +245,7 @@ flowchart TB
 | 历史 + query | 含 `query` 或 `extend._overwrite_params` | `convertToMessagesFormat()`：先铺 `_overwrite_params.history`，再追加 query 为 user message |
 | query\_parts | 含 `extend.query_parts` 或顶层 `query_parts` | 把每个 part（text/image）转成 content 数组元素，组装为单条 user message |
 
-### 5.3 多模态类型判定
+### 6.5.3 多模态类型判定
 
 底层 `DataMessage.msg_type` 必须与实际模态匹配，否则会走错推理链路。`decideMsgTypeFromProtocol()` 遍历 `messages[].content`（content 可能是 string 或 array），统计是否出现 `image`/`image_url` 与 `audio` 类型，映射到枚举：
 
@@ -258,7 +258,7 @@ flowchart TB
 
 枚举完整定义见 `data_message.h` 的 `banma::MsgType`（0~6 共 7 种组合）。
 
-### 5.4 同步与 SSE 流式
+### 6.5.4 同步与 SSE 流式
 
 **同步路径（stream=false）**：`handleInjectRequestSync()` 持有全局 `requestProcessingLock`，调用 `processSingleRequest()`，内部用 `CountDownLatch` 等待 SDK 回调 `finished=true`，再返回完整 JSON。
 
@@ -272,7 +272,7 @@ public void writeChunk(String text) { queue.put(text.getBytes(UTF_8)); }
 
 每个 SSE 事件的 `data` 是一个完整协议帧 JSON（见下）。SDK 回调的文本可能是「已是协议帧」或「纯文本」两种，服务端用 `looksLikeProtocolResponse()` 判别，纯文本则由 `buildProtocolFrame()` 包装。
 
-### 5.5 响应协议帧
+### 6.5.5 响应协议帧
 
 ```
 {
@@ -291,15 +291,15 @@ public void writeChunk(String text) { queue.put(text.getBytes(UTF_8)); }
 }
 ```
 
-## 6. JNI 桥接层（modelinfer.cpp）
+## 6.6 JNI 桥接层（modelinfer.cpp）
 
 `BanmaModelInference` 的每个 native 方法都在 `modelinfer.cpp` 中有对应实现，核心是 `nativeInference`。
 
-### 6.1 句柄模型
+### 6.6.1 句柄模型
 
 `nativeCreate()` 在堆上 `new banma::ModelInference()`，把指针 `reinterpret_cast<jlong>` 返回给 Java 作为 `nativeHandle`；后续所有调用把该 long 转回指针。`nativeDestroy()` 负责 `delete`。Java 侧 `BanmaModelInference` 实现 `AutoCloseable`，`close()` 与 `finalize()` 双保险释放。
 
-### 6.2 构造 DataMessage
+### 6.6.2 构造 DataMessage
 
 ```
 banma::DataMessage msg;
@@ -317,7 +317,7 @@ if (imageData != nullptr && imageFormat >= 0) {
 }
 ```
 
-### 6.3 跨线程回调（关键）
+### 6.6.3 跨线程回调（关键）
 
 SDK 推理在 native 工作线程产出结果，回调必须回到 JVM。实现要点：
 
@@ -347,9 +347,9 @@ p->inference_msg(msg, stream, cb);
 >
 > ① **全局引用**：局部引用跨线程即失效，必须 `NewGlobalRef`，且记得在末帧 `DeleteGlobalRef` 防泄漏。② **AttachCurrentThread**：native 线程没有 `JNIEnv`，不 Attach 直接调用会崩。③ **GetStringUTFChars 配对 Release**：`JStringToStdString` 内取完即释放，避免内存泄漏。
 
-## 7. 场景与三阶段流式协议
+## 6.7 场景与三阶段流式协议
 
-### 7.1 场景 ID
+### 6.7.1 场景 ID
 
 场景 ID 定义在 `data_message.h`，决定 SDK 内部走哪条 Agent 链路。HTTP 层从 payload 提取（优先级：顶层 > body > extend）并做元数据校验：
 
@@ -362,7 +362,7 @@ p->inference_msg(msg, stream, cb);
 
 HTTP 层在缺少关键元数据时只打 `WARNING` 日志、不阻断请求（SDK 可能用默认值），便于联调定位。
 
-### 7.2 舱外 QA（300）的三阶段流式协议
+### 6.7.2 舱外 QA（300）的三阶段流式协议
 
 只有 `scenario_id == 300` 走三阶段解析，其余场景直接透传 SDK 末帧。SDK 在流式输出中插入哨兵标记划分阶段：
 
@@ -384,7 +384,7 @@ stateDiagram-v2
 - **Stage 2/3**：逐 token 把 `streaming_output` 拼接到对应 builder；Stage2 结束时从哨兵 JSON 提取 `confidence`。
 - **收尾**：`finished=true` 时把三阶段汇总为单条 `caseSummary` JSON（`{request_id, elapsed_ms, stage1:{bbox,label}, stage2, stage3, confidence}`），便于离线检索与评测对比。
 
-## 8. 稳定性与自愈机制
+## 6.8 稳定性与自愈机制
 
 端侧大模型 + NPU 是强独占资源，native 层偶发卡死时 Java 无法用 `interrupt` 打断（JNI 调用不响应中断），会永久占用 C++ 串行锁。APK 设计了一套分层兜底：
 
@@ -419,9 +419,9 @@ flowchart TB
 >
 > 代码注释特别强调：SIGABRT 崩溃后的 `START_STICKY` 重启受系统**崩溃节流（crash throttling）**限制，既不保证也不干净。真正可靠的恢复是 `killProcess`（`SELF_HEAL_ENABLED` 路径）。`CRASH_FOR_TOMBSTONE` 只用于「抓一份证据后就停」的一次性诊断，不可当作恢复机制，生产环境必须关闭。
 
-## 9. 构建与部署
+## 6.9 构建与部署
 
-### 9.1 build.gradle 关键配置
+### 6.9.1 build.gradle 关键配置
 
 | 配置 | 值 / 说明 |
 | :--- | :--- |
@@ -434,7 +434,7 @@ flowchart TB
 
 依赖侧引入 `nanohttpd`（HTTP 服务）、`fastjson` + `gson`（JSON）、`androidx.lifecycle-service`、`material` 等；并用 `resolutionStrategy.force` 把 `androidx.activity` 锁到 1.7.2 以兼容 compileSdk 33。
 
-### 9.2 上车部署脚本（tar\_push\_install\_apk.sh）
+### 6.9.2 上车部署脚本（tar\_push\_install\_apk.sh）
 
 一键把最新 APK 装到车机，`set -euxo pipefail` 严格模式，流程：
 
@@ -453,7 +453,7 @@ flowchart LR
 
 脚本几处稳健性设计值得借鉴：归档名解析出 `buildType` 与 12 位时间戳并与 `BUILD_TYPE` 交叉校验，防止装错包；归档「先写 `.part` 再 `mv`」避免中断留下半个备份；空间检查**只报不清**（保护车机数据）；安装失败用 `&& / ||` 正确捕获退出码（某些车机 adb 即使失败也返回 0，需同时 grep `Failure`）。
 
-## 10. 工程要点小结
+## 6.10 工程要点小结
 
 > [!TIP]
 > **把 SDK 装进 APK 的 8 个关键点**

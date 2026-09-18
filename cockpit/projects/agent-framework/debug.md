@@ -1,12 +1,12 @@
-# Part 5: 调试与工具链
+# 5. 调试与工具链
 
 *Chapter 16 — 调试工具全景、排障决策树、FastRPC 排障、性能优化清单*
 
-## 1. 调试工具全景
+## 5.1 调试工具全景
 
 端侧 AI 模型在 SA8397P 上的部署调试涉及精度验证、性能调优、稳定性排查等多个环节。掌握正确的工具链和排障方法论是高效解决问题的关键。
 
-### 1.1 调试工具总览
+### 5.1.1 调试工具总览
 
 | 工具 | 类别 | 用途 | 典型使用场景 |
 | :--- | :--- | :--- | :--- |
@@ -17,7 +17,7 @@
 | **mini-dm** | 日志诊断 | 高通轻量级诊断日志工具，捕获 DSP 子系统的实时日志和 crash 信息 | DSP crash 后获取 crash dump 和调用栈；FastRPC 通信异常排查；SSR（子系统重启）事件分析 |
 | **AIMET** | 量化工具 | AI Model Efficiency Toolkit，高通开源的模型量化与压缩工具，支持 PTQ/QAT | 量化敏感度分析（逐层量化精度影响）；混合精度量化策略搜索；量化后模型精度恢复（AdaRound / CLE） |
 
-### 1.2 排障决策树
+### 5.1.2 排障决策树
 
 当端侧推理出现问题时，按以下决策树系统排查，避免盲目调试：
 
@@ -56,7 +56,7 @@ flowchart TD
     style STAB fill:#e74c3c,color:#fff
 ```
 
-### 1.3 FastRPC 排障指南
+### 5.1.3 FastRPC 排障指南
 
 FastRPC 是 ARM CPU 与 Hexagon DSP 之间的远程过程调用机制。FastRPC 通信异常是端侧部署中最常见的问题之一。以下是系统排障步骤：
 
@@ -81,7 +81,7 @@ FastRPC 是 ARM CPU 与 Hexagon DSP 之间的远程过程调用机制。FastRPC 
 >
 > FastRPC 调用返回 `AEE_ECONNREFUSED`（错误码 -14）时，通常不是网络问题而是 DSP 侧 skeleton 库加载失败。请检查：(1) skeleton .so 文件是否推送到 `/vendor/lib/rfsa/dsp/`；(2) 文件权限是否为 755；(3) testsig 是否匹配。
 
-### 1.4 常见性能优化清单
+### 5.1.4 常见性能优化清单
 
 以下清单涵盖端侧推理的常见性能优化点，按优先级排序：
 
@@ -103,11 +103,11 @@ FastRPC 是 ARM CPU 与 Hexagon DSP 之间的远程过程调用机制。FastRPC 
 >
 > 端侧推理性能优化的投入产出比通常为：**消除 fallback > Context Binary > 量化精度 > 预处理 offload > Pipeline 并行 > 结构优化**。建议按此顺序逐项排查，先摘低垂果实。90% 的性能问题可以在前三项解决。
 
-## 2. LLM 精度调试
+## 5.2 LLM 精度调试
 
 端侧 LLM 量化部署后，精度问题表现为**输出质量下降**而非简单的数值偏差。与传统视觉模型的精度调试（对比 mAP/IoU）不同，LLM 精度问题往往是隐性的——模型仍然能"说话"，但 Function Calling 准确率下降、出现幻觉、或多轮对话失去连贯性。
 
-### 2.1 量化精度损失定位
+### 5.2.1 量化精度损失定位
 
 端侧 LLM 量化后精度下降的系统排查流程：
 
@@ -136,7 +136,7 @@ flowchart TD
 | **多模态描述偏差** | 视觉编码器量化敏感 | 单独对比视觉编码器 FP16 vs INT8 的特征余弦相似度 | ViT 部分使用较高精度量化（INT8） |
 | **随机输出乱码** | 量化模型加载错误或权重损坏 | MD5 校验量化模型文件完整性 | 重新转换量化模型 |
 
-### 2.2 量化敏感层分析
+### 5.2.2 量化敏感层分析
 
 LLM 的不同层对量化的敏感度差异很大。通常以下层最为敏感：
 
@@ -172,9 +172,9 @@ for layer_idx in range(num_layers):
 >
 > 基于敏感度分析结果，推荐的混合精度策略：**Embedding + LM Head 用 INT8，前 2 层和后 2 层 Attention 用 INT8，其余全部 INT4**。相比全 INT4，Perplexity 增幅从 ~1.5% 降至 ~0.5%，而模型大小仅增加约 10%。这是端侧部署中精度和体积的最佳平衡点。
 
-## 3. 内存与 OOM 排障
+## 5.3 内存与 OOM 排障
 
-### 3.1 端侧 LLM 内存构成
+### 5.3.1 端侧 LLM 内存构成
 
 端侧 LLM 推理的内存占用由以下部分组成，理解各部分的大小和增长模式是排障的前提：
 
@@ -187,7 +187,7 @@ for layer_idx in range(num_layers):
 | **Vision Encoder** | ~300-500 MB | 否（独立模型） | ViT 权重 + 图像预处理缓冲区 |
 | **总计** | ~3.5-4.0 GB（初始） | KV Cache 持续增长 | 峰值取决于最大序列长度和并发数 |
 
-### 3.2 KV Cache OOM 排障
+### 5.3.2 KV Cache OOM 排障
 
 KV Cache 是端侧 LLM 最常见的 OOM 来源。随着对话轮次增加，KV Cache 持续增长直至内存耗尽：
 
@@ -219,7 +219,7 @@ KV Cache 内存计算:
 | **多模型 OOM** | ViT + LLM + ASR + TTS 同时驻留 | DDR 总用量超限 | 模型分时加载：ASR/TTS 用完卸载，仅保留 LLM 常驻 |
 | **内存泄漏** | 请求完成后 KV Cache 未正确释放 | 内存使用持续上升，不随对话结束回落 | 引用计数检查；每轮对话结束后验证 KV Cache 释放 |
 
-### 3.3 内存监控与预警
+### 5.3.3 内存监控与预警
 
 ```bash
 # 实时监控 DSP 内存使用
@@ -245,9 +245,9 @@ done
 >
 > 建议设置三级内存水位线：**绿色**（< 70% 总内存）正常运行；**黄色**（70-85%）触发 KV Cache 压缩和低优先级请求淘汰；**红色**（> 85%）停止接受新请求，仅完成当前请求后释放。通过 aadk\_monitor 服务定期检查并上报内存使用。
 
-## 4. Crash 分析与案例
+## 5.4 Crash 分析与案例
 
-### 4.1 端侧 LLM 常见 Crash 类型
+### 5.4.1 端侧 LLM 常见 Crash 类型
 
 | Crash 类型 | 触发场景 | 日志特征 | 排查要点 |
 | :--- | :--- | :--- | :--- |
@@ -257,7 +257,7 @@ done
 | **QNN Context 加载失败** | Context Binary 与硬件不匹配 | `QnnContext_createFromBinary failed` | 检查 Context Binary 编译目标 (SOC) 是否匹配当前硬件 |
 | **OOM Kill** | 系统内存不足触发 Low Memory Killer | `lowmemorykiller: kill process` | 检查内存使用曲线，定位内存泄漏或 KV Cache 未释放 |
 
-### 4.2 DSP Crash 分析流程
+### 5.4.2 DSP Crash 分析流程
 
 > [!NOTE]
 > **DSP Crash 排障四步法**
@@ -271,9 +271,9 @@ done
 > 4. **复现与验证**  
 >    使用 `qnn-net-run` 单独运行导致 crash 的子图，尝试不同输入复现问题。定位到具体算子后，检查算子的输入约束（如 padding 要求、shape 限制）是否满足。
 
-### 4.3 典型案例分析
+### 5.4.3 典型案例分析
 
-### 案例 1：量化模型间歇性输出乱码
+#### 5.4.3.1 量化模型间歇性输出乱码
 
 | 现象 | INT4 量化模型在长时间运行后（~2 小时）偶发输出乱码 token |
 | :--- | :--- |
@@ -281,7 +281,7 @@ done
 | 根因 | 多轮对话清理逻辑中，当用户切换 scenario\_id 时，旧 scenario 的 KV Cache 未被释放 |
 | 修复 | 在 scenario 切换时主动调用 KV Cache 清理；增加 KV Cache 使用量的边界检查 |
 
-### 案例 2：特定图片输入导致 DSP Crash
+#### 5.4.3.2 特定图片输入导致 DSP Crash
 
 | 现象 | 某张图片送入 Vision Encoder 时 DSP 立即 SSR |
 | :--- | :--- |
@@ -289,7 +289,7 @@ done
 | 根因 | 图像预处理 pipeline 中的 resize 函数在接收 YUV420 格式时路径异常，跳过了 resize 直接送入模型 |
 | 修复 | 在 model\_inference.cpp 的 image format conversion 之后增加 shape 校验断言 |
 
-### 案例 3：多音区并发导致 FastRPC Timeout
+#### 5.4.3.3 多音区并发导致 FastRPC Timeout
 
 | 现象 | 驾驶员和副驾同时发送语音指令时，偶发 FastRPC timeout（~10% 复现率） |
 | :--- | :--- |
@@ -297,9 +297,9 @@ done
 | 根因 | ModelScheduler 未对 Prefill 阶段做分片，大 Prompt 的 Prefill 独占 HTP 时间过长 |
 | 修复 | 1. Prefill 分片：将长 Prompt 分为多段，每段之间允许插入高优先级请求 2. FastRPC timeout 从 2s 调整为 5s 3. 高优先级请求（车控）可抢占低优先级（闲聊）的 Prefill |
 
-## 5. 日志与监控体系
+## 5.5 日志与监控体系
 
-### 5.1 aadkcore 日志系统
+### 5.5.1 aadkcore 日志系统
 
 aadkcore 框架内置了多级日志系统，用于端侧 Agent 的运行时诊断：
 
@@ -329,7 +329,7 @@ adb shell setprop persist.aadk.data_dump 1
 mini-dm  # 捕获 Hexagon DSP 实时日志
 ```
 
-### 5.2 aadk\_monitor 健康监控
+### 5.5.2 aadk\_monitor 健康监控
 
 aadkcore 附带独立的监控服务 `aadk_monitor`（通过 systemd 管理），负责持续监控 Agent 进程的健康状态：
 
@@ -341,7 +341,7 @@ aadkcore 附带独立的监控服务 `aadk_monitor`（通过 systemd 管理）�
 | **DSP 状态** | 检查 remoteproc 状态 | 状态为 crashed 或 offline | 记录 crash 信息 + 等待 SSR 恢复 |
 | **心跳检测** | 向 system\_agent 发送 health check 请求 | 连续 3 次无响应 | 强制重启 system\_agent |
 
-### 5.3 性能数据采集 (Profiling)
+### 5.5.3 性能数据采集 (Profiling)
 
 aadkcore 通过 `registerProfilingCallback` 接口支持实时性能数据采集，便于监控和优化：
 

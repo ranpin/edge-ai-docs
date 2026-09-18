@@ -1,14 +1,14 @@
-# Part 2: 岚图 AI Service 后端集成与重构
+# 2. 岚图 AI Service 后端集成与重构
 
-## 背景简介
+## 2.1 背景简介
 
 调整原先 GenAI 推理框架，改为采用岚图自研的 aiservice 推理框架。
 
-## 核心技术路线
+## 2.2 核心技术路线
 
 增加 aiservice 后端，多后端兼容实现。
 
-## aiservice 后端实现
+## 2.3 aiservice 后端实现
 
 通过 http 请求发送，解析输出。
 
@@ -18,7 +18,7 @@ Agentcore + agent_group 负责消息分发、agent 路由、任务管理、组�
 
 aiservice.cpp 通过发送 http 请求的方式使用 aiservice 推理框架进行模型的加载和推理，并解析返回的结果。
 
-## 难点
+## 2.4 难点
 
 1. **效果对齐（请求格式）**：保证发送的请求格式与参考实现一致。三场景请求体形状不同——
    - Agent100（舱外车辆）：`{"body":{"request_id","timestamp","car_signal":{...}}}`（有 body 包装）

@@ -2,7 +2,7 @@
 
 *34 道精选面试题 — 覆盖 BEV 感知、端到端架构、数据闭环、部署优化、Agent 安全与系统设计*
 
-## 一、BEV 感知算法
+## 1. BEV 感知算法
 
 <details markdown="1">
 <summary>**Q1: BEV 特征构建的核心原理 (2D→3D 变换)** · `中级`</summary>
@@ -76,7 +76,7 @@ Camera 和 LiDAR 在 BEV 空间中融合面临空间对齐和特征对齐的双�
 
 </details>
 
-## 二、端到端 vs 模块化
+## 2. 端到端 vs 模块化
 
 <details markdown="1">
 <summary>**Q9: 端到端自动驾驶 (UniAD/VAD) vs 模块化方案的优劣** · `中级`</summary>
@@ -123,7 +123,7 @@ GenAD（Generative Autonomous Driving）等生成式模型将驾驶建模为条�
 
 </details>
 
-## 三、数据与训练
+## 3. 数据与训练
 
 <details markdown="1">
 <summary>**Q14: 数据飞轮 (data flywheel) 设计** · `高级`</summary>
@@ -170,7 +170,7 @@ Corner Case（长尾场景）是自动驾驶安全的最大挑战——系统在
 
 </details>
 
-## 四、模型部署与优化
+## 4. 模型部署与优化
 
 <details markdown="1">
 <summary>**Q19: BEV 模型端侧量化的特殊挑战** · `高级`</summary>
@@ -226,7 +226,7 @@ OTA（Over-The-Air）模型更新允许远程升级车端 AI 模型，但必须�
 
 </details>
 
-## 五、驾驶 Agent 与安全
+## 5. 驾驶 Agent 与安全
 
 <details markdown="1">
 <summary>**Q25: VLM 在驾驶场景中的应用方式** · `中级`</summary>
@@ -291,7 +291,7 @@ ISO 26262 对硬件随机失效给出三个量化度量，ASIL-D 的门槛为：
 
 </details>
 
-## 六、系统设计题
+## 6. 系统设计题
 
 <details markdown="1">
 <summary>**Q32: 设计 L2+ 高速场景的完整感知方案** · `高级`</summary>
