@@ -2,11 +2,11 @@
 
 *Qualcomm 第三代 Snapdragon Digital Chassis 座舱 SoC 硬件全景与 DSP 深度解析*
 
-## 1.1 SA8397P SoC 全景
+## 1. SA8397P SoC 全景
 
 SA8397P 是高通第三代 Snapdragon Digital Chassis 平台的旗舰 SoC，目标是实现**座舱（Cockpit）与 ADAS 融合**。它将传统分立的座舱娱乐芯片和 ADAS 处理芯片整合到一颗 SoC 上，降低 BOM 成本、减少线束复杂度，同时通过 Hypervisor 实现功能安全隔离。
 
-### 1.1.1 SoC 功能模块总览
+### 1.1 SoC 功能模块总览
 
 ```mermaid
 graph TB
@@ -31,7 +31,7 @@ graph TB
     style MEM fill:#eef2ff,color:#1a1a2e,stroke:#4361ee
 ```
 
-### 1.1.2 各模块功能与典型用途
+### 1.2 各模块功能与典型用途
 
 | 模块 | 核心规格 | 主要职责 | 典型用例 |
 | :--- | :--- | :--- | :--- |
@@ -51,11 +51,11 @@ graph TB
 >
 > 传统方案使用独立的座舱芯片 + ADAS 芯片（如 SA8155P + SA8540P），需要两套供电、两套散热、以太网互联，BOM 成本高。SA8397P 通过 Hypervisor 在一颗芯片上隔离多个域（Android 座舱 + QNX ADAS），**硬件成本降低约 30%**，同时数据在片内共享，座舱与 ADAS 之间的通信延迟从毫秒级降至微秒级。面试中常见的对比题：一芯多域 vs 多芯方案的 trade-off。
 
-## 1.2 Hexagon DSP 微架构
+## 2. Hexagon DSP 微架构
 
 Hexagon DSP 是 SA8397P 上运行 AI 推理的核心单元。理解其内部微架构对于模型优化至关重要。以 CDSP（Compute DSP）为例，其内部由多个计算单元协同工作。
 
-### 1.2.1 内部架构总览
+### 2.1 内部架构总览
 
 ```mermaid
 graph LR
@@ -82,7 +82,7 @@ graph LR
     style HWT fill:#fff,stroke:#4361ee
 ```
 
-### 1.2.2 HTP = 品牌名，不是独立硬件
+### 2.2 HTP = 品牌名，不是独立硬件
 
 面试高频考点：**HTP（Hexagon Tensor Processor）不是一个独立的硬件模块**，而是高通的品牌命名，指 HMX + HVX + Scalar + VTCM 协同工作时的整体能力。当 QNN 编译器将一个模型 graph 映射到 CDSP 上执行时，矩阵乘法走 HMX、激活函数走 HVX、控制流走 Scalar、数据缓存在 VTCM，这个协同整体就叫 HTP。
 
@@ -92,7 +92,7 @@ graph LR
 - **VTCM**：256KB~1MB 的紧耦合 SRAM，带宽极高、延迟极低，是性能瓶颈的关键
 - **硬件多线程**：6 个硬件线程上下文，一个线程等内存时其他线程继续执行，隐藏访存延迟
 
-### 1.2.3 各计算单元吞吐量对比
+### 2.3 各计算单元吞吐量对比
 
 以 INT8 推理为基准，不同计算单元的相对吞吐量差异巨大：
 
@@ -113,7 +113,7 @@ xychart-beta
 | HMX | 64x |
 | HTP (协同) | 80x |
 
-### 1.2.4 存储层级与延迟
+### 2.4 存储层级与延迟
 
 | 存储层级 | 容量 | 带宽 | 典型延迟 | 说明 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -126,11 +126,11 @@ xychart-beta
 >
 > VTCM 容量有限（通常 1MB），而一个 Conv2D 层的权重+激活可能远超 1MB。QNN 编译器会自动进行 **Tiling（分块）**：将大张量切成小块，分批加载到 VTCM 中计算，再写回 DDR。Tiling 策略直接决定了 DDR 访问次数和性能。面试建议：能画出 Tiling 的数据流动图（DDR → VTCM → 计算 → VTCM → DDR）是加分项。
 
-## 1.3 DSP 子系统对比
+## 3. DSP 子系统对比
 
 SA8397P 内部有三个独立的 Hexagon DSP 子系统，各自有独立的固件、时钟域和供电域。AP（Application Processor，即 CPU）通过 FastRPC 与它们通信。
 
-### 1.3.1 三大 DSP 子系统架构
+### 3.1 三大 DSP 子系统架构
 
 ```mermaid
 graph LR
@@ -145,7 +145,7 @@ graph LR
     style SDSP fill:#e74c3c,color:#fff,stroke:none
 ```
 
-### 1.3.2 CDSP vs ADSP vs SDSP 详细对比
+### 3.2 CDSP vs ADSP vs SDSP 详细对比
 
 | 维度 | CDSP | ADSP | SDSP |
 | :--- | :--- | :--- | :--- |
@@ -162,11 +162,11 @@ graph LR
 >
 > SDSP 最经典的用例是**碰撞检测**：车辆熄火后（AP 进入深度睡眠），SDSP 持续以 <5mW 功耗监听加速度传感器。当检测到异常加速度（碰撞）时，SDSP 唤醒 AP，AP 启动摄像头录像并发送紧急通知。整个唤醒链路约 200ms。面试中被问到 "Always-On 传感器" 时，SDSP 是标准答案。
 
-## 1.4 FastRPC 通信机制
+## 4. FastRPC 通信机制
 
 FastRPC（Fast Remote Procedure Call）是高通自研的**跨处理器调用框架**，让 AP 上的用户态进程可以像调用本地函数一样调用 DSP 上的函数。理解 FastRPC 是调试 DSP 部署问题的基础。
 
-### 1.4.1 调用流程
+### 4.1 调用流程
 
 ```mermaid
 sequenceDiagram
@@ -194,7 +194,7 @@ sequenceDiagram
     Stub-->>App: 反序列化结果并返回
 ```
 
-### 1.4.2 核心概念对照表
+### 4.2 核心概念对照表
 
 | FastRPC 概念 | 作用说明 | 类比 |
 | :--- | :--- | :--- |
@@ -204,7 +204,7 @@ sequenceDiagram
 | **ION 共享内存** | AP 与 DSP 共享的物理连续内存区域 | mmap 共享内存 |
 | **Domain** | 目标 DSP 标识（0=ADSP, 3=CDSP, 2=SDSP） | gRPC 的 target endpoint |
 
-### 1.4.3 ION 共享内存分配示例
+### 4.3 ION 共享内存分配示例
 
 ```
 /* ION 共享内存分配 - AP 端 C 代码 */
@@ -258,11 +258,11 @@ int alloc_ion_buffer(int size) {
 > * Binder 的目标是同一 OS 内核中的进程；FastRPC 的目标是运行不同 RTOS（QuRT）的独立处理器
 > * FastRPC 有额外的中断和缓存一致性开销，单次调用延迟约 50~200us
 
-## 1.5 Hypervisor 与系统可靠性
+## 5. Hypervisor 与系统可靠性
 
 SA8397P 通过 Hypervisor 和 Protection Domain 实现多层次的隔离与容错，这是车规级芯片与消费级芯片的核心区别。
 
-### 1.5.1 Hypervisor 多域架构
+### 5.1 Hypervisor 多域架构
 
 SA8397P 采用 Type-1 Hypervisor（直接运行在裸机上），将 SoC 资源划分给多个虚拟机（VM），每个 VM 运行独立的操作系统。
 
@@ -297,7 +297,7 @@ graph TB
 - **ASIL-B 认证**：QNX 域满足 ISO 26262 ASIL-B 功能安全等级，可运行仪表盘等安全关键功能
 - **跨域通信**：VM 之间通过 Hypervisor 提供的共享内存通道通信，延迟 <100us
 
-### 1.5.2 Protection Domain（PD）
+### 5.2 Protection Domain（PD）
 
 Protection Domain 是 DSP 内部（QuRT RTOS 上）的隔离机制，类似于 OS 中的进程隔离。每个用户进程在 DSP 上对应一个 Guest PD，彼此之间内存隔离。
 
@@ -327,7 +327,7 @@ PD 隔离的意义：
 - **资源保护**：每个 Guest PD 有独立的堆内存，防止野指针跨域破坏
 - **Static PD 常驻**：FastRPC 框架和 QuRT 内核运行在 Static PD 中，是所有 Guest PD 的"管理者"
 
-### 1.5.3 SSR（Subsystem Restart，子系统重启）
+### 5.3 SSR（Subsystem Restart，子系统重启）
 
 当 DSP 子系统发生不可恢复的错误（如 Watchdog 超时、非法内存访问）时，SSR 机制会自动重启该子系统，而不需要重启整个 SoC。
 
@@ -360,9 +360,9 @@ SSR 恢复流程耗时约 **1~3 秒**，包括固件重新加载、QuRT 初始�
 >
 > 常见 Bug：开发者忘记处理 SSR，导致 DSP 重启后推理永久失败，只能重启整机。面试中被问到 "DSP 崩溃了怎么办"，SSR + handle 清理是标准答案。
 
-## 1.6 内存带宽瓶颈分析
+## 6. 内存带宽瓶颈分析
 
-### 1.6.1 DDR 带宽共享问题
+### 6.1 DDR 带宽共享问题
 
 SA8397P 的 LPDDR5x 提供约 **~68 GB/s** 理论峰值带宽，但这一带宽由 SoC 内的多个模块共享：
 
@@ -396,7 +396,7 @@ LLM 推理（Decode 阶段）高度依赖 DDR 带宽。当多个模块同时活�
 >
 > 实验室环境下的 LLM 推理速度（单独跑模型）与量产环境（多路摄像头 + 3D 仪表盘 + 导航渲染同时运行）可能有 **30-50% 的性能差距**。性能基准测试必须在**全系统负载**下进行，否则上车后会出现严重的延迟回退。解决方案包括：QoS 带宽优先级配置、LLM 推理与 GPU 渲染时间错开、ISP 数据直通 DSP 减少 DDR 搬运。
 
-### 1.6.2 VTCM — 片上高速缓存
+### 6.2 VTCM — 片上高速缓存
 
 VTCM（Vector Tightly Coupled Memory）是 Hexagon DSP 的片上 SRAM，容量约 **4MB**，带宽远高于 DDR（片上访问延迟仅 1-2 个周期）。VTCM 是端侧 LLM 推理优化的关键资源：
 
@@ -409,9 +409,9 @@ VTCM（Vector Tightly Coupled Memory）是 Hexagon DSP 的片上 SRAM，容量�
 
 VTCM 的 4MB 容量虽然有限，但对 LLM 推理至关重要：FlashAttention 的分块计算、权重预取（double buffering）、以及 HMX 矩阵乘法的 tiling 都依赖 VTCM 作为高速中间缓冲。当 VTCM 不足导致数据溢出到 DDR 时（称为 **VTCM spill**），性能可能下降 3-5 倍。
 
-## 1.7 功耗与热管理
+## 7. 功耗与热管理
 
-### 1.7.1 座舱芯片功耗约束
+### 7.1 座舱芯片功耗约束
 
 汽车座舱环境的功耗和散热约束远比手机或服务器严格：
 
@@ -422,7 +422,7 @@ VTCM 的 4MB 容量虽然有限，但对 LLM 推理至关重要：FlashAttention
 | **工作温度** | -40°C ~ +85°C（车规级） | 手机 0~35°C / 服务器 10~35°C |
 | **持续运行** | 需在高温下持续稳定运行（夏季暴晒后启动） | 手机可降频 / 服务器恒温机房 |
 
-### 1.7.2 功耗模式与 LLM 推理影响
+### 7.2 功耗模式与 LLM 推理影响
 
 SA8397P 支持动态电压频率调节（DVFS），DSP 频率根据负载自动调节。不同功耗模式对 LLM 推理性能有直接影响：
 
@@ -432,7 +432,7 @@ SA8397P 支持动态电压频率调节（DVFS），DSP 频率根据负载自动�
 | **均衡 (Normal)** | 中等频 | ~8-10 tok/s | ~12-15W | 日常运行，主动推荐等后台任务 |
 | **省电 (Low Power)** | 低频 | ~4-6 tok/s | ~6-8W | 停车等待、后台待机 |
 
-### 1.7.3 热降频问题
+### 7.3 热降频问题
 
 在高温环境下（如夏季暴晒后），芯片温度可能迅速达到热保护阈值（~100°C 结温），触发**热降频（Thermal Throttling）**：
 
@@ -453,9 +453,9 @@ echo performance > /sys/class/devfreq/soc:qcom,cdsp/governor
 >
 > 端侧 LLM 的热管理策略：(1) **按需加载**：用户未交互时将 DSP 降至低频，检测到唤醒词后快速升频；(2) **时间预算分配**：限制连续高负载推理时间（如 Prefill 后插入短暂冷却间隔）；(3) **温度感知调度**：当温度接近阈值时主动降低 batch size 或切换到更小的模型（Qwen3-1.7B）；(4) **避免 GPU 和 DSP 同时满载**：3D 渲染和 LLM 推理交替执行。
 
-## 1.8 竞品芯片对比
+## 8. 竞品芯片对比
 
-### 1.8.1 座舱/智驾芯片横向对比
+### 8.1 座舱/智驾芯片横向对比
 
 以下对比涵盖当前主流座舱和跨域计算芯片，数据来源于各厂商公开资料：
 
@@ -468,7 +468,7 @@ echo performance > /sys/class/devfreq/soc:qcom,cdsp/governor
 | **Journey 6** | 地平线 | ~128 TOPS (INT8, BPU Nash) | 7nm | LPDDR5 | ~25-35W | 智驾为主，可扩展座舱 |
 | **CT-X1** | 联发科 | ~46 TOPS (APU) | 4nm | LPDDR5x | ~15-20W | 座舱娱乐 + AI 助手 |
 
-### 1.8.2 端侧 LLM 可行性对比
+### 8.2 端侧 LLM 可行性对比
 
 从端侧 LLM 部署的角度，各芯片的关键差异在于 **NPU 算力**、**内存带宽** 和 **功耗预算**：
 
