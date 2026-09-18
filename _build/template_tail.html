@@ -29,12 +29,28 @@ function setupPanZoom(){
   });
   if(wraps.length>0&&done===wraps.length&&pzObs){pzObs.disconnect();pzObs=null;}
 }
+async function renderMermaidAll(){
+  if(typeof mermaid==='undefined')return;
+  try{
+    mermaid.initialize({startOnLoad:false,theme:document.documentElement.dataset.theme==='dark'?'dark':'default',securityLevel:'loose'});
+    var nodes=document.querySelectorAll('.mermaid');
+    for(var i=0;i<nodes.length;i++){
+      var el=nodes[i];
+      if(el.getAttribute('data-rendered'))continue;
+      try{
+        var r=await mermaid.render('mmd_'+i, el.textContent);
+        el.innerHTML=r.svg;
+        el.setAttribute('data-rendered','1');
+      }catch(e){}
+    }
+  }catch(e){}
+  setupPanZoom();
+}
 window.addEventListener('load',function(){
-  try{if(typeof mermaid!=='undefined'){mermaid.initialize({startOnLoad:true,theme:document.documentElement.dataset.theme==='dark'?'dark':'default',securityLevel:'loose'})}}catch(e){}
+  renderMermaidAll();
   pzObs=new MutationObserver(function(){clearTimeout(window._pzt);window._pzt=setTimeout(setupPanZoom,200);});
   pzObs.observe(document.body,{childList:true,subtree:true});
-  setTimeout(setupPanZoom,800);
-  setTimeout(setupPanZoom,2000);
+  setTimeout(setupPanZoom,1500);
 });
 </script>
 </body>
