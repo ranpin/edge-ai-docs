@@ -1,11 +1,11 @@
-# Part G: APK 集成与端侧服务化
+# Part 6: APK 集成与端侧服务化
 
 *lantu\_demo 宿主 APK  |  Qwen3-Omni-4B + LoRA · JNI 桥接 · 本地 HTTP 服务 · 前台服务自愈*
 
 > [!TIP]
 > **本篇讲什么**
 >
-> 前面的 Part D/E/F 聚焦 **native SDK 本身**（QNN 部署、aadkcore 核心框架、agent\_group 场景 Agent、调试工具链）。本篇切换到 **应用层视角**：这些 `.so` 如何被一个可安装、可常驻、可被座舱其他组件调用的 **Android APK**（`lantu_demo`，包名 `com.example.myapplication`）封装起来，并以 **本地 HTTP 服务**的形式对外提供大模型推理能力。这是从「SDK 能跑」到「产品能交付」的最后一公里。
+> 前面的 Part 2~5 聚焦 **native SDK 本身**（QNN 部署、aadkcore 核心框架、agent\_group 场景 Agent、调试工具链）。本篇切换到 **应用层视角**：这些 `.so` 如何被一个可安装、可常驻、可被座舱其他组件调用的 **Android APK**（`lantu_demo`，包名 `com.example.myapplication`）封装起来，并以 **本地 HTTP 服务**的形式对外提供大模型推理能力。这是从「SDK 能跑」到「产品能交付」的最后一公里。
 
 ## 1. 定位与整体架构
 
@@ -21,7 +21,7 @@
 | **协议适配** | 兼容 OpenAI 风格 `/v1/chat/completions` 与自定义 `/inject` 协议，并完成多模态消息的类型判定与格式转换 |
 | **稳定性兜底** | 串行化请求、超时检测、native 卡死时进程级自愈重启 |
 
-它承载的模型是 **Qwen3-Omni-4B**（INT4 量化 + 场景 LoRA），模型文件不打包进 APK，而是放在车机固定路径 `/AI/vllm_sdk/models` 下，由 SDK 在 init 阶段读取（见 [第 3 节](#ch3)）。
+它承载的模型是 **Qwen3-Omni-4B**（INT4 量化 + 场景 LoRA），模型文件不打包进 APK，而是放在车机固定路径 `/AI/vllm_sdk/models` 下，由 SDK 在 init 阶段读取（见 第 3 节）。
 
 ### 1.2 端到端调用链
 
@@ -102,7 +102,7 @@ flowchart TB
 
 | 分类 | 关键库 | 说明 |
 | :--- | :--- | :--- |
-| **业务 SDK** | `libandroid_sdk.so`、`libagent_group.so`、`libvoyah_ai_client.so`、`libaadkcore.so`、`libaisa.so`、`libqualla.so` | banma/voyah 推理与 Agent 框架（对应 Part E 的 aadkcore + agent\_group） |
+| **业务 SDK** | `libandroid_sdk.so`、`libagent_group.so`、`libvoyah_ai_client.so`、`libaadkcore.so`、`libaisa.so`、`libqualla.so` | banma/voyah 推理与 Agent 框架（对应 Part 3/4 的 aadkcore + agent\_group） |
 | **LLM 引擎** | `libllms.so`、`libGenie.so`、`libflash_attn.so` | 大模型推理内核与 FlashAttention 加速 |
 | **QNN / NPU 后端** | `libQnnHtp.so`、`libQnnHtpV81Skel.so`、`libQnnHtpV81Stub.so`、`libQnnHtpV81CalculatorStub.so`、`libQnnCpu.so`、`libQnnGenAiTransformer(Model).so`、`libqnn_backend.so` | 高通 QNN 框架 + HTP（Hexagon Tensor Processor）后端；`V81Skel` 运行在 DSP 侧 |
 | **系统 / FastRPC** | `libcdsprpc.so`（系统库，经 `<uses-native-library>` 声明） | FastRPC 通道，Host（APK）↔ cDSP 跨处理器调用 |
@@ -192,7 +192,7 @@ flowchart LR
 
 **初始化重试**：native init 可能因 DSP 尚未就绪、资源竞争等偶发失败，`initializeComponents()` 用 `for (i=0;i<3;i++)` 循环重试，每次间隔 500ms，并分别捕获 `UnsatisfiedLinkError` / `Exception` / `Throwable`。三次全失败则把 `infer` 置 null（HTTP 层会惰性重建）。
 
-**START\_STICKY**：`onStartCommand()` 返回 `START_STICKY`，服务被系统杀死后会被重新创建（重新走 `onCreate`），这是「自愈重启」能成立的系统级前提（见 [第 8 节](#ch8)）。
+**START\_STICKY**：`onStartCommand()` 返回 `START_STICKY`，服务被系统杀死后会被重新创建（重新走 `onCreate`），这是「自愈重启」能成立的系统级前提（见 第 8 节）。
 
 ### 4.3 请求队列（串行化）
 
@@ -470,4 +470,4 @@ flowchart LR
 > [!NOTE]
 > **与本篇相关的其他文档**
 >
-> QNN 框架与 ISP 数据流见 [Part D: 设备部署](deploy.html)；aadkcore / agent\_group 内部实现见 [Part E1](agent-core.html) / [Part E2](agent-group.html)；排障工具链（mini-dm、Snapdragon Profiler、tombstone 分析）见 [Part F: 调试与工具链](debug.html)；硬件底层（SA8397P、Hexagon、FastRPC、Hypervisor）见 [硬件与系统底层](../../general/hardware.html)；想从零理解本篇涉及的 Android 四大组件与 JNI 原理，见 [Android 开发 & JNI 基础](../../general/android-jni.html)。
+> QNN 框架与 ISP 数据流见 [Part 2: 设备部署](deploy.html)；aadkcore / agent\_group 内部实现见 [Part 3](agent-core.html) / [Part 4](agent-group.html)；排障工具链（mini-dm、Snapdragon Profiler、tombstone 分析）见 [Part 5: 调试与工具链](debug.html)；硬件底层（SA8397P、Hexagon、FastRPC、Hypervisor）见 [硬件与系统底层](../../general/hardware.html)；想从零理解本篇涉及的 Android 四大组件与 JNI 原理，见 [Android 开发 & JNI 基础](../../general/android-jni.html)。

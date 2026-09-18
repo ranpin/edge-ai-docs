@@ -1,23 +1,3 @@
-Android & JNI 基础
-
-[1. 学习路线总览](#ch1)
-[2. Android 工程结构](#ch2)
-[2.1 目录结构](#ch2-1)
-[2.2 Gradle 构建](#ch2-2)
-[2.3 Manifest 清单](#ch2-3)
-[3. 四大组件](#ch3)
-[4. JNI 基础](#ch4)
-[4.1 为什么需要 JNI](#ch4-1)
-[4.2 完整链路与命名](#ch4-2)
-[4.3 JNIEnv 与类型映射](#ch4-3)
-[5. JNI 进阶](#ch5)
-[5.1 句柄模式](#ch5-1)
-[5.2 数组与字符串](#ch5-2)
-[5.3 C++ 回调 Java](#ch5-3)
-[5.4 CMake 与 .so](#ch5-4)
-[6. 端侧进阶主题](#ch6)
-[7. 动手练习路径](#ch7)
-
 # Android 开发 & JNI 基础
 
 *从创建工程到 JNI 桥接的完整学习路径  |  以座舱端侧大模型 APK `lantu_demo` 为教材*
@@ -25,7 +5,7 @@ Android & JNI 基础
 > [!TIP]
 > **本篇定位**
 >
-> 这是一篇**从零开始的教程**，讲 Android 工程结构与 JNI 的基础知识，所有例子都取自真实项目 `lantu_demo`（一个在高通 SA8397P 座舱上跑端侧大模型的宿主 APK）。想直接看这个 APK 的**架构与实现细节**，请读 [Part G: APK 集成与端侧服务化](../projects/agent-framework/apk-integration.html)；想懂底层芯片/DSP/FastRPC，请读 [Part A: 硬件与系统底层](hardware.html)。本篇是「打基础」，Part G 是「看实战」。
+> 这是一篇**从零开始的教程**，讲 Android 工程结构与 JNI 的基础知识，所有例子都取自真实项目 `lantu_demo`（一个在高通 SA8397P 座舱上跑端侧大模型的宿主 APK）。想直接看这个 APK 的**架构与实现细节**，请读 [Part 6: APK 集成与端侧服务化](../projects/agent-framework/apk-integration.html)；想懂底层芯片/DSP/FastRPC，请读 [Part 1: 硬件与系统底层](hardware.html)。本篇是「打基础」，Part 6 是「看实战」。
 
 ## 1. 学习路线总览
 
@@ -474,7 +454,7 @@ flowchart TB
 | `Skel.so` 不能 strip | 它在 DSP 侧运行，CPU 链接器看不到它「被用」，strip 掉 DSP 就加载不了 |
 | 要设 `ADSP_LIBRARY_PATH` | DSP 侧 Skel 库不在标准路径，得靠这个环境变量告诉 FastRPC 去哪找 |
 
-更底层的芯片/DSP/SSR 细节见 [Part A: 硬件与系统底层](hardware.html)。
+更底层的芯片/DSP/SSR 细节见 [Part 1: 硬件与系统底层](hardware.html)。
 
 ### 6.2 前台服务 + 自愈（稳定性设计）
 
@@ -519,7 +499,7 @@ flowchart TB
 > [!TIP]
 > **小结**
 >
-> 阶段 2–4 是 JNI 的全部核心，`lantu_demo` 只是在这之上叠加了 NPU/QNN/服务化。把这三阶段做扎实，这个项目的 JNI 部分就没有秘密了。完整架构与实现细节见 [Part G: APK 集成与端侧服务化](../projects/agent-framework/apk-integration.html)。
+> 阶段 2–4 是 JNI 的全部核心，`lantu_demo` 只是在这之上叠加了 NPU/QNN/服务化。把这三阶段做扎实，这个项目的 JNI 部分就没有秘密了。完整架构与实现细节见 [Part 6: APK 集成与端侧服务化](../projects/agent-framework/apk-integration.html)。
 
 // Theme toggle
 var b=document.getElementById('themeBtn');
