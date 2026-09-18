@@ -20,7 +20,13 @@ h1{font-size:26px;font-weight:800;margin-bottom:6px}
 h2{font-size:20px;font-weight:700;margin:36px 0 14px;padding-bottom:6px;border-bottom:2px solid var(--accentL)}
 h3{font-size:16px;font-weight:600;margin:20px 0 10px}
 p{margin-bottom:10px;color:var(--text2)}
+.main p{text-align:justify;text-justify:inter-ideograph}
 strong{color:var(--text)}
+.main ul,.main ol{padding-left:26px;margin:10px 0}
+.main li{margin:4px 0}
+.main li>ul,.main li>ol{margin:4px 0}
+.info-box ul,.info-box ol{padding-left:20px;margin:6px 0}
+.info-box li{margin:3px 0}
 .info-box{padding:14px 16px;border-radius:7px;margin:14px 0;border-left:4px solid var(--info);background:var(--bg2);font-size:14px}
 .info-box.warn{border-left-color:var(--warning)}
 .info-box.ok{border-left-color:var(--success)}
