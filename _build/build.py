@@ -2,7 +2,7 @@
 """Build edge-ai-docs: convert .md sources -> themed .html into dist/, copy static assets.
 Run from repo root: python3 _build/build.py
 .md sources are the editable truth; .html without a sibling .md (echarts docs, index) are copied as-is."""
-import os, re, json, shutil, markdown
+import os, re, json, shutil, html, markdown
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -108,7 +108,9 @@ def render(md_text):
     body = re.sub(r'<(h2|h3)>(.*?)</\1>', add_id, body, flags=re.DOTALL)
     body = body.replace('<table>', '<div class="tbl-wrap"><table>').replace('</table>', '</table></div>')
     for idx, mm in enumerate(mermaids):
-        div = f'<div class="mermaid-wrap"><div class="mermaid">\n{mm.strip()}\n</div></div>'
+        # HTML 转义源码，避免浏览器把 <<enumeration>>、unique_ptr<X> 里的 <...> 当标签解析掉；
+        # 前端用 textContent 读回（实体解码还原）再 mermaid.render
+        div = f'<div class="mermaid-wrap"><div class="mermaid">\n{html.escape(mm.strip())}\n</div></div>'
         body = body.replace(f'<p>@@MM{idx}@@</p>', div).replace(f'@@MM{idx}@@', div)
     return body, toc
 
