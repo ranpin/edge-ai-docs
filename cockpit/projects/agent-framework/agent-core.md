@@ -1,4 +1,4 @@
-# Part E1: aadkcore 核心框架
+# Part 3: aadkcore 核心框架
 
 *Chapters 1-9 — 架构总览、统一模型接口、模型调度、对话管理、RAG、MCP、A2A、运行时与插件、LLM Flow*
 

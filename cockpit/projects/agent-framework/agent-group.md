@@ -1,4 +1,4 @@
-# Part E2: 场景 Agent 应用
+# Part 4: 场景 Agent 应用
 
 *Chapters 1-8 — 架构总览、车辆控制 Agent、主动视觉 Agent、闲聊 Agent、GUI Agent、其他场景 Agent、Prompt 模板工程、数据通路*
 

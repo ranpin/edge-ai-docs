@@ -22,7 +22,7 @@
         {
           "title": "硬件与系统底层",
           "file": "cockpit/general/hardware.html",
-          "badge": "Part A",
+          "badge": "Part 1",
           "status": "done",
           "desc": "SA8397P SoC 全景、Hexagon DSP 微架构、FastRPC 通信、Hypervisor 多域隔离、SSR 故障恢复",
           "tags": [
@@ -34,7 +34,7 @@
         {
           "title": "模型训练与微调",
           "file": "cockpit/general/training.html",
-          "badge": "Part B",
+          "badge": "Part 2",
           "status": "done",
           "desc": "DMS/OMS 数据策略、知识蒸馏、LoRA 微调、SWIFT 训练框架",
           "tags": [
@@ -46,7 +46,7 @@
         {
           "title": "推理优化",
           "file": "cockpit/general/infer.html",
-          "badge": "Part C",
+          "badge": "Part 3",
           "status": "done",
           "desc": "量化 (PTQ/QAT/AIMET)、多核绑定、前缀缓存、投机采样、约束解码、KV Cache 优化",
           "tags": [
@@ -77,7 +77,7 @@
             {
               "title": "项目总览",
               "file": "cockpit/projects/agent-framework/overview.html",
-              "badge": "总览",
+              "badge": "Part 1",
               "status": "done",
               "desc": "大模型 Agent 框架项目总览：整体架构、模块划分与文档导读",
               "tags": [
@@ -88,7 +88,7 @@
             {
               "title": "设备部署",
               "file": "cockpit/projects/agent-framework/deploy.html",
-              "badge": "Part D",
+              "badge": "Part 2",
               "status": "done",
               "desc": "QNN 框架、ISP 数据流零拷贝、多模型调度策略、Context Binary",
               "tags": [
@@ -100,7 +100,7 @@
             {
               "title": "aadkcore 核心框架",
               "file": "cockpit/projects/agent-framework/agent-core.html",
-              "badge": "Part E1",
+              "badge": "Part 3",
               "status": "done",
               "desc": "统一模型接口、模型调度器、多音区对话管理、RAG、MCP 工具协议、A2A 协议、运行时与插件机制",
               "tags": [
@@ -113,7 +113,7 @@
             {
               "title": "场景 Agent 应用",
               "file": "cockpit/projects/agent-framework/agent-group.html",
-              "badge": "Part E2",
+              "badge": "Part 4",
               "status": "done",
               "desc": "车辆控制 Agent (30+ 技能)、主动视觉 Agent、闲聊 Agent、GUI Agent、Prompt 模板工程",
               "tags": [
@@ -125,7 +125,7 @@
             {
               "title": "调试与工具链",
               "file": "cockpit/projects/agent-framework/debug.html",
-              "badge": "Part F",
+              "badge": "Part 5",
               "status": "done",
               "desc": "mini-dm、Snapdragon Profiler、qnn-profile-viewer、排障决策树",
               "tags": [
@@ -136,7 +136,7 @@
             {
               "title": "APK 集成与端侧服务化",
               "file": "cockpit/projects/agent-framework/apk-integration.html",
-              "badge": "Part G",
+              "badge": "Part 6",
               "status": "done",
               "desc": "lantu_demo 宿主 APK：三层架构、JNI 桥接、NanoHTTPD 本地服务、多模态协议转换、前台服务自愈、QNN Skel 打包、上车部署脚本",
               "tags": [
@@ -155,7 +155,7 @@
             {
               "title": "GenAI 方案架构总览",
               "file": "cockpit/projects/lantu/genai-architecture.html",
-              "badge": "总览",
+              "badge": "Part 1",
               "status": "done",
               "desc": "Qwen3-omni-4B 端侧部署整体架构：AIMET INT4 量化、多 VIT 动态切换、单核改多核、前缀缓存、DeepStack，及三阶段推理链路",
               "tags": [
@@ -168,7 +168,7 @@
             {
               "title": "AIService 后端集成与重构",
               "file": "cockpit/projects/lantu/aiservice-integration.html",
-              "badge": "后端",
+              "badge": "Part 2",
               "status": "done",
               "desc": "从 GenAI 切换到岚图自研 aiservice 推理框架：多后端兼容、请求格式对齐、跨形态不可比、SSE 解析、SELinux 等 8 大难点",
               "tags": [
@@ -181,7 +181,7 @@
             {
               "title": "效果及性能测试",
               "file": "cockpit/projects/lantu/effect-performance.html",
-              "badge": "评测",
+              "badge": "Part 3",
               "status": "done",
               "desc": "数据集分布、舱内/舱外效果指标、0601→0828 版本演进时间线、逐场景+逐阶段性能、温度/CPU/内存监控",
               "tags": [
@@ -194,7 +194,7 @@
             {
               "title": "性能优化与稳定性",
               "file": "cockpit/projects/lantu/perf-optimization.html",
-              "badge": "优化",
+              "badge": "Part 4",
               "status": "done",
               "desc": "上海未水冷 vs 北京水冷对比、单核→3核 42% 提速、aiservice vs genai 存储占用、稳定性与消融实验设计",
               "tags": [
@@ -207,7 +207,7 @@
             {
               "title": "两方案端到端对比",
               "file": "cockpit/projects/lantu/genai-vs-aiservice.html",
-              "badge": "对比",
+              "badge": "Part 5",
               "status": "done",
               "desc": "GenAI 与 AIService 两方案端到端总耗时对比参考",
               "tags": [
@@ -219,7 +219,7 @@
             {
               "title": "运维及安全",
               "file": "cockpit/projects/lantu/ops-security.html",
-              "badge": "运维",
+              "badge": "Part 6",
               "status": "done",
               "desc": "设备安装、系统升级、OTA 与模型加密方案（打包工具/load 进程/访问控制设计）",
               "tags": [

@@ -1,18 +1,4 @@
-Part A: 硬件与系统底层
-
-[1. SA8397P SoC 全景](#ch1)
-[2. Hexagon DSP 微架构](#ch2)
-[3. DSP 子系统对比](#ch3)
-[4. FastRPC 通信机制](#ch4)
-[5. Hypervisor 与系统可靠性](#ch5)
-[5.1 Hypervisor 多域架构](#ch5-1)
-[5.2 Protection Domain](#ch5-2)
-[5.3 SSR 子系统重启](#ch5-3)
-[6. 内存带宽瓶颈分析](#ch6)
-[7. 功耗与热管理](#ch7)
-[8. 竞品芯片对比](#ch8)
-
-# Part A: SA8397P 硬件架构
+# Part 1: SA8397P 硬件架构
 
 *Qualcomm 第三代 Snapdragon Digital Chassis 座舱 SoC 硬件全景与 DSP 深度解析*
 

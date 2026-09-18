@@ -1,4 +1,4 @@
-# Part C: 推理优化
+# Part 3: 推理优化
 
 *以 Qwen3-Omni-4B 为例  |  量化 · AIMET · KV Cache · 多核绑定 · 前缀缓存 · 投机采样 · 约束解码*
 
