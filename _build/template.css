@@ -31,7 +31,11 @@ table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
 th,td{padding:8px 12px;border:1px solid var(--border);text-align:left}
 th{background:var(--accentL);color:var(--accentD);font-weight:600}
 tr:nth-child(even){background:var(--bg2)}
-.mermaid-wrap{margin:16px 0;padding:16px;background:var(--bg2);border-radius:7px;overflow-x:auto}
+.mermaid-wrap{margin:16px 0;padding:0;background:var(--bg2);border-radius:7px;overflow:hidden;position:relative;height:480px}
+.mermaid-wrap .mermaid{width:100%;height:100%}
+.mermaid-wrap svg{width:100%!important;height:100%!important;max-width:none!important;display:block}
+.mm-hint{position:absolute;top:8px;right:12px;font-size:11px;color:var(--muted);background:var(--bg);padding:2px 9px;border-radius:5px;opacity:.85;pointer-events:none;z-index:6}
+.svg-pan-zoom-control{fill:var(--text2)!important}
 .chart-wrap{margin:16px 0;background:var(--bg2);border-radius:7px;padding:12px}
 .chart-box{width:100%;height:360px}
 pre{background:var(--bg3);border-radius:7px;padding:14px;overflow-x:auto;font-size:13px;margin:10px 0}
@@ -40,5 +44,5 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 ol.steps{margin:10px 0 10px 20px;color:var(--text2)}
 ol.steps li{margin-bottom:6px}
 ol.steps code{font-size:12px}
-@media(max-width:900px){.sidebar{display:none}.main{margin-left:0;padding:20px 16px 60px}}
+@media(max-width:900px){.sidebar{display:none}.main{margin-left:0;padding:20px 16px 60px}.mermaid-wrap{height:340px}}
 @media print{.top-nav,.sidebar,.theme-btn{display:none!important}.main{margin:0;padding:16px;max-width:100%}}
