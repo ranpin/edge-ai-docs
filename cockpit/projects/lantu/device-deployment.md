@@ -5,7 +5,7 @@
 > [!TIP]
 > **本篇讲什么**
 >
-> 岚图 8397 上 GenAI 方案 SDK 的**设备部署与上车流程**——这是从框架层 [设备部署](../../agent-framework/deploy.html) 下沉的**岚图分支专属**部分（主线 agent\_core\_dev 不含 android\_sdk / android\_test）：
+> 岚图 8397 上 GenAI 方案 SDK 的**设备部署与上车流程**——这是从框架层 [设备部署](../agent-framework/deploy.html) 下沉的**岚图分支专属**部分（主线 agent\_core\_dev 不含 android\_sdk / android\_test）：
 >
 > - 可执行文件部署：`build_8397_android.sh`（带 `ENABLE_LANTU_SDK`）构建 → `/AI/vllm_sdk/` 设备目录 → adb push → `android_test` 运行
 > - APK 集成 SO：`libandroid_sdk.so` 集成、JNI 接口（`model_inference.h`）

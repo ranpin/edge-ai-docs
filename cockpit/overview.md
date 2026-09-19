@@ -32,10 +32,13 @@ flowchart LR
 
 | 文档 | 讲什么 |
 | :--- | :--- |
-| [硬件与系统底层](general/hardware.html) | SA8397P SoC、Hexagon DSP、FastRPC、Hypervisor、内存带宽、功耗热管理 |
-| [模型训练与微调](general/training.html) | DMS/OMS 训练、LoRA/QLoRA、SWIFT、知识蒸馏、数据合规 |
-| [推理优化](general/infer.html) | 量化、AIMET、KV Cache、多核绑定、前缀缓存、投机采样、约束解码 |
-| [Android 开发 & JNI 基础](general/android-jni.html) | Android 工程结构、JNI 桥接、端侧 NPU 调用 |
+| [硬件与系统底层](general/hardware.html) | SA8397P SoC、Hexagon DSP、FastRPC、Hypervisor、内存带宽、功耗热管理、HTP 架构版本 |
+| [模型训练与微调](general/training.html) | DMS/OMS 训练、LoRA/QLoRA、知识蒸馏、端侧微调可行性、SWIFT 工具链 |
+| [座舱数据合规、评估与数据飞轮](general/data-pipeline.html) | 数据分类与隐私合规（PIPL/R155/R156）、模型评估体系、数据飞轮 |
+| [端侧模型量化与压缩](general/quantization.html) | PTQ/QAT、AIMET、W4A16 机制、量化方案对比 |
+| [LLM 推理原理与性能模型](general/infer-principles.html) | Prefill/Decode、Roofline、KV Cache、FlashAttention、Genie/QAIRT、Tokenizer |
+| [端侧解码与服务化优化](general/infer-serving.html) | 前缀缓存、投机采样、约束解码、Continuous Batching、TTFT/端到端延迟 |
+| [Android 开发 & JNI 基础](general/android-jni.html) | Android 工程结构、JNI 桥接、SELinux、RegisterNatives、端侧服务化与安全 |
 | [面试指南](general/interview.html) | 51 道精选题，覆盖上述领域知识 |
 
 ### 2.2 第二层 · 框架研发（aadkcore / agent_group）

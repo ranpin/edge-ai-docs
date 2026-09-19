@@ -30,7 +30,7 @@
           "file": "cockpit/general/hardware.html",
           "badge": "Part 1",
           "status": "done",
-          "desc": "SA8397P SoC 全景、Hexagon DSP 微架构、FastRPC 通信、Hypervisor 多域隔离、SSR 故障恢复",
+          "desc": "SA8397P SoC 全景、Hexagon DSP 微架构、HTP 架构版本、FastRPC 通信、Hypervisor 多域隔离、SSR 故障恢复、内存带宽",
           "tags": [
             "SA8397P",
             "DSP",
@@ -42,7 +42,7 @@
           "file": "cockpit/general/training.html",
           "badge": "Part 2",
           "status": "done",
-          "desc": "DMS/OMS 数据策略、知识蒸馏、LoRA 微调、SWIFT 训练框架",
+          "desc": "DMS/OMS 数据策略、知识蒸馏、LoRA 微调、端侧微调可行性、SWIFT 工具链",
           "tags": [
             "LoRA",
             "蒸馏",
@@ -50,15 +50,51 @@
           ]
         },
         {
-          "title": "推理优化",
-          "file": "cockpit/general/infer.html",
+          "title": "座舱数据合规、评估与数据飞轮",
+          "file": "cockpit/general/data-pipeline.html",
           "badge": "Part 3",
           "status": "done",
-          "desc": "量化 (PTQ/QAT/AIMET)、多核绑定、前缀缓存、投机采样、约束解码、KV Cache 优化",
+          "desc": "数据分类与隐私合规（PIPL/UNECE R155/R156/EU AI Act）、模型评估体系、数据飞轮与 Shadow Mode",
+          "tags": [
+            "数据合规",
+            "评估",
+            "数据飞轮"
+          ]
+        },
+        {
+          "title": "端侧模型量化与压缩",
+          "file": "cockpit/general/quantization.html",
+          "badge": "Part 4",
+          "status": "done",
+          "desc": "PTQ/QAT、AIMET（CLE/BiasCorrection/AdaRound）、W4A16 机制、量化方案对比",
           "tags": [
             "量化",
+            "AIMET",
+            "W4A16"
+          ]
+        },
+        {
+          "title": "LLM 推理原理与性能模型",
+          "file": "cockpit/general/infer-principles.html",
+          "badge": "Part 5",
+          "status": "done",
+          "desc": "Prefill/Decode、Roofline 模型、KV Cache、FlashAttention、Genie/QAIRT 运行时、端侧 Tokenizer",
+          "tags": [
+            "Roofline",
+            "KV Cache",
+            "Genie"
+          ]
+        },
+        {
+          "title": "端侧解码与服务化优化",
+          "file": "cockpit/general/infer-serving.html",
+          "badge": "Part 6",
+          "status": "done",
+          "desc": "前缀缓存、投机采样、约束解码、Continuous Batching、TTFT 与端到端延迟优化",
+          "tags": [
             "投机采样",
-            "约束解码"
+            "约束解码",
+            "服务化"
           ]
         },
         {
@@ -66,11 +102,11 @@
           "file": "cockpit/general/android-jni.html",
           "badge": "基础",
           "status": "done",
-          "desc": "从创建工程到 JNI 桥接的完整学习路径：工程结构、Gradle、四大组件、JNI 命名/类型映射/句柄模式/C++ 回调、CMake 与 .so、NPU/FastRPC、前台服务自愈，以 lantu_demo 为教材",
+          "desc": "从创建工程到 JNI 桥接的完整学习路径：工程结构、Gradle、四大组件、JNI 命名/类型映射/句柄模式/C++ 回调、RegisterNatives、SELinux、CMake 与 .so、端侧服务化与安全边界",
           "tags": [
             "Android",
             "JNI",
-            "Gradle",
+            "SELinux",
             "教程"
           ]
         }
