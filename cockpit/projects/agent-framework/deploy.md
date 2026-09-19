@@ -75,7 +75,10 @@ flowchart LR
 | 自定义 Op | 9 | 5 | 7 |
 | 离线编译 | 10 | 7 | 2 |
 | 易用性 | 6 | 8 | 9 |
-| 车规认证 | 10 | 5 | 1 |
+| 车规平台适配 | 10 | 5 | 1 |
+
+> [!NOTE]
+> **车规 / 功能安全口径**：上表「车规平台适配」指框架在高通车规 SoC 上的适配与落地成熟度，**不代表框架自身持有功能安全认证**。QNN 框架本身**无独立功能安全认证**；配合高通车规平台（安全岛、ASIL 硬件基础等）可满足 ISO 26262 ASIL 相关要求，认证责任在平台 / 整机层面而非推理框架层面。
 
 ### 1.4 推理框架详细对比
 
@@ -86,7 +89,7 @@ flowchart LR
 | **自定义算子** | QNN OpPackage 机制 | UDL (User Defined Layer) | Custom Op 注册 |
 | **离线编译** | Context Binary (推荐) | DLC 缓存 | 不支持 |
 | **易用性** | 中等，学习曲线较陡 | 高，文档完善 | 高，Python API 友好 |
-| **车规认证** | 支持 ASIL-B/D | 部分支持 | 无车规认证 |
+| **车规认证** | 框架本身无独立功能安全认证；配合高通车规平台可满足 ASIL 要求 | 部分支持 | 无车规认证 |
 | **维护状态** | 活跃开发中 | 维护模式，不再新增功能 | 活跃开发中 |
 | **推荐场景** | 新项目首选 | 仅限已有项目维护 | 跨平台/非高通场景 |
 
@@ -115,17 +118,20 @@ flowchart LR
 
 ### 2.2 端到端延迟分解
 
-从摄像头捕获到最终 GPU 渲染输出的全链路延迟分解（瀑布图）：
+从摄像头捕获到最终 GPU 渲染输出的全链路，可按阶段拆解延迟。下图为**分阶段延迟分解**示意（每段 = 该阶段在一帧内占用的耗时，各段之和 ≈ 端到端总延迟）：
 
-**Camera → AI 输出 端到端延迟分解**（延迟）
+**Camera → AI 输出 分阶段延迟分解（示例参数）**
 
 ```mermaid
 xychart-beta
-    title "Camera → AI 输出 端到端延迟分解"
+    title "Camera → AI 输出 分阶段延迟分解（示例）"
     x-axis ["Camera→ISP", "ISP 处理", "ISP→CDSP (ION)", "HTP 推理", "后处理 (CPU)", "GPU 渲染"]
-    y-axis "累计延迟 (ms)" 0 --> 14.83
+    y-axis "各阶段延迟 (ms)" 0 --> 14
     bar [2, 3, 0.1, 12.9, 2, 4]
 ```
+
+> [!NOTE]
+> **数据口径**：图中各段延迟为**示例参数**，仅用于演示「分阶段延迟分解」这一方法，不代表实测；请代入你自己平台的流水线实测替换（全站数据口径见 [硬件平台](../../general/hardware.html) 顶部 NOTE）。读图要点：把端到端链路拆成串行阶段后，**HTP 推理通常占大头**，是优化的首要靶点；ISP→CDSP 走 Zero-Copy（见 §2.3）时该段可压到亚毫秒级。若要画成累计曲线（瀑布），则末段值应等于各阶段之和（此例约 24ms），而非单段值。
 
 ### 2.3 Zero-Copy 数据通路
 
@@ -188,17 +194,22 @@ gantt
 >
 > 在汽车座舱中，**冷启动时间**是一项硬性要求：从上电到 DMS 系统就绪必须 **< 2 秒**。不同加载方式的冷启动时间对比：
 >
-> | 加载方式 | 首次推理延迟 | 原因 |
+> | 加载方式 | 首次推理延迟（量级示意） | 原因 |
 > | --- | --- | --- |
-> | `Model .so` 动态加载 | ~5~8 秒 | 需要 JIT 编译图优化、内存分配、算子调度 |
+> | `Model .so` 动态加载 | ~5~8 秒 | 运行时才做图优化、内存分配与算子调度（图固化 / graph finalization，**非 JIT 编译**） |
 > | `Context Binary .bin` | ~200~500ms | 离线已完成编译优化，直接加载二进制到 HTP VTCM |
 >
 > **Context Binary 的额外优势**：
 >
-> * **确定性执行**：离线编译确保每次推理的执行路径完全一致，满足功能安全 (ASIL) 要求
+> * **确定性执行**：离线编译确保每次推理的执行路径完全一致，有助于满足功能安全 (ASIL) 的确定性执行要求（确定性只是 ASIL 的必要条件之一，认证在平台 / 整机层面完成，见 §1.3 口径说明）
 > * **内存预分配**：所有 Tensor Buffer 在编译期确定大小和位置，运行时无动态分配
 > * **防篡改**：二进制文件可加签名校验，防止模型被恶意替换
 > * **多模型打包**：多个模型可编译为同一 Context Binary，共享内存池，减少碎片
+
+> [!WARNING]
+> **Context Binary 与 QNN 版本强耦合（上机高频坑）**
+>
+> Context Binary 不只是**硬件绑定**（见 §7.2），还是**版本绑定**：`.bin` 由特定版本的 `qnn-context-binary-generator` 生成，只能被**版本匹配**的 QNN runtime 与 DSP skel 库（`libQnnHtp*.so` / `*skel*.so` / stub `.so`）加载。若升级了 QNN SDK 却未重新生成 Context Binary，或设备上 runtime 与 skel 版本不一致，典型表现为 `QnnContext_createFromBinary failed`、图 finalize 失败或加载即崩溃。**每次升级 QNN SDK / 工具链后，必须重新生成全部 Context Binary，并确保设备上部署的 runtime 与 skel 版本一致。**
 
 > [!NOTE]
 > **推理优化与量化工具**
@@ -288,7 +299,7 @@ flowchart LR
 ├── data/
 │   ├── config/                # 运行时配置
 │   │   ├── runtime_config.json
-│   │   └── banma.datatransport.DataTransport.service.config.json
+│   │   └── datatransport.service.config.json   # Fusion/DataTransport 服务配置（示例文件名，实际随项目/集成方而异）
 │   ├── template/              # YAML Prompt 模板
 │   └── assets/                # 静态资源（RAG 知识库等）
 ├── agentcore.service          # systemd 单元文件
@@ -341,7 +352,7 @@ WantedBy=multi-user.target
 | 参数 | 默认值 | 说明 |
 | :--- | :--- | :--- |
 | `--http 1` | 0 (关闭) | 启用 HTTP Server 模式替代 Fusion，用于调试场景 |
-| `--dump 1` | 0 (关闭) | 启用推理数据录制，将请求/响应保存到文件 |
+| `--dump 1` | **1 (开启)** | 推理数据录制，将请求/响应保存到文件；**默认开启**，需显式传 `--dump 0` 关闭 |
 | `--upload 1` | 0 (关闭) | 启用推理数据上传到远端服务器 |
 | `--dual 1` | 0 (关闭) | 启用 SA8397P 双实例模式（双 NPU 核心） |
 
@@ -355,13 +366,13 @@ aadkcore 通过 `runtime_config.json` 实现多平台自动切换，通过 `mult
 {
     "current_runtime": "8397",
     "8397": {
-        "model_name": "qnn/qwen2.5-vl",
-        "model_config": "config/qwen2.5-vl_8397.json",
-        "active_model_config": "config/qwen2.5-vl_8397_active.json"
+        "model_name": "qnn/qwen3-omni-4b",
+        "model_config": "config/qwen3-omni-4b_8397.json",
+        "active_model_config": "config/qwen3-omni-4b_8397_active.json"
     },
     "orin": {
-        "model_name": "lape/Qwen2.5-Omni-7B",
-        "model_config": "config/Qwen2.5-Omni-7B.json"
+        "model_name": "lape/qwen3-omni-4b",
+        "model_config": "config/qwen3-omni-4b_orin.json"
     },
     "worker_count": 4,
     "capacity": 10,
@@ -372,12 +383,21 @@ aadkcore 通过 `runtime_config.json` 实现多平台自动切换，通过 `mult
 | 配置项 | 说明 |
 | :--- | :--- |
 | `current_runtime` | 当前运行平台标识（8397 / orin / 8295\_android），决定使用哪组模型配置 |
-| `model_name` | 模型标识，格式为 `后端/模型名`，如 `qnn/qwen2.5-vl`（QNN 后端加载 Qwen2.5-VL） |
-| `model_config` | 主模型配置文件路径，包含 Context Binary 路径、ViT 模型路径等 |
-| `active_model_config` | 主动视觉 Agent 使用的模型配置（可选，独立于主模型） |
+| `model_name` | 模型标识，格式为 `后端/模型名`，如 `qnn/qwen3-omni-4b`（QNN 后端加载 Qwen3-Omni-4B 内部定制型号） |
+| `model_config` | **主对话模型**配置文件路径，包含 Context Binary 路径、ViT 模型路径等 |
+| `active_model_config` | **主动视觉模型**配置（可选，独立于主对话模型，供主动视觉 Agent 使用） |
 | `worker_count` | ModelScheduler 工作线程数 |
 | `capacity` | 任务队列容量 |
 | `timeout_s` | 单次推理超时时间（秒） |
+
+> [!NOTE]
+> **示例模型口径与三种角色**：aadkcore 框架本身**模型无关**——`model_name` 只是 `后端/模型名` 标识，可配置任意后端支持的模型。为与全站锚点一致，本节示例统一采用内部定制型号 **Qwen3-Omni-4B**（数据口径见 [硬件平台](../../general/hardware.html) 顶部 NOTE）。配置中涉及三种模型角色，量产时常共用同一基座以节省 NPU 常驻内存，也可各自独立：
+>
+> - **主对话模型**（`model_config`）：承载默认对话 / 问答；
+> - **主动视觉模型**（`active_model_config`）：主动视觉 Agent 使用，可独立于主对话模型；
+> - **多 LoRA 基座**（下方 `multi_lora_runtime_config.json` 的 `base_model`）：多 LoRA 热切换时共享的基座。
+>
+> 本节（`runtime_config.json` / `multi_lora_runtime_config.json`）是模型配置的**主参考**；[Agent 插件库](agent-group.html) §1.4 的运行时配置表引用本节口径，场景 Agent 与 `scene_id` 的映射详见 agent-group，本节不重复。
 
 **multi\_lora\_runtime\_config.json**（多 LoRA 配置）：
 
@@ -391,11 +411,10 @@ aadkcore 通过 `runtime_config.json` 实现多平台自动切换，通过 `mult
                 "config_path": "config/qwen3-omni-4b_8397.json"
             },
             "lora": [
-                {"scene_id": 1003, "name": "base_model",       "lora_path": ""},
-                {"scene_id": 1100, "name": "incar_item_detect", "lora_path": "cnyb"},
-                {"scene_id": 1200, "name": "cloth_detect",      "lora_path": "cnyb"},
-                {"scene_id": 1300, "name": "grounding_sr",      "lora_path": "dwsr"},
-                {"scene_id": 1300, "name": "visual_assistant",  "lora_path": "znzs"}
+                {"scene_id": 1000, "name": "base_model", "lora_path": ""},
+                {"scene_id": 1001, "name": "scene_a",    "lora_path": "lora_a"},
+                {"scene_id": 1002, "name": "scene_b",    "lora_path": "lora_b"},
+                {"scene_id": 1003, "name": "scene_c",    "lora_path": "lora_a"}
             ]
         }
     }
@@ -404,11 +423,11 @@ aadkcore 通过 `runtime_config.json` 实现多平台自动切换，通过 `mult
 
 ```mermaid
 flowchart LR
-    BASE["基础模型Qwen3-Omni-4B(Context Binary)"] --> SW{"LoRA切换器"}
-    SW -->|"scene_id=1003"| L0["base_model无 LoRA（闲聊）"]
-    SW -->|"scene_id=1100"| L1["incar_item_detect车内物品检测 LoRA"]
-    SW -->|"scene_id=1200"| L2["cloth_detect着装识别 LoRA"]
-    SW -->|"scene_id=1300"| L3["grounding_sr定位超分 LoRA"]
+    BASE["基础模型Qwen3-Omni-4B(Context Binary)"] --> SW{"LoRA切换器按 scene_id 路由"}
+    SW -->|"scene_id=1000"| L0["base_model无 LoRA（默认对话）"]
+    SW -->|"scene_id=1001"| L1["scene_a加载 lora_a"]
+    SW -->|"scene_id=1002"| L2["scene_b加载 lora_b"]
+    SW -->|"scene_id=1003"| L3["scene_c复用 lora_a"]
 
     style BASE fill:#4361ee,color:#fff
     style SW fill:#f39c12,color:#fff
@@ -417,7 +436,7 @@ flowchart LR
 > [!TIP]
 > **多 LoRA 热切换机制**
 >
-> 多 LoRA 架构通过 `scene_id` 自动路由到对应的 LoRA 适配器。基础模型权重常驻 NPU 内存，LoRA 增量权重按需加载。切换 LoRA 仅需替换增量权重（通常 < 100MB），无需重新加载基础模型（~2.5GB），切换延迟在毫秒级。这使得同一个 4B 参数基础模型能同时服务闲聊、车内物品检测、着装识别、车外问答等多个场景。
+> 多 LoRA 架构通过 `scene_id` 自动路由到对应的 LoRA 适配器。基础模型权重常驻 NPU 内存，LoRA 增量权重按需加载。切换 LoRA 仅需替换增量权重（量级示意：通常 < 100MB），无需重新加载基础模型（量级示意：~2.5GB），切换延迟在毫秒级。这使得同一个 4B 参数基础模型能同时服务多个业务场景（不同 `scene_id` 各自路由到自己的 LoRA，多个场景也可复用同一 LoRA），无需为每个场景单独部署一份完整模型。上例中的 `scene_a/b/c` 与 `lora_a/b/c` 为中性占位，实际项目中替换为具体场景名与 LoRA 代号。
 
 ## 5. OTA 模型更新
 

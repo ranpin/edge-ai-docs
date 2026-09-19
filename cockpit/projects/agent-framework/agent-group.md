@@ -1,4 +1,4 @@
-# 4. 场景 Agent 应用
+# 5. 场景 Agent 应用
 
 *agent\_group 场景 Agent 插件库 · 基于 aadkcore AgentPlugin 接口 · `libagent_group.so`*
 
@@ -35,6 +35,11 @@ graph LR
     style D fill:#f39c12,color:#fff
 ```
 
+> [!NOTE]
+> **插件加载失败与降级**
+>
+> AgentRuntime 启动时动态加载 `libagent_group.so` 并调用工厂函数 `get_supported_agents` / `create_dispatcher`。若 .so 缺失、导出符号缺失，或某 scenario\_id 的 `create_dispatcher` 返回空，AgentRuntime 记录错误并**跳过该插件，不影响其余插件加载**——按项目编译开关裁剪本就是常态，缺哪个 Agent 就少哪个 scenario。运行期某 Dispatcher 处理异常时，该条消息被丢弃并记日志，不会拖垮整个 AgentRuntime；对应 scenario 退化为不可用，其余 scenario 正常服务。
+
 ### 1.2 Scenario ID 分配表
 
 所有 scenario\_id 统一定义在 `aadkcore/include/runtime/constant_ids.h` 中，保证跨模块一致性：
@@ -44,8 +49,8 @@ graph LR
 | `VIDEOCHAT_SCENARIO_ID` | 100 | VideoChat | 视频聊天 |
 | `PROACTIVE_SPEECH_SCENARIO_ID` | 200 | ProactiveSpeech | 主动语音 |
 | `ACTIVE_VISION_SCENARIO_ID` | 300 | ActiveVision | 主动视觉 |
-| `RAIN_DECTION_SCENARIO_ID` | 400 | RainDection (Porsche) | 雨天检测 / GUI Agent |
-| `SPORT_MODE_SCENARIO_ID` | 500 | SportMode (Porsche) | 运动模式 / 车辆哨兵 |
+| `RAIN_DECTION_SCENARIO_ID` | 400 | RainDection（某 OEM） | 雨天检测 / GUI Agent |
+| `SPORT_MODE_SCENARIO_ID` | 500 | SportMode（某 OEM） | 运动模式 / 车辆哨兵 |
 | `OAI_INFERENCE_SCENARIO_ID` | 600 | OaiInference | OpenAI 兼容推理接口 |
 | `WELCOME_MODE_SCENARIO_ID` | 700 | WelcomeMode | 迎宾模式 |
 | `SYSTEM_AGENT_SCENARIO_ID` | 1001 | SystemAgent | 系统 Agent |
@@ -60,6 +65,8 @@ graph LR
 > **ID 复用说明**
 >
 > scenario\_id 400 和 500 存在条件编译复用：在 `ENABLE_PORSCHE` 模式下分别用于 RainDection 和 SportMode；在 `ENABLE_DEVICEAI_BASE` 模式下通过 `#define GUI_AGENT_SCENARIO_ID 400` 和 `#define CAR_SENTINEL_AGENT_SCENARIO_ID 500` 重新映射给 GuiAgent 和 CarSentinel。
+>
+> **拼写说明（sic）**：`RAIN_DECTION`（而非 DETECTION）、`FEATURE_SOPRT_MODE`（而非 SPORT）是代码中的**原始标识符拼写**，本文照抄代码、不作"纠正"，以便与源码一一对应。
 
 ### 1.3 条件编译体系
 
@@ -68,8 +75,8 @@ agent\_factory.cpp 通过多级条件编译宏控制 Agent 的编译包含，实
 | 宏定义 | 控制范围 | 包含的 Agent |
 | :--- | :--- | :--- |
 | `ENABLE_DEVICEAI_BASE` | 基础 Agent 集合 | CarControl, ActiveVision, GuiAgent, VideoChat, CarSentinel |
-| `ENABLE_PORSCHE` | 保时捷定制 | RainDection, SportMode, WelcomeMode |
-| `ENABLE_LANTU_SDK` | 岚图定制 | DressDetect, InCarItemDetect, OutCarQA |
+| `ENABLE_PORSCHE` | 某 OEM 定制 | RainDection, SportMode, WelcomeMode |
+| `ENABLE_LANTU_SDK` | 某 OEM 定制 | DressDetect, InCarItemDetect, OutCarQA |
 | `FEATURE_CAR_CONTROL` | 车辆控制独立开关 | CarControlDispatcher |
 | `FEATURE_ACTIVE_VISION` | 主动视觉独立开关 | ActiveVisionDispatcher |
 | `FEATURE_CHIT_CHAT` | 闲聊独立开关 | ChitchatDispatcher |
@@ -83,14 +90,12 @@ agent\_factory.cpp 通过多级条件编译宏控制 Agent 的编译包含，实
 
 ### 1.4 runtime\_config.json 配置
 
-运行时通过 `runtime_config.json` 选择当前平台和模型配置，支持 Orin 和 8397 两套硬件：
+运行时通过 `runtime_config.json` 选择当前平台（orin / 8397）与模型配置，`current_runtime` 字段决定激活的平台。每个平台配置两套模型参数：`model_config`（**主对话模型**，CarControl / Chitchat 使用）与 `active_model_config`（**主动视觉模型**，ActiveVision 使用，独立于主模型）。
 
-| 平台 | model\_name | 推理后端 | 基础模型 |
-| :--- | :--- | :--- | :--- |
-| **orin**（默认） | `lape/Qwen2.5-Omni-7B` | Lape (llama.cpp) | Qwen2.5-Omni-7B |
-| **8397** | `qnn/qwen2.5-vl` | QNN (Qualcomm) | Qwen2.5-VL-3B |
-
-每个平台分别配置 `model_config`（基础推理）和 `active_model_config`（主动视觉推理）两套模型参数文件。`current_runtime` 字段决定当前激活的平台。
+> [!NOTE]
+> **以 deploy.md 为准**
+>
+> 完整字段说明、各平台取值、以及多 LoRA 配置（`multi_lora_runtime_config.json`）见 [部署与运行时配置](deploy.html) §4.3（deploy 为主），本篇不再重复。模型口径（主对话模型 / 主动视觉模型 / 多 LoRA 基座）亦以该节为准。
 
 ## 2. 车辆控制 Agent -- CarControlDispatcher
 
@@ -166,6 +171,11 @@ CarControlDispatcher 定义了 `TypeClass` 枚举，LLM 输出解析后根据结
 | `door_child_lock_control` | 儿童锁 | door\_position[后排左/右], state | 默认双侧锁定 |
 | `cant_control` | 不可控 | args 为空 | 需求不在技能表内时触发 |
 
+> [!NOTE]
+> **技能规则为示例业务规则**
+>
+> 表中「规则要点」（如座椅通风对特定乘客的档位限制、儿童老人的温度/风速约束）来自某项目 prompt 的**示例业务规则**，用于展示技能规则的写法与注入方式，**并非框架通用默认**。各项目的实际规则随其 prompt 定制，可能与此处不同。
+
 ### 2.4 Prompt 模板设计
 
 CarControlDispatcher 的 Prompt 由 `car_control.yaml` 中的多段模板拼接而成：
@@ -196,7 +206,7 @@ CarControlDispatcher 通过 `PassengerInfo` 结构体（含 pos/occupancy/gender
 | 座椅加热联动 | 有人座位同步加热档位 | seat\_heating 技能规则 |
 | 座椅通风 + 成年女性 | 女性座位通风强制 1 档 | seat\_ventilation 技能规则 |
 
-此外，`voice_zone_map_` 将音区编码映射到位置名称（1=主驾, 2=副驾, 4=左后, 8=右后, 16=中左, 32=中右），`direction_map_` 将指向信息（right/left/up）映射到目标位置，实现基于语音源和手势指向的精准控制。
+此外，`voice_zone_map_` 将音区编码映射到位置名称，与 aadkcore `AudioZone` 权威枚举（`chat_history.hpp`）一致：**1=FrontLeft（主驾）、2=FrontRight（副驾）、4=MiddleLeft（左后）、8=MiddleRight（右后）、16=BackLeft、32=BackRight**，`AllZone=0xFF` 表示全部音区。`direction_map_` 将指向信息（right/left/up）映射到目标位置，实现基于语音源和手势指向的精准控制。
 
 ## 3. 主动视觉 Agent -- ActiveVisionDispatcher
 
@@ -212,6 +222,11 @@ CarControlDispatcher 通过 `PassengerInfo` 结构体（含 pos/occupancy/gender
 | **乘客特征提取** | -- | 上车 | 性别、年龄、穿着提取 | `handle_passenger_feature_request()` |
 | **危险动作识别** | -- | 实时 | 吸烟、儿童站立、手伸窗外 | `handle_dangerous_action_request()` |
 | **遗留物检测** | -- | 下车 | 座椅上独立物品检测 | `handle_left_object_request()` |
+
+> [!NOTE]
+> **mode 值口径**
+>
+> 前三个场景（迎宾 / 送宾 / 行中监测）由 `mode` 值（0/1/2）触发；后三个（乘客特征提取 / 危险动作识别 / 遗留物检测）由实时事件或 task\_id 驱动、**不按 `mode` 字段触发**，故 mode 值标为「--」。
 
 此外，`handle_intelligent_cockpit_request()` 实现自动座舱场景，包括吃东西、睡觉、阅读、玩电子产品等行为检测，并联动阅读灯和空调等车控设备。对应的 task\_id 列表为：`xz_front_behavior`, `xz_rear_behavior`, `xz_front_temp`, `xz_rear_dangerous_behavior`。
 
@@ -235,12 +250,12 @@ graph LR
 
 ### 3.3 多 LoRA 架构
 
-ActiveVisionDispatcher 通过 `use_multi_lora_` 标志支持同一基础 VLM 模型搭配不同场景 LoRA 适配器。同一个 Qwen2.5-VL 基座模型通过 `addLora` / `switchLora` 接口切换不同场景的微调权重，避免为每个场景单独加载完整模型。
+ActiveVisionDispatcher 通过 `use_multi_lora_` 标志支持同一基础 VLM 模型搭配不同场景 LoRA 适配器。这里的多 LoRA 基座即**主动视觉模型**（由 runtime\_config 的 `active_model_config` 指定，独立于 CarControl / Chitchat 使用的**主对话模型**）；以全站锚点的 Qwen3-Omni-4B 内部定制型号为例，通过 `addLora` / `switchLora` 接口在同一基座上切换不同场景的微调权重，避免为每个场景单独加载完整模型。各 scene\_id 对应的 LoRA 路由与配置见 [部署与运行时配置](deploy.html) §4.3。
 
 > [!NOTE]
-> **连续帧推理**
+> **连续帧推理与丢帧策略**
 >
-> `front_behavior_images_` 和 `rear_behavior_images_` 各维护一个容量为 4 的 `FixedQueue`，缓存连续帧图像。VLM 推理时将多帧输入一起送入模型，利用时序信息提升行为识别的准确性（如区分短暂动作和持续行为）。
+> `front_behavior_images_` 和 `rear_behavior_images_` 各维护一个容量为 4 的 `FixedQueue`，缓存连续帧图像。VLM 推理时将多帧输入一起送入模型，利用时序信息提升行为识别的准确性（如区分短暂动作和持续行为）。`FixedQueue` 作为定长滑动窗口，**满帧时丢弃最旧帧、只保留最近 4 帧**——主动感知只关心最新时序上下文，丢旧帧既控制内存占用，又保证送入模型的帧始终是最新的。
 
 ### 3.4 安全通知频率控制与自适应车控联动
 
@@ -349,12 +364,12 @@ agent\_group 是**多项目共用**的场景 Agent 插件库：除框架通用 A
 | Agent 名称 | 类名 | scenario\_id | 编译条件 | 核心功能 |
 | :--- | :--- | :--- | :--- | :--- |
 | **车辆哨兵** | `CarSentinelDispatcher` | 500 | `FEATURE_CAR_SENTINEL` | 停车后环境监控，通过 sentry 库进行视频分段摘要与风险评级。支持动态加载 sentry .so 库，注入视频进行推理分析。 |
-| **雨天检测** | `RainDectionDispatcher` | 400 | `ENABLE_PORSCHE` + `FEATURE_RAIN_DECTION` | 保时捷定制，雨天场景检测与自动雨刮控制。基于视觉模型检测雨量强度。 |
-| **运动模式** | `SportModeDispatcher` | 500 | `ENABLE_PORSCHE` + `FEATURE_SOPRT_MODE` | 保时捷定制，运动驾驶场景感知，提供运动模式下的驾驶数据分析和车辆状态反馈。 |
-| **迎宾模式** | `WelcomeModeDispatcher` | 700 | `ENABLE_PORSCHE` + `FEATURE_WELCOME_MODE` | 保时捷定制的上车迎宾交互，独立于 ActiveVision 的迎宾场景。 |
-| **着装检测** | `DressDetectDispatcher` | 1200 | `ENABLE_LANTU_SDK` | 岚图定制，基于车内摄像头识别乘客着装特征，用于个性化服务。 |
-| **车内物品检测** | `InCarItemDetectDispatcher` | 1100 | `ENABLE_LANTU_SDK` | 岚图定制，识别车内物品并提供相关服务建议。 |
-| **车外问答** | `OutCarQADispatcher` | 1300 | `ENABLE_LANTU_SDK` | 岚图定制，基于车外摄像头进行场景视觉问答。 |
+| **雨天检测** | `RainDectionDispatcher` | 400 | `ENABLE_PORSCHE` + `FEATURE_RAIN_DECTION` | 某 OEM 定制，雨天场景检测与自动雨刮控制。基于视觉模型检测雨量强度。 |
+| **运动模式** | `SportModeDispatcher` | 500 | `ENABLE_PORSCHE` + `FEATURE_SOPRT_MODE` | 某 OEM 定制，运动驾驶场景感知，提供运动模式下的驾驶数据分析和车辆状态反馈。 |
+| **迎宾模式** | `WelcomeModeDispatcher` | 700 | `ENABLE_PORSCHE` + `FEATURE_WELCOME_MODE` | 某 OEM 定制的上车迎宾交互，独立于 ActiveVision 的迎宾场景。 |
+| **着装检测** | `DressDetectDispatcher` | 1200 | `ENABLE_LANTU_SDK` | 某 OEM 定制，基于车内摄像头识别乘客着装特征，用于个性化服务。 |
+| **车内物品检测** | `InCarItemDetectDispatcher` | 1100 | `ENABLE_LANTU_SDK` | 某 OEM 定制，识别车内物品并提供相关服务建议。 |
+| **车外问答** | `OutCarQADispatcher` | 1300 | `ENABLE_LANTU_SDK` | 某 OEM 定制，基于车外摄像头进行场景视觉问答。 |
 | **OAI 推理** | `OaiInferenceDispatcher` | 600 | `FEATURE_OAI_INFERENCE` | OpenAI API 兼容推理接口，支持标准 chat/completions 格式的消息解析（system/user/history），支持 Base64 图片输入和流式输出。 |
 
 > [!WARNING]
@@ -475,6 +490,11 @@ graph TB
 
 消息出站流程：Dispatcher 处理完毕后，通过 `SendResultNotification()` 将结果回传给 `DataTransportServer`，再通过 Fusion IPC 返回外部系统。对于需要流式输出的场景（如 GUI Agent 和 ActiveVision），使用 `StreamProcessor` + `stream_callback_handler` 实现分段推送。
 
+> [!NOTE]
+> **Dispatcher 并发与线程模型**
+>
+> 多个外部消息（含多音区同时说话）经 Fusion IPC 并发到达 `DataTransportServer`。`MsgDispacher.deliver_msg()` 按 scenario\_id 路由后，**同一 Dispatcher 内的消息串行处理**（按到达顺序入队、逐一消费），以避免对 `chat_history_`、`model_runner_` 等共享状态的竞态；**不同 Dispatcher 之间相互独立、可并行**。因此多音区同时投递到同一 Agent 时不会互相踩踏，而是排队串行。推理请求最终统一提交给 ModelScheduler，由其工作线程池（runtime\_config 的 `worker_count`）按优先级调度、任务队列容量为 `capacity`（见 [部署与运行时配置](deploy.html) §4.3）。
+
 ### 8.3 消息录制与回放
 
 每个 Dispatcher 都内置了 `DataDump` 实例，通过 `set_data_dump_flag()` 控制数据录制开关。录制的内容包括：
@@ -486,7 +506,7 @@ graph TB
 | LLM 输出 | JSON | 精度验证和回归测试 |
 | 推理耗时 | 时间戳 | 性能分析 |
 
-启动时通过命令行参数 `-d/--dump` 控制录制行为（默认值为 1，启用录制）。录制的完整消息流可用于离线回放调试，避免依赖真实硬件环境。
+启动时通过命令行参数 `-d/--dump` 控制录制行为（**默认值为 1，即开启录制**；与 [部署与运行时配置](deploy.html) 的命令行参数表一致）。录制的完整消息流可用于离线回放调试，避免依赖真实硬件环境。
 
 > [!NOTE]
 > **与 aadkcore 的集成关系**

@@ -5,15 +5,17 @@
 > [!TIP]
 > **本篇讲什么**
 >
-> aadkcore 的完整架构与核心 API：
+> aadkcore 的**运行时与模型主线**——从架构分层到模型实例、调度、对话历史与知识增强：
 >
 > - 架构总览（分层架构、代码目录结构、平台支持矩阵）
-> - 统一模型接口 ModelInstance、模型调度器 ModelScheduler
-> - 多音区对话管理 ChatHistory、RAG 知识增强
-> - MCP 工具协议、A2A 协议、Agent 运行时与插件机制
-> - LLM Flow 与 Tool 系统、端云协同架构、安全沙箱机制
+> - 统一模型接口 ModelInstance（多模态消息类型、ModelConfig 参数）
+> - 模型调度器 ModelScheduler（优先级评分、饥饿窗口、抢占时的中间态处理）
+> - 多音区对话管理 ChatHistory（AudioZone、关键人物系统、历史获取策略）
+> - RAG 知识增强
 >
-> **代码基线**：aadkcore 仓库 `src/`（`agent` / `models` / `runner` / `runtime` / `rag` / `a2a` / `flow` / `tools` / `memory` / `session` 等模块）。
+> **协议与执行主线**（MCP 工具协议、A2A 协议、Agent 运行时与插件机制、LLM Flow 与 Tool 系统，以及端云协同 / 安全沙箱等设计方向）已拆分至 [协议与运行时执行](agent-protocols.html)。
+>
+> **代码基线**：aadkcore 仓库 `src/`（`models` / `runner` / `runtime` / `memory` / `rag` / `session` 等模块）与 `aadkapi/` 公共头文件。
 
 ## 1. aadkcore 架构总览
 
@@ -114,7 +116,7 @@ graph TD
 > [!NOTE]
 > **回调函数类型**
 >
-> `StreamCallback = function<void(const string& content, bool is_finished, void* user_data)>` — 流式回调，每生成一个 token 调用一次，`is_finished` 为 true 表示生成结束。  
+> `StreamCallback = function<void(const string& content, bool is_finished, void* user_data)>` — 流式回调，每生成一个 token 调用一次，`is_finished` 为 true 表示生成结束。
 > `CompletionCallback = function<void(const string& content, void* user_data)>` — 非流式回调，生成完成后一次性返回。
 
 ### 2.2 多模态消息类型系统
@@ -182,11 +184,22 @@ classDiagram
 | `max_output_tokens` | `int` | 1024 | 最大输出 token 数 |
 | `seed` | `int` | 42 | 随机种子 |
 | `greedy` | `bool` | true | 是否贪心解码 |
-| `repetition_penalty` | `int` | 1 | 重复惩罚因子 |
+| `repetition_penalty` | `int` | 1 | 重复惩罚因子（见下方 NOTE） |
 | `ebnf_path` | `string` | "" | EBNF 语法文件路径，用于约束解码 |
 | `pruned_vocabulary` | `string` | "" | 裁剪词表，减少解码搜索空间 |
 | `enable_jump_forward` | `bool` | false | 约束解码跳跃前进优化 |
 | `config_file_path` | `string` | "" | 模型特定配置文件路径 |
+
+> [!NOTE]
+> **`repetition_penalty` 在本框架中是 `int`，不是惯例的 `float`**
+>
+> `model_config.hpp` 中的声明是 `int repetition_penalty = 1;`（`InferParams` 中为 `std::optional<int>`）。**默认值 1 表示"不惩罚"**，与主流推理引擎（vLLM / llama.cpp / transformers）的语义一致。
+>
+> 但需要注意口径差异：业界惯例把该参数定义为 `float`，常用取值是 **1.05 ~ 1.2** 这类略大于 1 的小数。`int` 类型**无法表达这一档位的微调**——可取值只有 1（不惩罚）、2（强惩罚）等整数。因此：
+>
+> - 从其他引擎迁移 prompt/采样配置时，**不要把 `1.05` 直接抄过来**，它会被截断为 `1`（等价于关闭惩罚）。
+> - 若确实需要小数级重复惩罚，应在后端适配层（Lape / QNN / Bailian）扩展该字段类型，而不是在业务侧调这个 `int`。
+> - 端侧约束解码场景下，重复问题更多依靠 `ebnf_path` / `pruned_vocabulary` 收敛输出空间，而非依赖重复惩罚。
 
 ### 2.4 流式多模态推理代码示例
 
@@ -264,14 +277,33 @@ flowchart LR
 | `HIGH` | 30 | 车控指令 |
 | `CRITICAL` | 40 | 紧急安全指令 |
 
-**综合评分公式**：调度器使用 `CompareTask` 比较器，基于优先级和等待时间计算综合评分：
+**综合评分公式**：调度器使用 `CompareTask` 比较器，基于优先级和等待时间计算综合评分，`score` 越大越先出队：
 
 ```
 score = priority * weight_priority + wait_time_ms * weight_wait * 0.001
-
-// 默认权重：weight_priority = 2.0, weight_wait = 0.5
-// 等待越久，score 越高，避免低优先级任务饥饿
 ```
+
+`CompareTask` 的默认构造给出 `weight_priority = 2.0`、`weight_wait = 0.5`（另有一个 `weight_type` 槽位用于按任务类型加权，当前评分公式中未参与计算）。实际生效的权重取决于 `ModelScheduler` 构造时传给优先队列的 `CompareTask(wp, ww, wt)` 实参，**不同分支/配置可能不同**，调优前请先确认自己分支上的构造实参。
+
+> [!WARNING]
+> **"避免饥饿"需要限定条件：默认权重下的饥饿窗口是分钟级**
+>
+> 等待项确实会随时间抬高 `score`，但它的增长速率很慢。按 `weight_priority = 2.0`、`weight_wait = 0.5` 推导，一个 `LOW` 任务追平一个**刚入队**（等待时间为 0）的 `CRITICAL` 任务所需的等待时长为：
+>
+> ```
+> 优先级分差 = (40 - 10) * 2.0            = 60 分
+> 等待项速率 = 0.5 * 0.001                = 0.0005 分/ms
+> 追平所需时间 = 60 / 0.0005              = 120000 ms ≈ 120 s
+> ```
+>
+> 也就是说：只要高优先级任务持续到达，`LOW` 任务最坏要等约 **2 分钟**才有机会出队。若把 `weight_wait` 调小到 0.1（部分分支的构造实参），同一推导给出 `60 / 0.0001 = 600 s ≈ 10 分钟`。
+>
+> **结论**：评分公式只能保证低优先级任务**最终不会永久饿死**，不能当作"防饥饿"机制来依赖。上面这个算式应当作为**推导模板**使用——代入你自己分支的 `weight_priority` / `weight_wait` 与业务能容忍的最大等待时长，反解出需要的权重，而不是照抄 120 s 这个数字。若业务对后台任务（日志摘要、离线分析）的时效有要求，正确做法是调大 `weight_wait`（或调小 `weight_priority`）把窗口压到可接受范围。
+>
+> 框架实际提供的兜底是另外两条路径，而非评分公式本身：
+>
+> - **超时自动提权**：`SubmitTask` 同步等待结果，超过 `timeout_s`（配置项，默认 100 s）未返回时自动调用 `BoostPriority(task_id, +10)`；再等一个 `timeout_s` 仍未完成则 `StopTask` 并返回 `TASK_TIMEOUT`。
+> - **提权有上限**：`BoostPriority` 会拒绝把优先级抬到 **30 以上**的请求（`p_value > 30` 直接 return），因此无法通过 boost 把任务提到 `CRITICAL` 档；且它只扫描**等待队列**，对已在执行的任务无效。
 
 ### 3.3 抢占机制与 ModelRunner
 
@@ -279,7 +311,7 @@ score = priority * weight_priority + wait_time_ms * weight_wait * 0.001
 | :--- | :--- |
 | `SubmitTask(task)` | 提交任务到优先级队列，按评分排序等待执行 |
 | `PreemptAndSubmit(task)` | 中断当前正在执行的任务，立即执行高优先级任务 |
-| `BoostPriority(task_id, delta)` | 动态提升指定任务的优先级 |
+| `BoostPriority(task_id, delta)` | 动态提升指定任务的优先级（上限 30，仅作用于等待队列） |
 | `StopTask(task_id, scenario_id)` | 停止指定任务 |
 | `ListAllTasks()` | 列出所有任务及其状态 |
 
@@ -291,9 +323,75 @@ score = priority * weight_priority + wait_time_ms * weight_wait * 0.001
 - `preprocessImage() / preprocessAudio()`：多模态预处理，基于 `DataMessage` 中的媒体数据
 
 > [!NOTE]
+> **`scene_id` 与 `scenario_id` 是两套 ID，不要混用**
+>
+> 框架里有两个长得很像但职责不同的整型 ID：
+>
+> | ID | 职责 | 出现位置 |
+> | :--- | :--- | :--- |
+> | **`scene_id`** | **模型 / LoRA 路由键**——决定某个场景用哪个基座模型、哪个 LoRA 适配器 | `ModelRunner::scene_model_details_`、`scene_named_lora_details_`、`BaseTask::scene_id`、模型配置里的 `multi_lora` 条目 |
+> | **`scenario_id`** | **Agent 消息路由键**——决定 `DataMessage` 投递给哪个业务插件 | `AgentPlugin::scenario_id()`、`constant_ids.h`（`CAR_CONTROL_SCENARIO_ID` 等）、`SystemRuntime` / `msg_deliver` 分发 |
+>
+> 两者在 `ModelRunner` 内部会被**桥接**：推理时把 `data_message.scenario_id` 当作 `scene_id` 去查 `scene_model_details_`。由此产生一个容易踩的静默失败：
+>
+> - 命中 → 使用该 `scene_id` 对应的模型 / LoRA；
+> - **未命中 → `getModelDetailsByScene()` 回落到 `CHITCHAT_SCENARIO_ID` 的 `ModelDetails`**（而不是报错）。
+>
+> 所以新增 Agent 时，`constant_ids.h` 里的 `scenario_id` 与模型配置里的 `scene_id` **必须对齐**，否则会出现"消息路由正确、但模型/LoRA 悄悄走了闲聊默认配置"的问题——现象是回答风格/能力不对，日志里却没有明显错误。
+>
+> 另需注意：带 LoRA 名的重载 `getModelDetailsByScene(scene_id, lora_name)` **没有这层回落**，查不到指定名字的 LoRA 时直接返回 `nullopt` 并打 `LOG_E`。
+
+### 3.4 抢占时的任务状态与中间态处理
+
+抢占是端侧调度里最容易误解的一环：**它不是强制 kill，也不支持断点续算**。
+
+```mermaid
+flowchart TD
+    NEW["PreemptAndSubmit(高优任务)"] --> CHK{"队列已满?<br/>(capacity_, 默认 10)"}
+    CHK -->|"否"| ENQ["新任务入队"]
+    CHK -->|"是"| FIND["找出队列中优先级最低的任务"]
+    FIND --> CMP{"最低优 < 新任务?"}
+    CMP -->|"否"| REJ["返回 TASK_PREEMPT_FAILED新任务不入队"]
+    CMP -->|"是"| DROP["最低优任务移出队列promise 兑现 TASK_PREEMPTED"]
+    DROP --> ENQ
+    ENQ --> TAG{"新任务 break_tag == true?"}
+    TAG -->|"是"| CANCEL["遍历 active_tasks置位 cancel_flag"]
+    TAG -->|"否"| WAIT["仅排队，不打断在跑任务"]
+    CANCEL --> COOP["在跑任务的 onProcessing()轮询到 cancel_flag 后自行退出"]
+
+    style DROP fill:#e74c3c,color:#fff
+    style REJ fill:#e74c3c,color:#fff
+    style COOP fill:#f39c12,color:#fff
+```
+
+**关键语义**：
+
+| 机制 | 实际行为 |
+| :--- | :--- |
+| **协作式取消** | `PreemptAndSubmit` / `StopTask` 只是把目标 `TaskEntry::cancel_flag` 置位（`StopTask` 对 RUNNING 任务还会调 `runner_->stopGenerate(scenario_id)`）。真正停止依赖任务的 `onProcessing(stop_all, cancel_flag)` **主动轮询**这两个原子标志并退出。**任务实现若不轮询，抢占就不会生效**。 |
+| **`break_tag` 是打断开关** | 只有构造 `CommonSchedulerTask` 时传入 `break_tag = true` 的新任务，才会去遍历 `active_tasks` 置位 `cancel_flag` 打断在跑任务；否则新任务只是插队，等待当前任务自然结束。 |
+| **被抢占任务不会自动重排** | 队列满时被选中的最低优任务**直接从队列移除**，其 promise 以 `error_code::TASK_PREEMPTED` 兑现。调度器不会把它重新入队，也不会自动重试——**是否重新 `SubmitTask` 由调用方决定**。 |
+| **执行权是串行的** | 模型执行由 `generate_mutex_` 保护：即使 `worker_count` > 1（上限为 `hardware_concurrency()`），同一时刻也只有一个任务真正在跑模型，其余 worker 阻塞在锁上。所以抢占抢的是**队列位置与执行权**，不是并行计算资源。 |
+
+> [!CAUTION]
+> **KV Cache 与中间态：抢占即丢弃，恢复等于重跑 prefill**
+>
+> 调度器层**不做任何检查点（checkpoint）**。被抢占/取消的任务，其已生成的部分输出与底层推理引擎为该请求建立的 KV Cache 会随任务结束一并释放，**没有"挂起后恢复"的路径**。
+>
+> 因此恢复一个被抢占的任务，唯一方式是调用方重新 `SubmitTask`，而这等于**从 prefill 完整重跑**：
+>
+> - 代价 ≈ 一次完整 prefill。对长 prompt 任务（多模态输入、长对话历史、RAG 注入）尤其昂贵——在端侧带宽受限平台上，prefill 往往就是整个请求的延迟大头。
+> - 已经流式回调给上层（如已播报给用户的 TTS 片段）的内容**不会被撤回**，重跑会产生重复输出。业务侧需要自己按 `request_id` 做幂等/去重。
+> - 这正是 `break_tag` 默认关闭、只让真正紧急的任务（如安全类指令）开启打断的原因：**打断不是免费的**。
+>
+> 设计建议：把可打断性当作任务属性来显式声明，而不是全局打开。长任务（视觉解码、长文本生成）应保持 `break_tag = false` 靠排队解决；只有延迟敏感且 prompt 短的任务才适合开启打断。
+
+> [!NOTE]
 > **TaskResponse 结构**
 >
 > 每个任务完成后返回 `TaskResponse`，包含：`task_id`（任务ID）、`status`（error\_code 枚举）、`ttft`（首 token 延迟 ms）、`input_tokens`、`output_tokens`、`tokens_per_second`（吞吐量），可用于性能监控和调优。
+>
+> `error_code` 中与调度相关的取值：`SUCCESS(0)`、`TASK_CANCELED(1)`、`TASK_NOT_FOUND(2)`、`TASK_STOP(3)`、`TASK_ALREADY_EXISTS(4)`、`TASK_PREEMPT_FAILED(5)`、`TASK_PREEMPTED(6)`、`TASK_TIMEOUT(7)`、`TASK_UNKNOWN_ERROR(8)`，以及模型侧的 `MODEL_NOT_FOUND(-1)`、`MODEL_NOT_READY(-2)`、`MODEL_SUSPENDED(-3)`、`MODEL_GEN_STOPPED(-4)`。**调用方必须区分 `TASK_PREEMPTED` 与 `TASK_CANCELED`**：前者意味着"被更高优任务挤掉、可考虑重提"，后者意味着"被显式停止、通常不应重提"。
 
 ## 4. 多音区对话管理 — ChatHistory
 
@@ -304,13 +402,22 @@ score = priority * weight_priority + wait_time_ms * weight_wait * 0.001
 | 枚举值 | zone\_id | 说明 |
 | :--- | :--- | :--- |
 | `InvalidZone` | 0 | 无效音区 |
-| `FrontLeftZone` | 1 | 主驾（FrontZone 别名） |
+| `FrontLeftZone` | 1 | 主驾（`FrontZone` 是其别名，同等于 1） |
 | `FrontRightZone` | 2 | 副驾 |
 | `MiddleLeftZone` | 4 | 左后排 |
 | `MiddleRightZone` | 8 | 右后排 |
-| `BackLeftZone` | 16 | BackLeftZone（扩展） |
-| `BackRightZone` | 32 | BackRightZone（扩展） |
+| `BackLeftZone` | 16 | 左后（扩展音区） |
+| `BackRightZone` | 32 | 右后（扩展音区） |
 | `AllZone` | 0xFF | 所有音区 |
+
+> [!NOTE]
+> **这是音区 ID 的权威定义**
+>
+> 上表逐值对应 `aadkapi/chat_history.hpp` 中的 `enum AudioZone`，是全站音区 ID 的**唯一权威来源**。取值是**位掩码风格**（1/2/4/8/16/32），因此可以按位或组合表达"多个音区"，`AllZone = 0xFF` 是全音区掩码。
+>
+> 其他文档（如 [场景 Agent 应用](agent-group.html) 的 `voice_zone_map_`）若出现音区映射，**以本表为准**；不一致时应视为待修正的文档缺陷，而不是两套并存的口径。
+>
+> 另需注意：`MiddleLeftZone(4)` / `MiddleRightZone(8)` 对应的是**左后/右后**排，而 `BackLeftZone(16)` / `BackRightZone(32)` 是更靠后的扩展音区。字符串与 ID 的互转由 `audioZoneToString()` / `stringToAudioZoneId()` 提供，后者目前只识别 `"主驾"/"副驾"/"左后"/"右后"/"ALL"` 五个字面量，**未覆盖 16/32 两个扩展音区**——传入其他字符串会落到 `InvalidZone`。
 
 **ChatMessage 三种类型**：
 
@@ -357,9 +464,24 @@ flowchart LR
 | `clear()` | - | 清空所有历史记录和 UserInfo |
 
 > [!WARNING]
-> **默认 Token 估算规则**
+> **默认 Token 估算是字符级启发式，不是真 tokenizer**
 >
-> `getHistoryByTokenLimit` 在不传入自定义 token\_counter 时，使用默认估算：中文字符 1:1（一个中文字 = 1 token），英文 1.3:1。如需精确计数，可传入与实际 tokenizer 对齐的计数函数。
+> `getHistoryByTokenLimit` 在不传入自定义 `token_counter` 时，回落到 `src/memory/chat_history.cpp` 中的 `estimate_tokens()`。它先按 UTF-8 把文本分成三类字符，再分别加权求和：
+>
+> ```
+> estimated = 中文字符数 * 1.8      // U+4E00 ~ U+9FFF，每个汉字 ≈ 1.8 token
+>           + 英文字母数 / 4.0      // 每 4 个 ASCII 字母 ≈ 1 token
+>           + 其他字符数 / 2.0      // 数字、标点、emoji 等，每 2 个 ≈ 1 token
+> 返回 round(estimated)
+> ```
+>
+> 三点需要注意：
+>
+> 1. **中文是 1.8 token/字，不是 1:1**。这个系数偏保守（高估），用它裁剪历史会**比实际更早截断**——好处是不会超模型上下文，代价是可用轮数变少。
+> 2. **英文是"4 个字母 ≈ 1 token"**（即 0.25 token/字符），方向与主流 BPE 分词器一致。注意它只统计 `isalpha` 的 ASCII 字母，数字和标点被归入"其他"按 2:1 计。
+> 3. **多字节解析只完整支持 3 字节 UTF-8**（即基本汉字区）。emoji、4 字节字符会被整体归为"其他"并按首字节粗略跳过，计数不精确。
+>
+> 因此这个估算**只适合做"别超上下文"的粗裁剪**。若业务对 token 预算敏感（例如要在固定预算内尽量多塞历史、或要与后端 KV Cache 占用对齐），**必须传入与实际 tokenizer 对齐的 `token_counter`**，不要依赖默认值。
 
 ## 5. RAG 知识增强
 
@@ -400,436 +522,7 @@ if (rag.isReady()) {
 }
 ```
 
-## 6. MCP 工具协议
-
-MCP（Model Context Protocol）是 LLM 与外部工具的标准通信协议。`McpServer`（定义于 `aadkapi/tools/mcp/mcp_server.hpp`）实现了 MCP 服务端，支持将车辆控制 API、导航 API 等外部能力暴露为 LLM 可调用的 Tool。
-
-```mermaid
-flowchart LR
-    LLM["LLM 推理引擎"] <-->|"FunctionCall /FunctionResponse"| MC["MCP Client"]
-    MC <-->|"JSON-RPC"| MS["McpServer"]
-    MS --> T1["车控 API"]
-    MS --> T2["导航 API"]
-    MS --> T3["多媒体 API"]
-    MS --> T4["车辆状态查询"]
-
-    style LLM fill:#4361ee,color:#fff
-    style MS fill:#f39c12,color:#fff
-```
-
-### 6.1 四种传输类型
-
-| 枚举值 | 传输类型 | 说明 | 适用场景 |
-| :--- | :--- | :--- | :--- |
-| `MCP_TRANSPORT_STDIO` | STDIO | 标准输入/输出通信 | 本地进程间通信 |
-| `MCP_TRANSPORT_SSE` | SSE | Server-Sent Events | Web 单向推送 |
-| `MCP_TRANSPORT_HTTP` | HTTP | HTTP 请求/响应 | RESTful 调用 |
-| `MCP_TRANSPORT_FUSION` | Fusion | 自定义融合协议 | 车载系统内部通信 |
-
-### 6.2 核心 API
-
-| API | 说明 |
-| :--- | :--- |
-| `McpServer(name, version)` | 构造 MCP 服务实例，指定服务名称和版本 |
-| `AddTool(param, callback)` | 注册工具，param 为 JSON 描述（名称/描述/参数 Schema），callback 处理调用 |
-| `AddPrompt(param, callback)` | 注册 Prompt 模板 |
-| `AddResource(param, callback)` | 注册数据资源（URI + 描述） |
-| `AddResourceTemplate(param, callback)` | 注册资源模板 |
-| `Start(transport_type, param)` | 启动 MCP 服务，指定传输类型和参数 |
-| `AddServer(server, path)` (static) | 注册 MCP 服务器实例到指定路径 |
-| `StartServers(config, transport, addr, port)` (static) | 批量启动所有已注册的 MCP 服务器 |
-
-### 6.3 注册工具代码示例
-
-```
-// 创建 MCP Server
-auto mcp_server = std::make_shared<McpServer>("car_control", "1.0.0");
-
-// 注册"设置空调温度"工具
-nlohmann::json tool_param = {
-    {"name", "set_ac_temperature"},
-    {"description", "设置车内空调温度"},
-    {"inputSchema", {
-        {"type", "object"},
-        {"properties", {
-            {"temperature", {{"type", "number"}, {"description", "目标温度(°C)"}}},
-            {"zone", {{"type", "string"}, {"description", "音区: 主驾/副驾/全车"}}}
-        }},
-        {"required", {"temperature"}}
-    }}
-};
-
-mcp_server->AddTool(tool_param,
-    [](uintptr_t session, nlohmann::json& req) -> nlohmann::json {
-        double temp = req["temperature"];
-        // 调用车控底层 API 设置温度...
-        return {{"status", "success"}, {"temperature", temp}};
-    });
-
-// 启动服务
-mcp_server->Start(McpServer::MCP_TRANSPORT_FUSION, "car_mcp");
-```
-
-## 7. A2A 协议
-
-A2A（Agent-to-Agent）是多 Agent 间通信标准，遵循 [a2a-protocol.org](https://a2a-protocol.org) 规范。`A2AServer`（定义于 `aadkapi/a2a/a2a_server.h`）实现了 A2A 服务端，支持 Agent 间的任务委托、状态同步和结果传递。
-
-### 7.1 任务状态机
-
-```mermaid
-stateDiagram-v2
-    [*] --> submitted
-    submitted --> working : Agent 开始处理
-    working --> completed : 任务成功
-    working --> failed : 任务失败
-    working --> canceled : 任务取消
-    working --> input_required : 需要额外输入
-    input_required --> working : 收到输入
-    submitted --> rejected : Agent 拒绝
-    submitted --> auth_required : 需要认证
-
-    completed --> [*]
-    failed --> [*]
-    canceled --> [*]
-    rejected --> [*]
-```
-
-### 7.2 A2AServer API
-
-| API | 说明 |
-| :--- | :--- |
-| `A2AServer(agent_config, cb, task_cb, userdata)` | 创建 A2A 服务，配置 Agent Card（名称/描述/能力），设置消息回调和任务回调 |
-| `Start(host, port)` | 启动 A2A HTTP 服务，默认使用 config 中的地址 |
-| `Stop()` | 停止 A2A 服务 |
-| `Append(other)` | 将其他 A2A Agent 共享同一个 HTTP 服务 |
-
-### 7.3 A2ATaskHandler
-
-| API | 说明 |
-| :--- | :--- |
-| `UpdateTaskState(taskId, state, message)` | 更新任务状态（submitted/working/completed/failed 等） |
-| `AddArtifact(taskId, artifact, isFinal, isAppend)` | 添加产出物（文本/文件），支持标记是否为最终产出 |
-| `GetTask(taskId)` | 查询任务详细信息（JSON 格式） |
-
-### 7.4 多 Agent 协作场景
-
-```mermaid
-sequenceDiagram
-    participant U as 用户
-    participant SA as SystemAgent
-    participant CA as 车控 Agent
-    participant NA as 导航 Agent
-
-    U->>SA: "导航到公司，并把空调调到 24 度"
-    SA->>SA: 意图拆分为两个子任务
-
-    par 并行执行
-        SA->>CA: A2A: 设置空调温度 24°C
-        CA->>CA: 调用车控 API
-        CA-->>SA: completed + artifact
-    and
-        SA->>NA: A2A: 导航到"公司"
-        NA->>NA: 调用导航 API
-        NA-->>SA: completed + artifact
-    end
-
-    SA-->>U: "空调已设置为 24°C，导航已开始"
-```
-
-## 8. Agent 运行时与插件机制
-
-aadkcore 的运行时分为两层：`SystemRuntime` 负责消息接收与路由；`AgentRuntime` 负责 Agent 生命周期管理。业务 Agent 通过插件机制（`AgentPlugin`）以动态库形式加载。
-
-```mermaid
-flowchart TD
-    MSG["外部消息(语音/触控/系统事件)"] --> SR["SystemRuntime"]
-    SR -->|"scenario_id 路由"| AR["AgentRuntime"]
-    AR --> D["BaseMsgDeliverDispatcher"]
-    D --> P1["AgentPlugin车控 Agent"]
-    D --> P2["AgentPlugin闲聊 Agent"]
-    D --> P3["AgentPlugin视觉 Agent"]
-    P1 & P2 & P3 --> RES["结果回传"]
-
-    style SR fill:#4361ee,color:#fff
-    style AR fill:#7b8cff,color:#fff
-    style D fill:#f39c12,color:#fff
-```
-
-### 8.1 AgentPlugin 插件接口
-
-定义于 `include/runtime/agent_plugin.h`，是所有业务 Agent 必须实现的抽象接口：
-
-| 方法 | 返回类型 | 说明 |
-| :--- | :--- | :--- |
-| `deliver_msg(message)` | `bool` | 接收并处理 `DataMessage`，Agent 的核心入口 |
-| `scenario_id()` | `int` | 返回 Agent 负责的场景 ID（对应 `constant_ids.h`） |
-| `clear_memory()` | `bool` | 清除对话历史 |
-| `set_data_dump_flag(flag)` | `void` | 设置数据录制标志（默认空实现） |
-
-**场景 ID 常量**（`constant_ids.h`）：
-
-| 常量 | ID | 场景 |
-| :--- | :--- | :--- |
-| `SYSTEM_AGENT_SCENARIO_ID` | 1001 | 系统总控 Agent |
-| `CAR_CONTROL_SCENARIO_ID` | 1002 | 车控 Agent |
-| `CHITCHAT_SCENARIO_ID` | 1003 | 闲聊 Agent |
-| `VIDEOCHAT_SCENARIO_ID` | 100 | 视频对话 |
-| `PROACTIVE_SPEECH_SCENARIO_ID` | 200 | 主动语音 |
-| `ACTIVE_VISION_SCENARIO_ID` | 300 | 主动视觉 |
-| `WELCOME_MODE_SCENARIO_ID` | 700 | 迎宾模式 |
-| `BROADCAST_SCENARIO_ID` | 65535 | 广播消息 |
-
-### 8.2 动态加载机制
-
-`libaadkcore.so` 运行时通过 `dlopen` 加载业务 Agent 动态库（如 `libagent_group.so`），通过约定的 `extern "C"` 工厂函数获取 Agent 列表并创建实例。
-
-```mermaid
-sequenceDiagram
-    participant SR as SystemRuntime
-    participant DL as dlopen
-    participant AG as libagent_group.so
-    participant AR as AgentRuntime
-
-    SR->>SR: init()
-    SR->>DL: dlopen("libagent_group.so")
-    DL-->>SR: handle
-
-    SR->>AG: get_supported_agents(plugin_list)
-    AG-->>SR: [{id:1001,name:"system"}, {id:1002,name:"car_ctrl"}, ...]
-
-    loop 遍历每个 plugin
-        SR->>AG: create_dispatcher(scenario_id, data_path, plugin)
-        AG-->>SR: unique_ptr<AgentPlugin>
-        SR->>AR: 注册到 AgentRuntime
-    end
-
-    Note over SR,AR: 消息按 scenario_id 路由到对应 AgentPlugin
-```
-
-**工厂函数签名**：
-
-```
-// 获取支持的 Agent 列表
-extern "C" void get_supported_agents(std::vector<PluginInfo>& plugins);
-
-// 创建指定场景的 Agent 实例
-extern "C" void create_dispatcher(int scenario_id, const char* data_path,
-                                  std::unique_ptr<AgentPlugin>& plugin);
-
-// 销毁 Agent 实例
-extern "C" void destroy_dispatcher(std::unique_ptr<AgentPlugin> plugin);
-```
-
-## 9. LLM Flow 与 Tool 系统
-
-`BaseLlmFlow`（定义于 `include/flow/base_llm_flow.hpp`）实现了 LLM 推理流水线的标准模式，负责预处理、调用模型、后处理和 Tool 调用循环。`BaseTool`（定义于 `include/tools/base_tool.hpp`）定义了工具的统一抽象接口。
-
-### 9.1 BaseLlmFlow 流水线
-
-```mermaid
-flowchart TD
-    START["run_async(context)"] --> PRE["_preprocess_async请求处理器链"]
-    PRE --> BM["_handle_before_model_callback"]
-    BM --> CALL["_call_llm_async调用模型推理"]
-    CALL --> AM["_handle_after_model_callback"]
-    AM --> POST["_postprocess_async响应处理器链"]
-    POST --> FC{"存在 FunctionCall?"}
-    FC -->|"是"| HANDLE["_postprocess_handle_function_calls_sync执行工具调用"]
-    HANDLE --> PRE
-    FC -->|"否"| FIN["_finalize_model_response_event返回最终结果"]
-
-    style START fill:#4361ee,color:#fff
-    style CALL fill:#f39c12,color:#fff
-    style HANDLE fill:#e74c3c,color:#fff
-    style FIN fill:#2ecc71,color:#fff
-```
-
-**SingleFlow** 是 `BaseLlmFlow` 的标准实现，预注册了两个请求处理器：
-
-- `basic::request_processor` — 基础请求构建
-- `instructions::request_processor` — 将 Agent 的 instructions 注入到请求中
-
-### 9.2 BaseTool 工具基类
-
-| 属性/方法 | 返回类型 | 说明 |
-| :--- | :--- | :--- |
-| `name()` | `const string&` | 工具名称 |
-| `description()` | `const string&` | 工具描述 |
-| `is_long_running()` | `bool` | 是否长时间运行（如导航规划） |
-| `get_declaration()` | `optional<ToolDefinition>` | 返回 JSON Schema 格式的工具声明 |
-| `run_async(args, context)` | `Task<bool>` | 异步执行工具，参数为 `map<string, any>` |
-| `process_llm_request(context)` | `Task<tuple>` | 处理 LLM 请求，返回描述文本和 ToolDefinition |
-
-**ToolDefinition 结构**（定义于 `content.hpp`）：
-
-```
-struct ToolDefinition {
-    std::string name;         // 工具名称，如 "set_ac_temperature"
-    std::string description;  // 工具描述
-    ToolParameters parameters; // 输入参数 Schema
-    ToolParameters responses;  // 输出结构 Schema
-};
-
-struct ToolParameters {
-    std::string type;  // "object"
-    std::map<std::string, ParamInfo> properties; // 参数名 → {type, description}
-};
-```
-
-LLM 根据所有注册 Tool 的 `ToolDefinition` 生成结构化的 `FunctionCall`，Flow 引擎解析后调用对应 Tool 的 `run_async()`，结果通过 `FunctionResponse` 回传给 LLM 继续推理。
-
-### 9.3 端到端调用链
-
-```mermaid
-sequenceDiagram
-    participant U as 用户
-    participant AR as AgentRuntime
-    participant AP as AgentPlugin
-    participant FL as BaseLlmFlow
-    participant MR as ModelRunner
-    participant MS as ModelScheduler
-    participant LLM as LLM 模型
-    participant TL as BaseTool
-
-    U->>AR: 语音输入 "把空调调到 24 度"
-    AR->>AP: deliver_msg(DataMessage)
-    AP->>FL: run_async(InvocationContext)
-
-    FL->>FL: _preprocess_async (构建 LlmRequest)
-    FL->>MR: schedule_run_sync(system_prompt, user_prompt, history)
-    MR->>MS: SubmitTask(CommonSchedulerTask)
-    MS->>LLM: onProcessing → streamGenerate
-    LLM-->>MS: FunctionCall: set_ac_temperature(24)
-    MS-->>MR: ModelResponse
-    MR-->>FL: 返回推理结果
-
-    FL->>FL: _postprocess_async (检测到 FunctionCall)
-    FL->>TL: run_async({temperature: 24})
-    TL-->>FL: FunctionResponse: {status: success}
-
-    FL->>MR: 再次推理（含 FunctionResponse）
-    MR->>MS: SubmitTask
-    MS->>LLM: streamGenerate
-    LLM-->>FL: "已将空调温度设置为 24°C"
-
-    FL-->>AP: 最终响应
-    AP-->>AR: 回传结果
-    AR-->>U: TTS 播报
-```
-
 > [!TIP]
-> **框架核心价值**
+> **下一篇：协议与运行时执行**
 >
-> aadkcore 将 Agent 开发中的共性能力（模型调度、对话管理、Tool 调用、RAG、A2A 协作）下沉到框架层，业务 Agent 开发者只需关注：(1) 编写 `AgentPlugin` 实现业务逻辑；(2) 注册 `BaseTool` 连接外部能力；(3) 编写 `instructions` 定义 Agent 行为。框架负责调度、流水线、协议对接等基础设施工作。
-
-## 10. 端云协同架构
-
-纯端侧 Agent 受限于模型能力和知识范围，纯云端 Agent 受限于延迟和离线可用性。端云协同是座舱 Agent 的最优架构——端侧处理低延迟、高隐私的请求，云端处理复杂推理和知识密集型任务。
-
-### 10.1 端云分工策略
-
-| 请求类型 | 处理方 | 原因 | 示例 |
-| :--- | :--- | :--- | :--- |
-| **车辆控制** | 端侧 | 低延迟（< 2s）+ 离线可用 + 安全关键 | "打开空调" "调到22度" "打开车窗" |
-| **简单问答** | 端侧 | 端侧模型可胜任 + 零网络延迟 | "现在几点" "电量还有多少" "今天限号吗" |
-| **复杂推理** | 云端 | 需要大模型能力（72B+） | "帮我规划三天旅行行程" "分析这份报告" |
-| **知识密集型** | 云端 | 需要实时联网搜索 | "最近有什么好看的电影" "XX 餐厅评价怎么样" |
-| **多模态理解** | 端侧优先，云端增强 | 端侧快速响应 + 云端精准分析 | DMS 疲劳检测（端侧）+ 复杂场景分析（云端） |
-
-### 10.2 协同架构设计
-
-```mermaid
-flowchart TB
-    U["用户请求"] --> R["端侧路由器(意图分类)"]
-    R -->|"车控/简单"| E["端侧 LLMQwen3-Omni-4B"]
-    R -->|"复杂/知识密集"| C["云端 LLMQwen3-72B / GPT-4"]
-    R -->|"不确定"| E
-    E --> D{"端侧置信度足够?"}
-    D -->|"是"| RES["直接返回结果"]
-    D -->|"否"| C
-    C --> RES
-
-    style R fill:#f39c12,color:#fff
-    style E fill:#4361ee,color:#fff
-    style C fill:#e74c3c,color:#fff
-    style RES fill:#2ecc71,color:#fff
-```
-
-| 协同模式 | 工作方式 | 延迟 | 适用场景 |
-| :--- | :--- | :--- | :--- |
-| **端侧优先 (Edge-First)** | 端侧先处理，置信度不足时转云端 | 低（端侧成功时 < 1s） | 默认模式，大部分座舱交互 |
-| **端云并行 (Parallel)** | 同时发给端侧和云端，取先到或更优结果 | 低（取较快者） | 对质量和延迟都有要求时 |
-| **端侧草稿 (Draft-Refine)** | 端侧快速生成初稿，云端校验/润色 | 中（端侧先显示，云端更新） | 长文本生成、复杂回答 |
-| **云端主导 (Cloud-Primary)** | 直接转云端处理 | 高（依赖网络） | 明确需要大模型或联网的请求 |
-
-### 10.3 离线降级与缓存
-
-当网络不可用时（隧道、地下车库、偏远地区），端云协同需要优雅降级：
-
-| 降级策略 | 实现方式 | 用户体验 |
-| :--- | :--- | :--- |
-| **功能降级** | 需要云端的功能（搜索、在线导航）提示"当前离线，部分功能不可用" | 明确告知，不假装可用 |
-| **缓存命中** | 热门问题（天气、限行）在有网时预缓存到本地 RAG | 离线也能回答常见问题 |
-| **云端结果缓存** | 云端返回的结果（路线规划、POI 信息）缓存到本地 | 重复查询直接本地返回 |
-| **网络恢复后同步** | 离线期间的日志和请求在恢复后批量上传 | 不丢失数据 |
-
-> [!NOTE]
-> **端云协同与 aadkcore 的集成**
->
-> 在 aadkcore 框架中，端云协同可以通过 **A2A 协议** 实现：端侧 Agent 作为 A2A Client 向云端 Agent（A2A Server）发送子任务。SystemRuntime 的 HTTP Server 模式可以接收云端的回调结果。路由决策可以在 `BaseLlmFlow` 的 pipeline 中实现——在 Prefill 之前通过轻量意图分类（Qwen3-1.7B 或规则引擎）决定请求走向。
-
-## 11. 安全沙箱机制
-
-座舱 Agent 的 Tool 调用直接控制车辆硬件（空调、车窗、车门、车灯），安全沙箱是防止 LLM 幻觉或 Prompt 注入导致危险操作的最后防线。
-
-### 11.1 三级安全分级
-
-| 安全等级 | 操作类型 | 确认要求 | 示例工具 | 实现方式 |
-| :--- | :--- | :--- | :--- | :--- |
-| **L1 只读** | 查询类，无副作用 | 无需确认，直接执行 | 查天气、查电量、查导航 ETA | Tool 标记 `safety_level: L1` |
-| **L2 可逆** | 可逆操作，影响车辆状态 | 语音确认（"好的，帮您调到22度"） | 调空调、开车窗、调音量、切歌 | Tool 执行前插入确认回复，等待用户未反对后执行 |
-| **L3 不可逆/高危** | 不可逆或涉及安全 | 二次确认 + 条件检查（车速、档位） | 打开车门、发送消息、支付 | 强制二次确认 + 车辆状态安全检查 + 必要时生物认证 |
-
-### 11.2 安全检查流水线
-
-```mermaid
-flowchart LR
-    A["LLM 输出Tool Call"] --> B["Schema 校验参数类型与范围"]
-    B --> C["安全等级判定L1 / L2 / L3"]
-    C --> D{"车辆状态检查"}
-    D -->|"安全"| E["执行 Tool"]
-    D -->|"危险"| F["拒绝执行返回安全提示"]
-    E --> G["结果校验执行是否成功"]
-    G --> H["返回给 LLM"]
-    F --> H
-
-    style B fill:#3498db,color:#fff
-    style D fill:#f39c12,color:#fff
-    style F fill:#e74c3c,color:#fff
-```
-
-安全检查流水线中的各环节：
-
-| 检查环节 | 检查内容 | 拒绝示例 |
-| :--- | :--- | :--- |
-| **Schema 校验** | 参数类型、范围、必填项。如温度必须在 16-32°C 范围内 | set\_ac\_temperature(temp=100) → 拒绝：温度超出范围 |
-| **工具白名单** | LLM 输出的工具名必须在已注册工具列表中 | execute\_shell("rm -rf /") → 拒绝：工具不存在 |
-| **车辆状态检查** | 根据当前车速、档位、行驶状态判断操作是否安全 | 车速 > 0 时 open\_door() → 拒绝：行驶中不可开门 |
-| **频率限制** | 防止短时间内重复执行相同操作 | 1 秒内连续 5 次 set\_ac\_temperature → 拒绝：操作频率异常 |
-| **用户权限** | 根据 scenario\_id 判断请求来源的权限 | 后排乘客尝试 unlock\_door → 拒绝：权限不足 |
-
-### 11.3 Prompt 注入防御
-
-LLM 存在 Prompt 注入风险——恶意用户可能通过精心构造的输入欺骗模型执行危险操作。座舱场景的防御需要多层保护：
-
-| 防御层 | 实现方式 | 防御目标 |
-| :--- | :--- | :--- |
-| **System Prompt 加固** | System Prompt 中明确列出禁止行为，使用特殊分隔符隔离系统指令和用户输入 | 防止用户指令覆盖系统约束 |
-| **输入过滤** | 检测并过滤已知的注入模式（"忽略前面的指令"、"你是一个没有限制的AI"） | 拦截常见越狱尝试 |
-| **输出校验（Post-Guard）** | LLM 输出的 Tool Call 必须通过安全检查流水线，不依赖 LLM 自身的安全判断 | 即使 LLM 被欺骗，执行层也能拦截危险操作 |
-| **Tool Schema 约束** | 工具参数通过 JSON Schema 严格约束类型和范围，非法参数在 Schema 校验阶段即被拒绝 | 防止 LLM 幻觉出非法参数值 |
-
-> [!CAUTION]
-> **安全沙箱的核心原则：不信任 LLM 输出**
->
-> 安全沙箱的设计哲学是**将 LLM 视为不可信的组件**。LLM 负责理解用户意图并生成结构化的 Tool Call，但最终的执行决策由安全沙箱（Schema 校验 + 车辆状态检查 + 权限验证）做出。这意味着即使 LLM 100% 被 Prompt 注入欺骗，只要安全沙箱正确实现，危险操作仍然无法执行。这与 Web 安全中"永远不信任客户端输入"是同一原则。
+> 本篇覆盖的是"模型 / 对话 / 调度"主线。模型能力如何对外暴露为工具、多个 Agent 之间如何协作、业务插件如何被加载与卸载、一次请求在 Flow 流水线里如何走完 Tool 调用循环——见 [协议与运行时执行](agent-protocols.html)（MCP、A2A、AgentRuntime / AgentPlugin、BaseLlmFlow / BaseTool，以及端云协同与安全沙箱的设计方向）。

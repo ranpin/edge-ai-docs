@@ -47,7 +47,8 @@ flowchart LR
 | :--- | :--- |
 | [座舱端侧 Agent 总览](projects/agent-framework/overview.html) | 框架整体架构与模块划分 |
 | [设备部署](projects/agent-framework/deploy.html) | QNN 推理框架、多平台构建矩阵、Service 量产部署 |
-| [aadkcore 核心框架](projects/agent-framework/agent-core.html) | 统一模型接口、模型调度、对话管理、RAG/MCP/A2A |
+| [aadkcore 核心框架](projects/agent-framework/agent-core.html) | 架构总览、统一模型接口、模型调度、多音区对话管理、RAG |
+| [协议与运行时执行](projects/agent-framework/agent-protocols.html) | MCP/A2A 协议、运行时与插件机制、LLM Flow 与 Tool Use、端云协同与安全沙箱 |
 | [场景 Agent 应用](projects/agent-framework/agent-group.html) | 场景 Agent 插件机制（车控/主动视觉/闲聊/GUI 等） |
 | [调试与工具链](projects/agent-framework/debug.html) | 精度/内存/Crash 排障、日志与监控 |
 

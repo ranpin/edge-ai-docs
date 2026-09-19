@@ -144,18 +144,31 @@
               "file": "cockpit/projects/agent-framework/agent-core.html",
               "badge": "Part 3",
               "status": "done",
-              "desc": "统一模型接口、模型调度器、多音区对话管理、RAG、MCP 工具协议、A2A 协议、运行时与插件机制",
+              "desc": "架构总览、统一模型接口（ModelInstance）、模型调度器（ModelScheduler）、多音区对话管理（ChatHistory）、RAG",
               "tags": [
                 "C++17",
+                "ModelScheduler",
+                "ChatHistory",
+                "RAG"
+              ]
+            },
+            {
+              "title": "协议与运行时执行",
+              "file": "cockpit/projects/agent-framework/agent-protocols.html",
+              "badge": "Part 4",
+              "status": "done",
+              "desc": "MCP 工具协议、A2A 协议、运行时与插件机制、LLM Flow 与 Tool Use、端云协同与安全沙箱（设计方向）",
+              "tags": [
                 "MCP",
                 "A2A",
-                "ModelScheduler"
+                "插件",
+                "Tool Use"
               ]
             },
             {
               "title": "场景 Agent 应用",
               "file": "cockpit/projects/agent-framework/agent-group.html",
-              "badge": "Part 4",
+              "badge": "Part 5",
               "status": "done",
               "desc": "车辆控制 Agent (30+ 技能)、主动视觉 Agent、闲聊 Agent、GUI Agent、Prompt 模板工程",
               "tags": [
@@ -167,7 +180,7 @@
             {
               "title": "调试与工具链",
               "file": "cockpit/projects/agent-framework/debug.html",
-              "badge": "Part 5",
+              "badge": "Part 6",
               "status": "done",
               "desc": "mini-dm、Snapdragon Profiler、qnn-profile-viewer、排障决策树",
               "tags": [
