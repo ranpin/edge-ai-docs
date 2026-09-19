@@ -129,6 +129,9 @@ def load_titles():
     try:
         d = json.load(open(os.path.join(ROOT, 'docs.json'), encoding='utf-8'))
         for cat in d.get('categories', []):
+            ov = cat.get('overview')
+            if ov:
+                titles[ov['file']] = ov['title']
             for doc in cat.get('general', []):
                 titles[doc['file']] = doc['title']
             for p in cat.get('projects', []):

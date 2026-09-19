@@ -6,6 +6,12 @@
       "name": "智能座舱",
       "id": "cockpit",
       "note": "座舱端侧大模型 · 学习与面试",
+      "overview": {
+        "title": "智能座舱端侧大模型：从领域知识到量产实践",
+        "desc": "通识 → 框架研发 → 岚图量产的完整故事线导读",
+        "file": "cockpit/overview.html",
+        "badge": "导读"
+      },
       "general": [
         {
           "title": "智能座舱面试指南",

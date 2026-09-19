@@ -100,6 +100,11 @@ function renderCategory(cat){
   if(cat.note)name.appendChild(el('span','cat-note',cat.note));
   catalog.appendChild(name);
 
+  // 置顶导读（overview）
+  if(cat.overview){
+    catalog.appendChild(grid([cat.overview]));
+  }
+
   // 上半：通用文档（网格）
   if(cat.general&&cat.general.length){
     catalog.appendChild(el('div','subhead','通用文档 · 基础与面试'));
