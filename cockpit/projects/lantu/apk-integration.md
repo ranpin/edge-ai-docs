@@ -22,11 +22,20 @@
 | :--- | :--- |
 | **加载并初始化 native SDK** | 按正确顺序加载 `libcdsprpc.so`、`libmodelinfer.so` 及全部 QNN/LLM 依赖，设置 DSP 运行环境 |
 | **常驻后台** | 以前台服务（`dataSync` 类型 + `START_STICKY`）形式存活，被杀后自动拉起 |
-| **服务化对外** | 在设备本地 `0.0.0.0:8080` 起一个 HTTP 服务，座舱 HMI / 语音 / 视觉等模块通过 HTTP 调用大模型 |
+| **服务化对外** | 在设备本地 `0.0.0.0:8080` 起一个 HTTP 服务（demo 姿态，见下方警示），座舱 HMI / 语音 / 视觉等模块通过 HTTP 调用大模型 |
 | **协议适配** | 兼容 OpenAI 风格 `/v1/chat/completions` 与自定义 `/inject` 协议，并完成多模态消息的类型判定与格式转换 |
 | **稳定性兜底** | 串行化请求、超时检测、native 卡死时进程级自愈重启 |
 
-它承载的模型是 **Qwen3-Omni-4B**（INT4 量化 + 场景 LoRA），模型文件不打包进 APK，而是放在车机固定路径 `/AI/vllm_sdk/models` 下，由 SDK 在 init 阶段读取（见 第 3 节）。
+> [!WARNING]
+> **`0.0.0.0:8080` 是 demo 阶段的选择，车规安全视角是硬伤**
+>
+> 绑定 `0.0.0.0` 意味着**所有网络接口**——车机同网段的任意设备都能访问这个消耗 NPU、可被任意 payload（最大 15MB）打、且承载舱内图像的推理端点，而端点**没有任何鉴权**。demo 期为联调方便（任意主机 curl 直连 / `adb forward`）可以接受；**量产必须收敛**：
+>
+> ① 绑定改回环 `127.0.0.1`（座舱调用方本就同机，回环绑定不影响 `adb forward` 联调）；② 确需跨主机访问时加鉴权（token / mTLS）；③ 用 SELinux 域策略限制可达该端口的进程。
+>
+> 对比：aiservice 形态的 `VoyahAIService` 绑定 `127.0.0.1:8090`，两形态的网络安全姿态**不一致**，迁移时应以回环绑定为基线。详见 [运维、安全与功能安全](ops-security.html) 的 5.3 节。
+
+它承载的模型是 **Qwen3-Omni-4B**（内部定制型号 `qwen3-omni-4b`，INT4 量化 + 场景 LoRA）。模型文件不打包进 APK，而是放在车机固定路径下，且**分两个根目录**：运行时配置/模板根 `/AI/vllm_sdk/models`（`init()` 的入参）与模型权重/Context Binary 根 `/AI/VLM/models/qwen3-omni-4b`（由配置中 `model_root` 定位）。谁读谁、权威目录树见 3.3 节与 [设备部署与上车流程](device-deployment.html) 的 2.2 节。
 
 ### 1.2 端到端调用链
 
@@ -79,7 +88,7 @@ flowchart TB
 | 类 | 类型 | 职责 |
 | :--- | :--- | :--- |
 | `MyApplication` | Application | 进程级初始化：按序加载 native 库、设置 `ADSP_LIBRARY_PATH`（早于任何 Activity/Service） |
-| `MainActivity` | Activity (Launcher) | 界面入口；初始化 `BanmaModelInference` 并拉起前台服务（UI 推理路径默认注释，仅作演示） |
+| `MainActivity` | Activity (Launcher) | 界面入口；只负责拉起前台服务（`startForegroundService`）。native init 统一收敛到 `TestHttpEndpoint.initOnce()` 单点（2026-08-17 修复此前 MainActivity / Service 各 init 一次、两个 handle 争抢 NPU 的问题，见 4.2）；UI 推理路径默认注释，仅作演示 |
 | `TestInjectService` | Service (foreground) | 常驻前台服务；持有推理实例与 HTTP 端点；请求队列串行处理；`START_STICKY` 自愈 |
 | `TestHttpEndpoint` | NanoHTTPD | HTTP 服务核心（约 2200 行）：协议解析/转换、类型判定、图片提取、同步/SSE 响应、超时自愈 |
 | `BanmaModelInference` | JNI 封装 | `AutoCloseable`；暴露 `init / inference / inferenceWithImage / close`，内部持有 native handle |
@@ -173,18 +182,20 @@ nativeLibDir                      // APK 自身 jniLibs 解压目录
 
 设置通过 `Os.setenv("ADSP_LIBRARY_PATH", ..., true)` 完成。C++ 侧 `nativeInit` 在调用 SDK `init()` 前会**用同值再设一次**作为兜底（正常路径下 `MyApplication` 已设过），两侧字面量必须保持一致——这正是把它收敛到 `NativeEnv` 单一构造点的原因。
 
-### 3.3 模型路径
+### 3.3 模型路径：配置根，不是权重根
 
-SDK 约定模型放在固定绝对路径，APK 不做拷贝（模型体积大，随 APK 打包不现实）：
+SDK 约定模型放在固定绝对路径，APK 不做拷贝（模型体积大，随 APK 打包不现实）。注意 `init()` 的入参是**运行时配置/模板根**，权重在另一个根目录下——两个根目录的权威目录树与「谁读谁」见 [设备部署与上车流程](device-deployment.html) 的 2.2 节：
 
 ```
 // TestInjectService.java:81
-String modelPath = "/AI/vllm_sdk/models";   // SDK 从该目录查找 qwen3-omni-4b/model.json
-infer.init(modelPath, nativeLibraryDir);
+String modelPath = "/AI/vllm_sdk/models";   // 运行时配置根：config/*.json + template/*.yaml
+infer.init(modelPath, nativeLibraryDir);    // 权重/Context Binary 在 /AI/VLM/models/qwen3-omni-4b，
+                                            // 由 multi_lora_runtime_config.json 的 model_root 定位
 ```
 
 > [!NOTE]
 > - 早期的 `infer.requestNpuPermission("vllm")` 已随 NPU 接口停用一并删除（见 2.2）
+> - GenAI 形态下 SDK 读配置后按 `model_root` 到 `/AI/VLM/models/qwen3-omni-4b` 装载 Context Binary（进程内 QNN/HTP）
 > - AIService 形态下 `init()` 只读配置、不载模型，约 **25ms** 返回；模型由 `VoyahAIService` 启动时扫描 `/AI/VLM/models` 装载（见 [AIService 后端集成与重构](aiservice-integration.html)）
 
 ## 4. 前台服务与自愈（TestInjectService）
@@ -196,7 +207,7 @@ infer.init(modelPath, nativeLibraryDir);
 ```
 <!-- AndroidManifest.xml -->
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />  <!-- Android 14+ 必须声明具体类型 -->
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />  <!-- 为 Android 14+ 提前声明 -->
 
 <service android:name=".TestInjectService"
          android:exported="true"
@@ -207,22 +218,27 @@ infer.init(modelPath, nativeLibraryDir);
 > [!NOTE]
 > **两个 manifest 细节**
 >
-> ① Android 14（API 34）起前台服务必须声明具体的 `foregroundServiceType` 及对应权限，这里用 `dataSync`。② `<uses-native-library>` 声明对系统库 `libcdsprpc.so` 的依赖（`required="false"` 表示缺失也不阻止安装，由运行期 `loadLibrary` 兜底报错）。
+> ① 「前台服务必须声明具体 `foregroundServiceType` 及对应权限」这条强制是**按 targetSdk 34+ 触发**的：本 APK targetSdk 33（见 9.1），跑在 Android 14 设备上并**不**触发强制校验。这里声明 `dataSync` 类型 + `FOREGROUND_SERVICE_DATA_SYNC` 权限是**为兼容 Android 14+（targetSdk 升到 34+ 时）的提前声明**，向前兼容、无副作用。② `<uses-native-library>` 声明对系统库 `libcdsprpc.so` 的依赖（`required="false"` 表示缺失也不阻止安装，由运行期 `loadLibrary` 兜底报错）。
 
 ### 4.2 onCreate 三步走
 
 ```mermaid
 flowchart LR
-    A["onCreate()"] --> B["initializeComponents()new BanmaModelInferenceinit() 重试 3 次"]
-    B --> C["startHttpEndpoint()NanoHTTPD :8080start(30000, false)"]
-    C --> D["startForegroundService()创建通知渠道startForeground()"]
+    A["onCreate()"] --> B["startForegroundService()创建通知渠道startForeground() 必须第一步"]
+    B --> C["startHttpEndpoint()NanoHTTPD :8080start(30000, false)含 GET /health"]
+    C --> D["model-init-thread 子线程initializeComponents()initOnce() 重试 3 次"]
     style A fill:#4361ee,color:#fff
-    style B fill:#eef2ff
+    style B fill:#e8f5e9
     style C fill:#eef2ff
-    style D fill:#e8f5e9
+    style D fill:#eef2ff
 ```
 
-**初始化重试**：native init 可能因 DSP 尚未就绪、资源竞争等偶发失败，`initializeComponents()` 用 `for (i=0;i<3;i++)` 循环重试，每次间隔 500ms，并分别捕获 `UnsatisfiedLinkError` / `Exception` / `Throwable`。三次全失败则把 `infer` 置 null（HTTP 层会惰性重建）。
+> [!NOTE]
+> **这个顺序是 2026-08-17 修出来的（commit "fix: boot order & double init"）**
+>
+> 最初实现把 `startForeground()` 排在 10~30s 的模型加载**之后**，超出 Android 对前台服务启动的 5 秒限制（`ForegroundServiceDidNotStartInTimeException`），进程被反复杀死，症状是 curl 8080 返回 HTTP/0.9；同时 `MainActivity` 与 `TestInjectService` 各做一次 native `init()`，两个 handle 争抢 NPU。修复后：① `startForeground()` 提到 `onCreate()` **首行**；② HTTP 端口先起来（含 `GET /health`，可立即探活）；③ 模型加载放 `model-init-thread` 子线程，避免阻塞主线程 ANR；④ native init 收敛为 `TestHttpEndpoint.initOnce()` **单次**调用。
+
+**初始化重试**：native init 可能因 DSP 尚未就绪、资源竞争等偶发失败，`initializeComponents()` 在子线程用 `for (i=0;i<3;i++)` 循环重试，每次间隔 500ms，捕获 `Exception` / `Throwable`；`initOnce()` 内部在 init 失败时把 `infer` 置 null，支持 HTTP 层惰性重建与后续重试。
 
 **START\_STICKY**：`onStartCommand()` 返回 `START_STICKY`，服务被系统杀死后会被重新创建（重新走 `onCreate`），这是「自愈重启」能成立的系统级前提（见 第 8 节）。
 
@@ -230,19 +246,29 @@ flowchart LR
 
 服务内维护 `ConcurrentLinkedQueue<RequestTask>` + `isProcessing` 标志 + `triggerLock`，保证队列处理串行触发；实际执行交给 `TaskScheduler` 线程池。每个任务用 `CompletableFuture<String>` 回传结果。（注：HTTP 层自身还有一把 `requestProcessingLock` 串行锁，二者共同确保同一时刻只有一个推理在跑——NPU 是独占资源。）
 
+> [!NOTE]
+> **队列深度 / 背压 / 拒绝策略：现状与量产差距**
+>
+> - **现状**：`ConcurrentLinkedQueue` 是**无界队列**——没有深度上限、没有排队超时、没有针对「队列过长」的显式拒绝。实际的背压来自三处：① 全局串行锁保证同一时刻只有一个推理；② 同步路径 35s 超时（见 第 8 节）；③ SSE 路径 `BlockingQueue.put()` 队满阻塞（见 5.4）。唯一的显式拒绝是**模型未就绪**（`infer == null`）时推理端点直接返回 503 `Model is still initializing`，不入队。
+> - **量产差距**：持续高压下队列积压只表现为后续请求等待时间变长，客户端只能靠自身超时兜底。需要补：队列深度上限 + 超限快速拒绝（429/503 + `Retry-After`）、排队等待时间上限（超时即弃并回错误帧）、以及请求级优先级调度（SDK 协议已有 `priority` 字段，见 6.3 的 DataMessage 表，HTTP 层尚未映射）。
+
 ## 5. HTTP 服务层（TestHttpEndpoint）
 
-这是整个 APK 最核心、代码量最大的类（约 2000 行），基于 `NanoHTTPD` 实现，监听 `0.0.0.0:8080`。
+这是整个 APK 最核心、代码量最大的类（约 2200 行），基于 `NanoHTTPD` 实现，监听 `0.0.0.0:8080`——该绑定的安全问题是 demo 姿态、量产必须收敛，见 1.1 的警示框。
 
 ### 5.1 请求处理管线
 
-只接受 `POST /inject` 与 `POST /v1/chat/completions` 两个端点，其余返回 404。`serve()` 的处理流程：
+接受三个端点：`GET /health`（轻量健康检查，返回 `status / model_ready / last_inference / last_inference_time / uptime_seconds` 5 个扁平字段，不进推理链路）与 `POST /inject`、`POST /v1/chat/completions`；其余返回 404。模型未就绪（`infer == null`）时推理端点直接返回 **503**，显式拒绝、不入队。`serve()` 的处理流程：
 
 ```mermaid
 flowchart TB
-    S["serve(session)"] --> M{"Method=POST 且URI ∈ {/inject, /v1/chat/completions}?"}
+    S["serve(session)"] --> H{"GET /health ?"}
+    H -->|是| HOK["200 + 健康 JSONmodel_ready / uptime 等 5 字段"]
+    H -->|否| M{"Method=POST 且URI ∈ {/inject, /v1/chat/completions}?"}
     M -->|否| E404["404 + 错误 JSON"]
-    M -->|是| R["读取 body按 Content-Length 循环读满上限 15MB 防 OOM"]
+    M -->|是| RDY{"infer 就绪?"}
+    RDY -->|否| E503["503 Model is still initializing"]
+    RDY -->|是| R["读取 body按 Content-Length 循环读满上限 15MB 防 OOM"]
     R --> P{"已有标准 messages 数组?"}
     P -->|是| KEEP["原样透传（不重新序列化，保 UTF-8）"]
     P -->|否| CONV["convertToMessagesFormat()history / query_parts / query → messages"]
@@ -256,11 +282,15 @@ flowchart TB
     ST -->|true| SSE["handleInjectRequestStream()StreamingInputStream + text/event-stream"]
 
     style S fill:#4361ee,color:#fff
+    style HOK fill:#2ecc71,color:#fff
     style EBAD fill:#e74c3c,color:#fff
     style E404 fill:#e74c3c,color:#fff
+    style E503 fill:#e74c3c,color:#fff
     style SYNC fill:#e8f5e9
     style SSE fill:#e8f5e9
 ```
+
+（探活小贴士：等就绪要 `grep '"model_ready":true'`，不能只 grep `model_ready`——它在 `false` 时也命中，会误判就绪。）
 
 > [!WARNING]
 > **两个防御性设计**
@@ -323,15 +353,70 @@ public void writeChunk(String text) { queue.put(text.getBytes(UTF_8)); }
 }
 ```
 
-## 6. JNI 桥接层（modelinfer.cpp）
+## 6. JNI 桥接层与 SDK 接口面
 
-`BanmaModelInference` 的每个 native 方法都在 `modelinfer.cpp` 中有对应实现，核心是 `nativeInference`。
+`BanmaModelInference` 的每个 native 方法都在 `modelinfer.cpp` 中有对应实现，核心是 `nativeInference`。本节同时收录 SDK 接口面（`ModelInference` API）与 `DataMessage` 结构——[设备部署与上车流程](device-deployment.html) 不再重复这部分内容，只讲构建 / push / 设备目录 / 运行 / 验证。
 
 ### 6.1 句柄模型
 
 `nativeCreate()` 在堆上 `new banma::ModelInference()`，把指针 `reinterpret_cast<jlong>` 返回给 Java 作为 `nativeHandle`；后续所有调用把该 long 转回指针。`nativeDestroy()` 负责 `delete`。Java 侧 `BanmaModelInference` 实现 `AutoCloseable`，`close()` 与 `finalize()` 双保险释放。
 
-### 6.2 构造 DataMessage
+### 6.2 SDK 接口面（ModelInference API）
+
+JNI 层对接 SDK 的唯一入口是 `banma::ModelInference`（`include/model_inference.h`）。2026-08 接口停用删除后（见 2.2），头文件仅剩 4 个方法（`setSTRStatus` 亦注释停用）：
+
+| 方法 | 参数 | 返回值 | 说明 |
+| :--- | :--- | :--- | :--- |
+| `init` | `model_path` (string) | bool | 初始化模型。`model_path` 指向**运行时配置根** `/AI/vllm_sdk/models`（不是权重根，见 3.3），内部加载 runtime\_config.json 并初始化 MsgDeliverImpl |
+| `inference_msg` | `msg`, `stream`, `replyHandler` | bool | 发送推理请求。msg 包含文本/图像/音频输入，stream 控制流式输出，replyHandler 接收推理结果 |
+| `stopInferenceTask` | — | bool | 停止当前推理任务；无运行任务时返回 false |
+| `releaseModelResources` | — | bool | 释放模型资源（推理进行中返回 false）；释放后需重新 `init` |
+
+app 侧实际只调 `init` + `inference_msg`；`stopInferenceTask` / `releaseModelResources` 已实现但 app 尚未接入（打断与资源释放是后续工作）。
+
+不经 JNI 的最小调用示例（`android_test` 与厂商 Example 同形）：
+
+```
+#include "model_inference.h"
+#include "data_message.h"
+
+banma::ModelInference model;
+
+// 1. 初始化（入参是配置根；权重由配置中的 model_root 定位）
+model.init("/AI/vllm_sdk/models");
+
+// 2. 构造推理请求
+banma::DataMessage msg;
+msg.scenario_id = banma::OAI_INFERENCE;  // 通用推理
+msg.content = "今天天气怎么样？";
+msg.msg_type = banma::TEXT;
+msg.request_type = banma::REQUEST;
+msg.stream = true;
+
+// 3. 发送推理请求（流式回调）
+model.inference_msg(msg, true, [](const std::string& result, bool is_finished) {
+    std::cout << result;                 // 每次返回的文本片段
+    if (is_finished) std::cout << std::endl;
+});
+```
+
+### 6.3 DataMessage 结构
+
+`banma::DataMessage`（`include/data_message.h`）是推理请求的唯一输入契约：
+
+| 字段 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| `scenario_id` | uint16 | 场景 ID：0=OAI 推理, 100=车内遗留物, 200=着装识别, 300=舱外问答（详见 7.1） |
+| `content` | string | 文本内容（用户查询 / 协议 JSON） |
+| `image_info` | ImageInfo | 主图像数据（支持 JPEG/YUV\_NV12/RGB/BGR/RGBA 等格式） |
+| `extra_images` | vector<ImageInfo> | 附加图像帧（多帧推理场景） |
+| `audio_info` | AudioInfo | 音频数据（PCM 格式，含采样率/位深度） |
+| `msg_type` | MsgType | 消息类型：TEXT / IMAGE / AUDIO / TEXT\_IMAGE / TEXT\_AUDIO 等组合（判定规则见 5.3） |
+| `request_type` | RequestType | REQUEST=推理 / CONTEXT=上下文 / PREPROCESS=预处理 / CANCEL=取消 |
+| `priority` | uint16 | 优先级：0=LOW, 1=NORMAL, 2=HIGH, 3=CRITICAL |
+| `stream` | bool | 是否流式返回结果 |
+
+### 6.4 构造 DataMessage
 
 ```
 banma::DataMessage msg;
@@ -349,7 +434,12 @@ if (imageData != nullptr && imageFormat >= 0) {
 }
 ```
 
-### 6.3 跨线程回调（关键）
+> [!NOTE]
+> **`resized_*` 按场景 / VIT 档位而定，不是全局固定值**
+>
+> SDK 侧是多 VIT 两档：舱内场景（100/200）走 `veg_448_448`（448×448 单档），舱外视觉问答（300）走 `veg_1024_768`（1024×768）。`modelinfer.cpp` 里硬编码的 448×448（代码注释即「默认 resize 尺寸」）只对应**舱内单档**路径；舱外大图档位由 SDK 按输入路由（见 [GenAI 方案架构总览](genai-architecture.html) 的多 VIT 动态切换）。读这段示例时不要以为「所有图都 resize 到 448」。
+
+### 6.5 跨线程回调（关键）
 
 SDK 推理在 native 工作线程产出结果，回调必须回到 JVM。实现要点：
 
@@ -462,7 +552,7 @@ flowchart TB
 
 | 配置 | 值 / 说明 |
 | :--- | :--- |
-| `compileSdk / minSdk / targetSdk` | 33（Android 13） |
+| `compileSdk / minSdk / targetSdk` | 33（Android 13）。注意 4.1 的前台服务类型/权限声明是**为 Android 14+（targetSdk 34+）提前声明**——本 APK targetSdk 33，跑在 Android 14 设备上并不触发该校验 |
 | `ndk.abiFilters` | `"arm64-v8a"`（仅 64 位 ARM，匹配车机 SoC） |
 | `externalNativeBuild.cmake` | 指向 `src/main/cpp/CMakeLists.txt`，编译 `libmodelinfer.so` |
 | `jniLibs.srcDirs` | `src/main/jniLibs`（预编译 .so 入库目录） |
@@ -490,21 +580,31 @@ flowchart LR
 
 脚本几处稳健性设计值得借鉴：归档名解析出 `buildType` 与 12 位时间戳并与 `BUILD_TYPE` 交叉校验，防止装错包；归档「先写 `.part` 再 `mv`」避免中断留下半个备份；空间检查**只报不清**（保护车机数据）；安装失败用 `&& / ||` 正确捕获退出码（某些车机 adb 即使失败也返回 0，需同时 grep `Failure`）。
 
+### 9.3 交付指标（实测）
+
+| 指标 | GenAI 形态（sdk-genai-qnn246） | AIService 形态（sdk-aiservice） | 说明 |
+| :--- | :--- | :--- | :--- |
+| APK 包体 | 约 102.7 MB | 约 35.6 MB | NPU/profile 接口停用后（113.1→102.7 / 107.9→35.6，2026-08 实测） |
+| jniLibs 数量 | 37 个 `.so` | 10 个 `.so` | 差异即进程内 QNN/LLM 栈（见 第 3 节） |
+| native init 耗时 | 10~30s 量级（载模型 Context Binary） | 约 25ms（只读配置） | GenAI 形态的耗时正是 4.2 启动顺序必须 `startForeground` 先行的原因 |
+| APK 冷启动时间 | 未系统测量（待补） | 未系统测量（待补） | 应覆盖「进程冷启动 → `/health` ready」与「被杀后 `START_STICKY` 拉起 → ready」两条路径 |
+
 ## 10. 工程要点小结
 
 > [!TIP]
-> **把 SDK 装进 APK 的 8 个关键点**
+> **把 SDK 装进 APK 的 9 个关键点**
 >
-> **① 初始化位置**：底层库加载与 `ADSP_LIBRARY_PATH` 放 `Application.onCreate()`，保证任意拉起路径都就绪。  
-> **② 加载顺序**：先 `cdsprpc`（FastRPC）后 `modelinfer`（JNI）。  
-> **③ Skel 不 strip**：`doNotStrip libQnnHtpV81Skel.so`，否则 DSP 侧加载失败。  
-> **④ 常驻 + 自愈**：前台服务 `dataSync` + `START_STICKY`；native 卡死靠 `killProcess` 干净重启。  
-> **⑤ 服务化**：NanoHTTPD :8080，兼容 OpenAI 协议，跨语言可调用。  
-> **⑥ 进 C++ 前校验**：body 读满 + fastjson 校验，坏数据绝不入 native。  
-> **⑦ JNI 回调**：全局引用 + AttachCurrentThread + 末帧释放，三件套缺一不可。  
+> **① 初始化位置**：底层库加载与 `ADSP_LIBRARY_PATH` 放 `Application.onCreate()`，保证任意拉起路径都就绪。
+> **② 加载顺序**：先 `cdsprpc`（FastRPC）后 `modelinfer`（JNI）。
+> **③ Skel 不 strip**：`doNotStrip libQnnHtpV81Skel.so`，否则 DSP 侧加载失败。
+> **④ 常驻 + 自愈**：前台服务 `dataSync` + `START_STICKY`；native 卡死靠 `killProcess` 干净重启。
+> **⑤ 服务化**：NanoHTTPD :8080，兼容 OpenAI 协议，跨语言可调用。
+> **⑥ 进 C++ 前校验**：body 读满 + fastjson 校验，坏数据绝不入 native。
+> **⑦ JNI 回调**：全局引用 + AttachCurrentThread + 末帧释放，三件套缺一不可。
 > **⑧ NPU 独占**：全局串行锁保证同一时刻仅一个推理在跑。
+> **⑨ 量产安全收敛**：`0.0.0.0:8080` 无鉴权是 demo 姿态，量产改回环绑定 / 加鉴权 / SELinux 域限制可达进程（见 1.1 警示）。
 
 > [!NOTE]
 > **与本篇相关的其他文档**
 >
-> QNN 框架与 ISP 数据流见 [设备部署](../agent-framework/deploy.html)；aadkcore / agent\_group 内部实现见 [aadkcore 核心框架](../agent-framework/agent-core.html) / [场景 Agent 应用](../agent-framework/agent-group.html)；排障工具链（mini-dm、Snapdragon Profiler、tombstone 分析）见 [调试与工具链](../agent-framework/debug.html)；硬件底层（SA8397P、Hexagon、FastRPC、Hypervisor）见 [硬件与系统底层](../../general/hardware.html)；想从零理解本篇涉及的 Android 四大组件与 JNI 原理，见 [Android 开发 & JNI 基础](../../general/android-jni.html)。
+> SDK 构建、adb push、设备目录树（含两个模型根目录谁读谁）、部署成功判据与 SELinux 域差异见 [设备部署与上车流程](device-deployment.html)；QNN 框架与 ISP 数据流见 [设备部署](../agent-framework/deploy.html)；aadkcore / agent\_group 内部实现见 [aadkcore 核心框架](../agent-framework/agent-core.html) / [场景 Agent 应用](../agent-framework/agent-group.html)；排障工具链（mini-dm、Snapdragon Profiler、tombstone 分析）见 [调试与工具链](../agent-framework/debug.html)；硬件底层（SA8397P、Hexagon、FastRPC、Hypervisor）见 [硬件与系统底层](../../general/hardware.html)；想从零理解本篇涉及的 Android 四大组件与 JNI 原理，见 [Android 开发 & JNI 基础](../../general/android-jni.html)。

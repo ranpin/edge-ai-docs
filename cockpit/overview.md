@@ -56,14 +56,13 @@ flowchart LR
 
 | 文档 | 讲什么 |
 | :--- | :--- |
-| [GenAI 方案架构总览](projects/lantu/genai-architecture.html) | GenAI 方案的系统架构与优化 |
-| [AIService 后端集成与重构](projects/lantu/aiservice-integration.html) | 岚图自研 AIService 推理后端的集成 |
-| [APK 集成与端侧服务化](projects/lantu/apk-integration.html) | 宿主 APK 内部结构、JNI、HTTP 服务化 |
-| [设备部署与上车流程](projects/lantu/device-deployment.html) | SDK 构建 → 设备目录 → adb push → 运行 |
-| [效果及性能测试](projects/lantu/effect-performance.html) | 效果指标、性能指标、系统监控 |
-| [性能优化与稳定性](projects/lantu/perf-optimization.html) | 优化细节、存储、稳定性 |
-| [GenAI vs AIService 对比](projects/lantu/genai-vs-aiservice.html) | 两套推理后端端到端耗时对比 |
-| [运维及安全](projects/lantu/ops-security.html) | 设备安装、系统升级、OTA/模型加密设计 |
+| [GenAI 方案架构总览](projects/lantu/genai-architecture.html) | 模型制备链路、多 VIT、LoRA/prefix 映射、三阶段推理 |
+| [AIService 后端集成与重构](projects/lantu/aiservice-integration.html) | 岚图自研 AIService 推理后端的集成与验证 |
+| [APK 集成与端侧服务化](projects/lantu/apk-integration.html) | 宿主 APK 内部结构、JNI 与 ModelInference API、HTTP 服务化、安全暴露面 |
+| [设备部署与上车流程](projects/lantu/device-deployment.html) | SDK 构建 → 设备目录 → adb push → 运行 → 部署验证、两个模型根目录 |
+| [效果、性能与稳定性](projects/lantu/effect-perf-stability.html) | 效果指标、性能指标、优化量化贡献、热/内存/稳定性 |
+| [两方案选型决策与端到端对比](projects/lantu/genai-vs-aiservice.html) | GenAI vs AIService 选型决策表 + 端到端对比 |
+| [运维、安全与功能安全](projects/lantu/ops-security.html) | 运维排查、SELinux、功能安全、数据隐私、OTA、模型加密与密钥管理 |
 
 ## 3. 一条完整的落地链路
 

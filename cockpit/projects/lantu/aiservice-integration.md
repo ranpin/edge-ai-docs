@@ -151,6 +151,11 @@ graph TB
   - 非流式：`sendAsync(url, "", body)`
   - 流式：`streamAsyncRaw(url, "", body, chunk_cb)`
 
+> [!NOTE]
+> **端点鉴权与隔离**
+>
+> `VoyahAIService` 绑定 `127.0.0.1`（而非 `0.0.0.0`），外网不可直达，比绑定全网卡更安全。但**车机上任意本地进程仍能打这个消耗 NPU 的端点**——demo 阶段无鉴权（`api_host_` 写死、请求不带 token）；量产靠 SELinux 域隔离：岚图 App 是 system/vendor 应用，普通 `untrusted_app` 域进程受策略限制（参见难点 5.7）。
+
 ### 3.2 初始化链路 initFromConfig
 
 `initFromConfig(config_path)` 做三件事：
@@ -285,6 +290,8 @@ sequenceDiagram
 > - 无 `/metrics` 端点
 >
 > 但 **1 个 SSE 内容帧 = 1 个 token**，`tracked_cb` 数回调次数即 `output_tokens`——当前唯一可靠的产出计量口径。
+>
+> ⚠️ 这是**当前 VoyahAIService 版本的实测行为**（生产帧内容均为单个 BPE token：单个汉字 / 短 subword / 单个数字，最长 10 字节、从不含短语），**不是 SSE / OpenAI 协议的普遍保证**。服务端若升级为多 token 合帧或半 token 拆帧，此口径即失效，升级后需重新校验。
 
 ### 3.7 未接的能力
 
@@ -292,6 +299,32 @@ sequenceDiagram
   - 服务端其实已支持打断与优先级：`POST /responses/{id}/cancel`、`extras.priority ∈ low|normal|high|critical`（仅 `critical` 抢占）
   - 要接打断就是接这套
 - `generateContentAsync()` 返回一个已 close 的空 receiver，本形态不走它
+
+### 3.8 HTTP 一跳的失败面与开销量化
+
+aiservice 形态比 genai 进程内直调多一跳本机 HTTP。这一跳既是开销来源，也是失败面。
+
+**失败面与已知处理**：
+
+| 失败 | 已知行为 | 超时/重试（`src/utils/http_client.cpp` 已核实） |
+| :--- | :--- | :--- |
+| 连接拒绝（服务未启动 / 重启中） | init 阶段 `loadModelInService` 只向 `/models/load` POST 一次 | `CURLOPT_CONNECTTIMEOUT=10s`；**无退避重试**（只 POST 一次，失败即抛错） |
+| 推理超时 | — | 非流式 `CURLOPT_TIMEOUT=120s`（总超时）；流式路径不设总超时，靠低速断流兜底 |
+| 流中断 | `parseSSEFrames` 在流结束时对非空 `sse_buffer_` 补 `\n\n` flush 一次（3.6） | 流式 `CURLOPT_LOW_SPEED_LIMIT=1 B/s` + `CURLOPT_LOW_SPEED_TIME=60s`（60 秒收不到 ≥1 字节即中止）；**无自动重连/续传** |
+| 空答案（prompt 过长） | 服务端回 `finish_reason:"length"` + 0 个内容 token 且无 error；`finish_reason` 目前被 `parseSSEFrames` 丢弃（免费可得、未接的诊断信号） | — |
+
+> [!WARNING]
+> 难点 5.8 的 **50ms 超时在旧 UDS/NPU 注册通道**（`/tmp/voyah_qnn_service.sock`），**不在 HTTP 推理路径上**。HTTP 路径的超时已对 `src/utils/http_client.cpp`（`lantu_aiservice_dev`）核实：connect 10s、非流式总超时 120s、流式低速断流 1 B/s × 60s，且**两条路径均无自动重试**——连接拒绝/断流后直接失败上抛，重试与否由调用方决定。
+
+**单独量化这一跳开销的方法（loopback 空载基线）**：
+
+两形态端到端差值不能直接归因给 HTTP 一跳（见 5.3：两形态是不同模型包）。要单独量化这一跳：
+
+1. **空载 RTT 基线**：用 `curl -w '%{time_connect} %{time_starttransfer} %{time_total}'` 打一个不触发推理的最小请求（如 `GET /v1/models`），量 loopback 上 TCP 连接 + HTTP 往返耗时——这是 HTTP 一跳固定开销的下界
+2. **从端到端里减**：aiservice 形态 `infer_total` 减去该下界，剩余 ≈ 服务侧调度 + prefill + decode
+3. **同模型包 A/B**（真正的纯后端对比）：两形态用同一模型版本生成的包，端到端差值才是后端架构开销（HTTP 一跳 + 服务侧调度 vs 进程内 QNN 直调）
+
+方法 1/2 随时可做；方法 3 的前提（同一模型包）尚不具备，是跨形态对比的已知缺口（见 5.3 与 [GenAI vs AIService 选型决策与端到端对比](genai-vs-aiservice.html)）。
 
 ## 4. 重构：与 genai/QNN 形态解耦
 
@@ -467,16 +500,51 @@ sequenceDiagram
 
 ## 6. 验证与结果
 
+本节给 **aiservice 形态自身**的验证结果（效果一致性 + 性能口径）。GenAI / AIService 两形态的端到端耗时横向对比与多维选型决策，见独立篇 [GenAI vs AIService 选型决策与端到端对比](genai-vs-aiservice.html)。
+
+### 6.1 效果验证
+
+**三链路跑通率**（`android_test --agents 100,200,300`，11 个 prefix 全开）：
+
+| 日期 | Agent100 | Agent200 | Agent300 | 备注 |
+| :--- | :--- | :--- | :--- | :--- |
+| 2026-08-07 | 7/7 | 4/4 | 17/17 | 上机首次全通 |
+| 2026-08-11 | 7/7 | 4/4 | 17/17 | prefix 缓存修复后终态；66/66 请求都带 `prefix_cache_path`（0 条漏） |
+
+**对供应商最新 BanmaExample**（16 可比例）：
+
+- stage1 原始 `bbox_2d`：**16/16 逐字节同**
+- stage2 / stage3：**各 15/16**
+- 唯一分歧 `animal_0`：stage1 输出与对方完全相同，差异出在我方 `outcar_process.hpp` 对「动物」的 `min 80×80` 门限（实测 83×68px）触发 `clear_bbox` 并跳过 stage2——**已确认以我方为准，属设计差异非回归**
+
+**对我方 08-07 基线**（08-11 终态）：Agent100 逐字段全同、Agent200 语义全同（仅 `*_conf` 抖动）、Agent300 16/17 全同（唯一变化「交通标志→交通标识」，且与参考实现一致）。
+
+**确定性**：同配置 Agent300 连跑两轮，stage1/2/3 **17/17 逐字节同**，仅 `confidence` 展示值抖动。
+
 > [!NOTE]
-> **本节待补充**
+> stage3 grammar 的 A/B 实测（带 grammar 仅 2/17 完整句子 → 去掉后 17/17 干净）见难点 5.5；那是「结果错乱」类问题的定位证据，不计入上表的一致性跑通率。
+
+### 6.2 性能验证
+
+**TTFT 分解**（2026-08-18 上机实测，只改 prompt 长度）：
+
+| 段 | 15 字 | 415 字 | 2015 字 | 行为 |
+| :--- | :--- | :--- | :--- | :--- |
+| 请求 → 开场帧（受理） | 26–36ms | 26–36ms | 26–36ms | 与 prompt 长度无关 |
+| 开场帧 → 首内容 token（prefill） | 79ms | 139ms | 539ms | 随 prompt 长度线性增长 |
+
+即 TTFT 可拆成 `受理` + `prefill` 两段；开场帧（`delta:{"role":"assistant"}`）标记「服务端已受理」而非 prefill 完成（详见难点 5.6）。
+
+**prefix 缓存提速**（08-11 全开 vs 08-07）：Agent300 **−7.9%**、Agent200 **−10.8%**、Agent100 **−0.1%**（新增 prefix 的 step2 −2.2%）。
+
+**输出 token 计量**：服务端 `usage` 恒 0、`max_tokens` 被忽略、无 `/metrics`（详见 3.6）；当前唯一可靠口径是 **1 个 SSE 内容帧 = 1 个 token，数 `tracked_cb` 回调次数**（该口径绑定当前服务端版本，升级后需重新校验）。
+
+**逐场景端到端耗时**（`infer_total`，2026-09-16，9 场景 28 用例）：见 [GenAI vs AIService 选型决策与端到端对比](genai-vs-aiservice.html) 的 aiservice 列。
+
+> [!WARNING]
+> **逐阶段（stage1/2/3）TTFT/TPS/tokens 分解：待补**
 >
-> aiservice 形态的逐场景效果指标与完整性能数据尚未齐备，本节先留占位。已知锚点：
->
-> - **上机三链路全通**：Agent100 7/7、Agent200 4/4、Agent300 17/17（2026-08-07，11 个 prefix 全开）
-> - **对供应商最新 BanmaExample**（16 可比例）：stage1 原始 `bbox_2d` 16/16 逐字节同，stage2/stage3 各 15/16
->   - 唯一分歧 `animal_0`：我方 `outcar_process.hpp` 对「动物」的 `min 80×80` 门限（实测 83×68px）触发 `clear_bbox`，**已确认以我方为准，属设计差异非回归**
-> - 跨形态对比口径见 5.3
-> - 性能逐场景 + stage 分解数据源在 `performance_test_result.xlsx`，待整理后补入
+> `performance_test_result.xlsx` 现有逐阶段分解只覆盖 **GenAI 形态**（见《效果及性能测试（GenAI 方案）》第四节）；**aiservice 形态**的逐场景逐阶段分解尚未整理。缺口在于：服务端不提供逐阶段计时（无 `/metrics`、响应头无计时字段），需客户端在 stage1/2/3 三个 dispatch 点分别埋点聚合后才能给出。
 
 ## 7. 经验教训
 
