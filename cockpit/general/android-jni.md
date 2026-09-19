@@ -1,15 +1,17 @@
 # Android 开发 & JNI 基础
 
-*从创建工程到 JNI 桥接的完整学习路径  |  以座舱端侧大模型 APK `edge_vlm_demo` 为教材*
+*从创建工程到 JNI 桥接的完整学习路径  |  以座舱端侧大模型示例工程 `CockpitInferDemo` 为教材*
 
 > [!TIP]
 > **本篇定位**
 >
-> 这是一篇**从零开始的教程**，讲 Android 工程结构与 JNI 的基础知识，所有例子都取自示例工程 `edge_vlm_demo`（一个在高通 SA8397P 座舱上跑端侧大模型的宿主 APK）。想看一个真实量产项目的完整宿主 APK 实现，请读 [APK 集成与端侧服务化](../projects/lantu/apk-integration.html)；想懂底层芯片/DSP/FastRPC，请读 [硬件与系统底层](hardware.html)。本篇是「打基础」，那篇是「看实战」。
+> 这是一篇**从零开始的教程**，讲 Android 工程结构与 JNI 的基础知识。贯穿全篇的示例工程 `CockpitInferDemo` 是一个「在高通 SA8397P 座舱上跑端侧大模型的宿主 APK」的**中性教学示例**——从典型端侧推理 APK 中提炼泛化而来，**不绑定任何具体量产项目**。本篇属通识层，只讲通用方法与范式；具体项目的宿主 APK 实战，应由项目层文档反向链接本篇。想懂底层芯片/DSP/FastRPC，请读 [硬件与系统底层](hardware.html)。
+>
+> 数字口径：文中个别性能/超时数值一律为**示例参数**，仅用于演示方法；平台与锚点模型的统一口径见硬件篇开头的「全站数据基准」NOTE。
 
 ## 1. 学习路线总览
 
-`edge_vlm_demo` 几乎覆盖了「Android + JNI + 端侧 NPU」的完整知识栈，所以它是极好的教材。整条链路如下，本篇按此顺序展开：
+`CockpitInferDemo` 几乎覆盖了「Android + JNI + 端侧 NPU」的完整知识栈，所以它是极好的教材。整条链路如下，本篇按此顺序展开：
 
 ```mermaid
 flowchart TB
@@ -30,10 +32,10 @@ flowchart TB
 
 ### 2.1 目录结构
 
-一个标准 Android 工程（对照 `edge_vlm_demo`）：
+一个标准 Android 工程：
 
 ```
-edge_vlm_demo/
+CockpitInferDemo/
 ├── settings.gradle          # ① 工程「目录」：有哪些模块、去哪下依赖
 ├── build.gradle             # ② 根构建脚本（工程级公共配置）
 ├── gradle.properties        # ③ Gradle 运行参数
@@ -49,7 +51,7 @@ edge_vlm_demo/
         └── res/                  # ⑫ 资源（布局/图标/字符串）
 ```
 
-**关键心智模型**：Android 工程是「多模块」结构，`settings.gradle` 用 `include ':app'` 声明模块。本项目只有一个 `app` 模块。
+Android 工程是「多模块」结构，`settings.gradle` 用 `include ':app'` 声明模块；本示例只有一个 `app` 模块。
 
 ### 2.2 Gradle 构建系统
 
@@ -66,21 +68,21 @@ dependencyResolutionManagement {
         flatDir { dirs "app/libs" }   // 本地 .aar/.jar 目录
     }
 }
-rootProject.name = "My Application"
+rootProject.name = "CockpitInferDemo"
 include ':app'        // 👈 声明 app 模块
 ```
 
-**`app/build.gradle`** —— 最核心，逐段讲（项目真实文件）：
+**`app/build.gradle`** —— 最核心，逐段讲：
 
 ```
 android {
-    namespace 'com.example.myapplication'   // R 类与包命名空间
-    compileSdk 33                            // 用 API 33 编译（决定能用哪些新 API）
+    namespace 'com.example.cockpitinfer'   // R 类与包命名空间
+    compileSdk 35                          // 用 API 35（Android 15）编译；本篇用到的前台服务新 API 要求 ≥ 34
 
     defaultConfig {
-        applicationId "com.example.myapplication"  // 安装包唯一 ID
-        minSdk 33        // 最低支持 Android 13
-        targetSdk 33     // 目标行为版本
+        applicationId "com.example.cockpitinfer"  // 安装包唯一 ID
+        minSdk 33        // 最低支持 Android 13（跟随座舱车机系统版本）
+        targetSdk 35     // 目标行为版本
         ndk {
             abiFilters "arm64-v8a"   // 👈 只打包 64 位 ARM 的 .so
         }
@@ -93,10 +95,10 @@ android {
         cmake { version="3.22.1"; path = file("src/main/cpp/CMakeLists.txt") }
     }
 
-    packagingOptions {
+    packaging {
         jniLibs {
-            useLegacyPackaging true
-            doNotStrip "**/libQnnHtpV81Skel.so"   // 👈 关键：这个 .so 不能被裁剪符号
+            useLegacyPackaging true                        // .so 压缩打包、安装时解压（取舍见下）
+            keepDebugSymbols += "**/libQnnHtpV*Skel.so"    // 👈 关键：DSP 侧 Skel 库不能被裁剪符号
         }
     }
 }
@@ -105,14 +107,20 @@ android {
 > [!NOTE]
 > **三个 SDK 版本的区别（高频面试题）**
 >
-> **compileSdk**：编译时「看得见」的最高 API，纯编译期概念。  
-> **minSdk**：能安装的最低系统版本。  
+> **compileSdk**：编译时「看得见」的最高 API，纯编译期概念。
+> **minSdk**：能安装的最低系统版本。
 > **targetSdk**：你「声称适配到」的版本，系统据此决定是否启用新的兼容性限制。
+>
+> 三者通常**不相等**：minSdk 跟随你要支持的最老系统（车机量产平台多冻结在某个 Android 版本，如 13）；compileSdk / targetSdk 则应尽量新——否则新 API 根本编不过。一个典型反例：`FOREGROUND_SERVICE_SPECIAL_USE` 权限是 **API 34** 才引入的，若 compileSdk 停在 33，§2.3 的清单就写不出来。
 
 > [!WARNING]
-> **doNotStrip 是什么**
+> **keepDebugSymbols（旧写法 doNotStrip）：Skel 库不能被 strip**
 >
-> 打包时 Android 默认会 `strip` 掉 .so 里「没被引用」的符号以减小体积。但 `libQnnHtpV81Skel.so` 跑在 DSP 侧，它的符号在 APK（CPU 侧）看来「没人用」，一旦被 strip，DSP 加载时就找不到符号直接崩。所以必须显式排除。这是 APK 集成 QNN 最典型的坑。
+> 打包时 Android 默认会 `strip` 掉 .so 里「没被引用」的符号以减小体积。但 `libQnnHtpV*Skel.so`（V68/V73/V75/V79 等，后缀随 HTP 架构版本变化）跑在 **DSP 侧**，它的符号在 APK（CPU 侧）看来「没人用」，一旦被 strip，DSP 加载时就找不到符号直接崩。所以必须显式排除。这是 APK 集成 QNN 最典型的坑。
+>
+> **DSL 有版本差异，按 AGP 版本核实**：`doNotStrip` 是旧版 `PackagingOptions` 的方法；AGP 8+ 的 `packaging { jniLibs { ... } }` 块（`JniLibsPackaging`）对应的属性是 **`keepDebugSymbols`**。把旧方法写进新块里大概率编译失败——原理不变，写法要跟工具链走。
+>
+> 顺带说 `useLegacyPackaging` 的取舍：`true` = .so 压缩进 APK、安装时解压落盘（下载小、安装占用大且首装慢）；`false` = .so 不压缩存放、运行时直接从 APK 内加载。对几十上百 MB 的 QNN 库集合，这个选择对安装时间与磁盘占用的影响是可感知的。
 
 ### 2.3 AndroidManifest.xml
 
@@ -122,7 +130,8 @@ android {
 <manifest>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.INTERNET"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- API 34+：前台服务必须再声明与 foregroundServiceType 匹配的子权限 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application android:name=".MyApplication" ...>   <!-- 指定自定义 Application 类 -->
 
@@ -133,9 +142,15 @@ android {
             </intent-filter>
         </activity>
 
-        <service android:name=".TestInjectService"
-                 android:exported="true"
-                 android:foregroundServiceType="dataSync" />
+        <!-- 推理服务：exported=false（仅本应用可拉起，安全论证见 §6.5）
+             process=":infer"（独立进程，自愈设计见 §6.3） -->
+        <service android:name=".InferService"
+                 android:exported="false"
+                 android:process=":infer"
+                 android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                      android:value="on-device AI inference" />
+        </service>
 
         <uses-native-library android:name="libcdsprpc.so"
                              android:required="false" />
@@ -145,9 +160,33 @@ android {
 
 **要点**：所有四大组件都必须在这里注册，否则运行时找不到。`android:name=".MyApplication"` 里的 `.` 是 `namespace` 的简写。
 
+> [!WARNING]
+> **前台服务类型：常驻推理服务用 `specialUse`，不要用 `dataSync`**
+>
+> 很多教程顺手写 `foregroundServiceType="dataSync"`——对一个**常驻推理守护服务**来说这已经行不通了：**Android 15 对 `dataSync` 类型的前台服务施加了运行时限（每 24 小时累计约 6 小时）**，超时会被系统直接停掉。座舱语音助手不能因为「额度用完」而罢工。
+>
+> 正确做法是 **`specialUse`**，并在 `<service>` 内用 `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` 属性声明具体用途（如 `on-device AI inference`）。若走 Google Play 分发，`specialUse` 需要在商店审核中说明用途（车机预装应用通常不涉及）。
+>
+> 注意版本前提：`specialUse` 类型与 `FOREGROUND_SERVICE_SPECIAL_USE` 子权限都是 **API 34（Android 14）引入**的——这正是 compileSdk 必须 ≥ 34 的原因；「compileSdk 33 + 声明 API 34 权限」是自相矛盾的组合。在 API 34 以下的系统上，这些声明会被无害忽略（`dataSync` 时限本身也是 Android 15 才有的行为），不影响安装运行。
+
+> [!NOTE]
+> **`<uses-native-library>` 的生效前提：库必须在系统「白名单」里**
+>
+> Android 12（API 31）起，app 的 linker namespace 默认隔离，直接 `dlopen` NDK 之外的 vendor 库（如 FastRPC 的 `libcdsprpc.so`）会失败，需要在清单里声明 `<uses-native-library>`。**但声明只是必要条件**：目标库还必须被整机厂列进 **`/vendor/etc/public.libraries.txt`**（或 `public.libraries-<company>.txt`）对外导出，否则依然 `dlopen failed: library "libcdsprpc.so" is not accessible for the namespace ...`。
+>
+> 排查命令：
+>
+> ```
+> adb shell cat /vendor/etc/public.libraries.txt | grep cdsprpc
+> adb shell ls /vendor/etc/public.libraries*
+> adb logcat | grep -iE "linker|dlopen"    # 看 namespace 拒绝的具体日志
+> ```
+>
+> `android:required="false"` 表示系统上没有该库时应用仍可安装运行（降级到非 NPU 路径）；写 `true` 则缺库直接装不上。
+
 ## 3. 四大组件
 
-Android 应用由「组件」构成，系统按生命周期管理它们。本项目用到三类。
+Android 应用由「组件」构成，系统按生命周期管理它们。本示例用到三类。四大组件本身是通用 Android 知识，本节只展开**与端侧推理直接相关**的部分。
 
 ### 3.1 Application —— 进程级入口（MyApplication）
 
@@ -160,7 +199,14 @@ public class MyApplication extends Application {
         super.onCreate();
         System.loadLibrary("cdsprpc");     // 1. 先底层 FastRPC
         System.loadLibrary("modelinfer");  // 2. 再 JNI 桥接库
-        Os.setenv("ADSP_LIBRARY_PATH", NativeEnv.buildAdspLibraryPath(...), true);
+
+        // 3. ADSP_LIBRARY_PATH：告诉 FastRPC 去哪些目录找 DSP 侧 Skel 库
+        //    注意分隔符是分号 ";"，不是冒号
+        String adspPath = getApplicationInfo().nativeLibraryDir
+                + ";/vendor/lib/rfsa/adsp"
+                + ";/vendor/dsp/cdsp"
+                + ";/dsp";
+        Os.setenv("ADSP_LIBRARY_PATH", adspPath, true);   // true = 覆盖已有值
     }
 }
 ```
@@ -168,21 +214,29 @@ public class MyApplication extends Application {
 > [!NOTE]
 > **为什么把 native 库加载放这里而不是 Activity？**
 >
-> 进程有两种拉起方式：用户点图标（走 `MainActivity`），或系统因 `START_STICKY` 单独重启服务（走 `TestInjectService`，不经过 Activity）。放在 `Application.onCreate()` 能保证**无论哪种路径，底层环境都已就绪**。这是重要的工程思维：把「进程级依赖」放到「进程级入口」。
+> 进程有两种拉起方式：用户点图标（走 `MainActivity`），或系统因 `START_STICKY` 单独重启服务（走 `InferService`，不经过 Activity）。放在 `Application.onCreate()` 能保证**无论哪种路径，底层环境都已就绪**。这是重要的工程思维：把「进程级依赖」放到「进程级入口」。独立进程场景（§6.3）同样受益：`:infer` 进程启动时会重新执行一遍 `Application.onCreate()`，库加载与环境变量在新进程里天然就绪。
+
+> [!WARNING]
+> **`ADSP_LIBRARY_PATH` 的两个易错点**
+>
+> **① 取值**：至少要覆盖 app 自己的 `nativeLibraryDir`（APK 里的 Skel 库安装后解压到这里）+ 系统 DSP 库目录 `/vendor/lib/rfsa/adsp`、`/vendor/dsp/cdsp`、`/dsp`。哪些目录实际存在、是否可读随 BSP 与平台变化，全列上无害；分隔符用**分号**。
+> **② 时机**：必须在**第一次 `remote_handle_open` 之前**设置——即任何会触达 DSP 的 QNN/SDK 初始化之前。FastRPC 在建立 DSP 会话时读取该变量，事后再设对已建立的会话无效。这就是它紧跟 `loadLibrary`、放在 `Application.onCreate()` 里的原因。
+>
+> 设错的典型现象：初始化报 Skel 库找不到（如 `libQnnHtpV79Skel.so not found` / `remote_handle_open failed`），但文件明明就在 `nativeLibraryDir` 里。
 
 ### 3.2 Activity —— 界面（MainActivity）
 
-Activity 是「一屏界面」，核心是生命周期回调：
+Activity 是「一屏界面」，生命周期为 `onCreate → onStart → onResume →（可见可交互）→ onPause → onStop → onDestroy`。本示例界面很简单，真正的活在 Service 里干：
 
 ```
 public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);      // 加载布局 XML
-        infer = new ModelInference();           // 创建 JNI 封装对象
-        infer.init("/AI/vllm_sdk/models", nativeLibraryDir);
-        startMyService();                            // 拉起前台服务
+        setContentView(R.layout.activity_main);       // 加载布局 XML
+        infer = new ModelInference();                 // 创建 JNI 封装对象
+        infer.init("/data/models", nativeLibraryDir); // 模型文件所在目录
+        startInferService();                          // 拉起前台服务
     }
     @Override
     protected void onDestroy() {
@@ -192,9 +246,12 @@ public class MainActivity extends AppCompatActivity {
 }
 ```
 
-完整生命周期：`onCreate → onStart → onResume →（可见可交互）→ onPause → onStop → onDestroy`。本项目界面很简单，真正的活在 Service 里干。
+> [!CAUTION]
+> **`/data/models` 不是拿来就能读的路径**
+>
+> 普通应用（SELinux `untrusted_app` 域）默认**无权读取**这类非标准根目录，`open()` 会直接 EACCES——这是端侧模型 APK 上机的头号坑，详见 §6.2。
 
-### 3.3 Service —— 后台常驻（TestInjectService，本项目主体）
+### 3.3 Service —— 后台常驻（InferService，本示例主体）
 
 Service 没有界面、长期后台运行。大模型推理要「常驻 + 被杀后自动恢复」，所以放 Service。
 
@@ -207,6 +264,8 @@ private void startForegroundService() {
 }
 ```
 
+前台服务**类型**的选择（为什么是 `specialUse` 而不是 `dataSync`）见 §2.3 的 WARNING——这是 2026 年做常驻服务最实用的一条 Android 知识。
+
 **② START\_STICKY 自愈**：
 
 ```
@@ -216,12 +275,12 @@ public int onStartCommand(Intent intent, int flags, int startId) {
 }
 ```
 
-`START_STICKY` 是「粘性」标志：服务被杀后系统会重新 `onCreate()` 它。这是后面「native 卡死 → killProcess 重启」自愈机制能成立的**系统级前提**。
+`START_STICKY` 是「粘性」标志：服务被杀后系统会重新 `onCreate()` 它。这是后面「native 卡死 → 杀进程重启」自愈机制能成立的**系统级前提**——但它**不是无条件可靠**的：系统对频繁重启有指数退避节流，Android 12+ 还限制后台启动前台服务。完整讨论见 §6.3。
 
 **组件如何启动**：通过 `Intent`（意图）：
 
 ```
-Intent intent = new Intent(this, TestInjectService.class);
+Intent intent = new Intent(this, InferService.class);
 startForegroundService(intent);   // Android 8+ 必须用这个启动前台服务
 ```
 
@@ -229,17 +288,17 @@ startForegroundService(intent);   // Android 8+ 必须用这个启动前台服�
 
 ### 4.1 为什么需要 JNI
 
-JNI（Java Native Interface）是 Java 调用 C/C++ 代码的桥梁。本项目必须用它：
+JNI（Java Native Interface）是 Java 调用 C/C++ 代码的桥梁。本示例必须用它：
 
 - **性能**：大模型推理是重计算，必须 C++。
-- **复用**：QNN/LLM 引擎（`libllms.so` 等）都是 C++ 库。
+- **复用**：QNN/推理引擎（`libQnnHtp.so`、厂商 runtime 等）都是 C++ 库。
 - **硬件**：访问 Hexagon NPU 只能走 C/C++（FastRPC）。
 
 Java 负责「服务化、协议、生命周期」，C++ 负责「推理」，JNI 是中间的翻译官。
 
 ### 4.2 完整链路与命名规则
 
-用本项目的 `nativeCreate` 串一遍，这是理解 JNI 的主线：
+用 `nativeCreate` 串一遍，这是理解 JNI 的主线：
 
 ```mermaid
 flowchart TB
@@ -254,13 +313,56 @@ flowchart TB
 C++ 函数名 = `Java_` + 包名（`.`→`_`）+ `_类名_` + `方法名`：
 
 ```
-Java_com_example_myapplication_ModelInference_nativeCreate
-     └────────── 包名 ──────────────┘ └──── 类名 ────┘ └─方法名─┘
+Java_com_example_cockpitinfer_ModelInference_nativeCreate
+     └────────── 包名 ──────────┘ └──── 类名 ────┘ └─方法名─┘
 ```
 
-这就是为什么 Java 侧包名一改，C++ 函数名就得跟着改。
+这就是为什么 Java 侧包名一改，C++ 函数名就得跟着改——而这个痛点正是下一节 `RegisterNatives` 要解决的。
 
-### 4.3 JNIEnv 与类型映射
+### 4.3 RegisterNatives：运行时注册（生产级标配）
+
+名字拼接（静态注册）适合入门理解绑定原理，但**生产级 JNI 几乎都用 `RegisterNatives` 运行时注册**：`System.loadLibrary` 时 JVM 会回调 `JNI_OnLoad`，你在那里用一张表把「Java native 方法 ↔ C++ 函数指针」显式绑定：
+
+```
+// C++ 函数名从此可以随便起，不再需要 Java_com_example_... 前缀
+static jlong createInfer(JNIEnv* env, jclass) { /* ... */ return 0; }
+static jboolean initInfer(JNIEnv* env, jclass, jlong handle, jstring path, jstring libDir) { /* ... */ return JNI_TRUE; }
+static void destroyInfer(JNIEnv* env, jclass, jlong handle) { /* ... */ }
+
+static const JNINativeMethod gMethods[] = {
+    // { Java 方法名, 方法签名, C++ 函数指针 }
+    {"nativeCreate",  "()J",                                      (void*)createInfer},
+    {"nativeInit",    "(JLjava/lang/String;Ljava/lang/String;)Z", (void*)initInfer},
+    {"nativeDestroy", "(J)V",                                     (void*)destroyInfer},
+};
+
+extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void*) {
+    JNIEnv* env = nullptr;
+    if (vm->GetEnv((void**)&env, JNI_VERSION_1_6) != JNI_OK) return JNI_ERR;
+
+    // 此刻在调用 loadLibrary 的 Java 线程上，FindClass 能正常找到 app 类
+    jclass cls = env->FindClass("com/example/cockpitinfer/ModelInference");
+    if (!cls) return JNI_ERR;
+
+    if (env->RegisterNatives(cls, gMethods,
+                             sizeof(gMethods) / sizeof(gMethods[0])) < 0)
+        return JNI_ERR;
+    return JNI_VERSION_1_6;
+}
+```
+
+三个好处：
+
+| 好处 | 说明 |
+| :--- | :--- |
+| **解耦包名/类名** | Java 侧重构包名，C++ 不再需要跟着改一堆符号名，只改 `FindClass` 的一个路径字符串 |
+| **符号可隐藏** | 配合 `-fvisibility=hidden` 编译，native 方法不再导出 `Java_...` 符号——减小体积，也更难被反射/逆向枚举 |
+| **失败前置** | 签名写错在 `loadLibrary` 当场报错，而不是等到第一次调用才抛 `UnsatisfiedLinkError` |
+
+> [!TIP]
+> `JNI_OnLoad` 还有一个重要用途：**趁在 Java 线程上，预先缓存回调要用的 `jclass` / `jmethodID`**——这正是 §5.3 native 线程 `FindClass` 陷阱的标准解法。
+
+### 4.4 JNIEnv 与类型映射
 
 每个 JNI 函数前两个参数固定：
 
@@ -271,7 +373,7 @@ Java_..._nativeCreate(JNIEnv* env, jclass clazz) { ... }
 ```
 
 - **`JNIEnv* env`**：JNI 环境指针，所有 JNI 操作（转字符串、调方法、抛异常）都通过它。它是「线程局部」的——每个线程有自己的 `JNIEnv`（回调时至关重要，见 5.3）。
-- **`jclass`**：native 方法是 `static` 时第二个参数是类（`jclass`）；非 static 时是实例（`jobject`）。本项目 native 方法全是 static。
+- **`jclass`**：native 方法是 `static` 时第二个参数是类（`jclass`）；非 static 时是实例（`jobject`）。本示例 native 方法全是 static。
 
 | Java | JNI | C/C++ |
 | :--- | :--- | :--- |
@@ -284,7 +386,7 @@ Java_..._nativeCreate(JNIEnv* env, jclass clazz) { ... }
 
 ## 5. JNI 进阶
 
-### 5.1 句柄模式（本项目的核心设计）
+### 5.1 句柄模式（本示例的核心设计）
 
 C++ 对象活在堆上，Java 没法直接持有它。办法：把 C++ 指针转成 `long` 交给 Java 保管，每次调用再传回来。
 
@@ -325,9 +427,9 @@ public class ModelInference implements AutoCloseable {
 >
 > 「Java 持 long 句柄 ↔ C++ 持对象」是 JNI 封装有状态对象的标准范式。
 
-### 5.2 数组与字符串
+### 5.2 字符串与数组：转换、编码陷阱与零拷贝
 
-Java `String`（UTF-16）和 C++ `std::string`（UTF-8）不能直接用，必须转换：
+**字符串转换**。Java `String`（UTF-16）和 C++ `std::string`（UTF-8）不能直接用，必须转换：
 
 ```
 static std::string JStringToStdString(JNIEnv* env, jstring js) {
@@ -344,7 +446,53 @@ static std::string JStringToStdString(JNIEnv* env, jstring js) {
 >
 > `GetXxxChars` 必须配对 `ReleaseXxxChars`。这是 JNI 内存泄漏的头号来源。
 
-传图片 `byte[]` 给 C++：
+> [!WARNING]
+> **Modified UTF-8 陷阱：`GetStringUTFChars` 返回的不是标准 UTF-8**
+>
+> JNI 的「UTF-8」实际是 **Modified UTF-8（CESU-8）**，与标准 UTF-8 有两处关键差异：
+>
+> - **NUL（U+0000）** 被编码成两字节 `0xC0 0x80`（标准 UTF-8 明确禁止这种 overlong 编码）；
+> - **增补平面字符（emoji、部分生僻汉字，码点 > U+FFFF）** 按 UTF-16 代理对编码——每个代理项各 3 字节（共 6 字节），而不是标准的单个 4 字节序列。
+>
+> 后果：把结果直接塞进 `std::string` 交给按标准 UTF-8 处理的 **tokenizer / JSON 解析器 / 日志系统**，会解析失败或产出乱码；反方向更危险——把含 emoji 的**标准** UTF-8 字符串（模型生成结果、网络文本）传给 `NewStringUTF`，较新版本的 ART 会因「input is not valid Modified UTF-8」**直接 abort**。对「端侧大模型对话」场景，聊天文本几乎必然含 emoji，这是绕不开的坑。
+>
+> **正确做法**：绕开 Modified UTF-8——用 `GetStringChars` 取 UTF-16，自己编码成标准 UTF-8：
+
+```
+// Java String → 标准 UTF-8：取 UTF-16 自行编码（正确处理代理对）
+static std::string JStringToUtf8(JNIEnv* env, jstring js) {
+    if (!js) return {};
+    jsize len = env->GetStringLength(js);
+    const jchar* chars = env->GetStringChars(js, nullptr);   // UTF-16，不是 UTF-8
+    std::string out;
+    out.reserve(len * 2);
+    for (jsize i = 0; i < len; ) {
+        uint32_t cp = chars[i];
+        if (cp >= 0xD800 && cp <= 0xDBFF && i + 1 < len) {   // 高代理：与低代理合成码点
+            cp = 0x10000 + ((cp - 0xD800) << 10) + (chars[i + 1] - 0xDC00);
+            i += 2;
+        } else {
+            i += 1;
+        }
+        if (cp < 0x80)         { out.push_back((char)cp); }
+        else if (cp < 0x800)   { out.push_back((char)(0xC0 | (cp >> 6)));
+                                 out.push_back((char)(0x80 | (cp & 0x3F))); }
+        else if (cp < 0x10000) { out.push_back((char)(0xE0 | (cp >> 12)));
+                                 out.push_back((char)(0x80 | ((cp >> 6) & 0x3F)));
+                                 out.push_back((char)(0x80 | (cp & 0x3F))); }
+        else                   { out.push_back((char)(0xF0 | (cp >> 18)));   // emoji 走这支：4 字节
+                                 out.push_back((char)(0x80 | ((cp >> 12) & 0x3F)));
+                                 out.push_back((char)(0x80 | ((cp >> 6) & 0x3F)));
+                                 out.push_back((char)(0x80 | (cp & 0x3F))); }
+    }
+    env->ReleaseStringChars(js, chars);                      // 👈 同样配对释放
+    return out;
+}
+```
+
+反方向（C++ → Java）对称处理：把标准 UTF-8 解码回 UTF-16（增补平面码点拆成代理对），再用 `env->NewString(reinterpret_cast<const jchar*>(u16.data()), u16.size())`，**不要图省事用 `NewStringUTF`**。生产中两个方向都建议交给成熟转换库（如 utf8cpp）；这里手写是为了让你看清「JNI 的 UTF-8 ≠ 标准 UTF-8」到底差在哪。
+
+**传图片等大块 `byte[]` 给 C++**：
 
 ```
 jsize dataSize = env->GetArrayLength(imageData);
@@ -357,30 +505,72 @@ if (dataBytes) {
 }
 ```
 
-`JNI_ABORT` 表示「释放但不把改动写回 Java 数组」（只读不写，省一次拷贝）。
+`JNI_ABORT` 表示「释放但不把改动写回 Java 数组」（只读不写，省一次回写）。
+
+> [!WARNING]
+> **`GetByteArrayElements` 不是真零拷贝**
+>
+> ART **不保证**返回的是 pinned 指针——GC 无法原地固定数组时，运行时会**先拷贝一份**再给你副本；`JNI_ABORT` 只省了「回写」，省不掉「拷入」。对 1080p 图像（约 6 MB）这类大块数据，这次拷贝是实打实的浪费。真零拷贝有两条路：
+>
+> **① DirectByteBuffer**（纯 CPU 数据，最简单）：
+>
+> ```
+> // Java 侧：分配在 GC 堆外
+> ByteBuffer buf = ByteBuffer.allocateDirect(size);
+>
+> // C++ 侧：直接拿裸指针，JNI 层零拷贝
+> void* addr = env->GetDirectBufferAddress(buf);
+> jlong  cap = env->GetDirectBufferCapacity(buf);
+> ```
+>
+> 代价是生命周期要自己约定：Java 侧 buffer 被 GC 回收后，native 不得再触碰这块指针。
+>
+> **② AHardwareBuffer / HardwareBuffer**（跨硬件数据，相机 → NPU 的正解）：底层就是 **DMA-BUF**（已废弃的 ION 的继任者）。`AHardwareBuffer_lock()` 拿 CPU 映射指针，同一块内存还能被 GPU/ISP/DSP 直接导入；配合 FastRPC 的缓冲共享能力，可以打通「相机 → ISP → NPU」全链路零拷贝。这正是硬件篇 ION/DMA-BUF 零拷贝链路在 app 侧的落点，见 [硬件与系统底层](hardware.html)。
+
+> [!TIP]
+> **循环里别撑爆 Local Reference Table**
+>
+> 局部引用表默认上限 512。在 native 里循环处理帧/元素、不断产生 `jstring`/`jbyteArray` 时，要及时 `DeleteLocalRef`，或用 `PushLocalFrame(n)` / `PopLocalFrame(nullptr)` 包住循环体——否则 `local reference table overflow` 直接 abort。
 
 ### 5.3 C++ 回调 Java（最难的部分）
 
-推理是异步的：C++ 工作线程算出结果后，要反过来调用 Java 的 `onReply`。看项目实现：
+推理是异步的：C++ 工作线程算出结果后，要反过来调用 Java 的 `onReply`。先看一版**正确**的实现（三个最常见的错误写法随后对照给出）：
 
 ```
-// 准备阶段（在 Java 线程里）：
-jobject gHandler = env->NewGlobalRef(handler);   // ① 升级成全局引用
-jmethodID onReplyMid = env->GetMethodID(cls, "onReply", "(Ljava/lang/String;Z)V");  // ② 缓存方法 ID
+// 准备阶段（必须在 Java 线程里做，如 JNI_OnLoad 或某个 native 方法内）：
+jobject   gHandler    = env->NewGlobalRef(handler);  // ① 回调目标升级成全局引用
+jclass    gCls        = (jclass)env->NewGlobalRef(cls);  // ② jclass 也要缓存成全局引用（见下方 FindClass 陷阱）
+jmethodID onReplyMid  = env->GetMethodID(cls, "onReply", "(Ljava/lang/String;Z)V");  // ③ 缓存方法 ID
+
+// 每线程一次的 attach 守卫：首次回调时 attach，之后复用；线程退出时自动 detach
+struct JniThreadGuard {
+    JavaVM* vm; JNIEnv* env = nullptr; bool attached = false;
+    explicit JniThreadGuard(JavaVM* v) : vm(v) {
+        if (vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) {
+            if (vm->AttachCurrentThread(&env, nullptr) != JNI_OK) env = nullptr;
+            else attached = true;
+        }
+    }
+    ~JniThreadGuard() { if (attached) vm->DetachCurrentThread(); }
+};
 
 // 回调 lambda（将来在 C++ 工作线程里执行）：
-edgeai::ScenarioReplyHandler cb = [jvm, gHandler, onReplyMid](const std::string& result, bool finished){
-    JNIEnv* envCb = nullptr;
-    // ③ 当前是 native 线程，没有 JNIEnv，必须先 Attach
-    if (jvm->GetEnv((void**)&envCb, JNI_VERSION_1_6) == JNI_EDETACHED)
-        jvm->AttachCurrentThread(&envCb, nullptr);
+std::function<void(const std::string&, bool)> cb =
+    [jvm, gHandler, onReplyMid](const std::string& result, bool finished) {
+        static thread_local JniThreadGuard guard(jvm);   // ④ 每线程只 attach 一次
+        JNIEnv* envCb = guard.env;
+        if (!envCb) return;
 
-    // ④ 真正回调 Java
-    jstring jres = envCb->NewStringUTF(result.c_str());
-    envCb->CallVoidMethod(gHandler, onReplyMid, jres, (jboolean)finished);
+        // ⑤ 标准 UTF-8 → UTF-16 → NewString（见 §5.2，不要直接 NewStringUTF）
+        jstring jres = Utf8ToJString(envCb, result);
+        envCb->CallVoidMethod(gHandler, onReplyMid, jres, (jboolean)finished);
+        envCb->DeleteLocalRef(jres);
 
-    if (finished) envCb->DeleteGlobalRef(gHandler);  // ⑤ 末帧释放全局引用
-    jvm->DetachCurrentThread();                       // ⑥ 解绑线程
+        if (envCb->ExceptionCheck()) {          // ⑥ Java 侧可能抛异常，必须检查并处理
+            envCb->ExceptionDescribe();         //    先落日志（生产用 __android_log_print）
+            envCb->ExceptionClear();            //    再清除，否则下一次 JNI 调用直接 abort
+        }
+        // 注意：这里【不要】DeleteGlobalRef(gHandler)——释放由持有者单点完成，见 Bug②
 };
 ```
 
@@ -395,9 +585,25 @@ edgeai::ScenarioReplyHandler cb = [jvm, gHandler, onReplyMid](const std::string&
 
 **② 方法签名 `"(Ljava/lang/String;Z)V"`**：JNI 方法描述符——`(参数)返回值`。`Ljava/lang/String;` 是 String，`Z` 是 boolean，`V` 是 void。即 `void onReply(String, boolean)`。
 
-**③ `AttachCurrentThread`**：`JNIEnv` 是线程局部的。C++ 工作线程不是 Java 创建的，没有 `JNIEnv`，直接用会崩。必须先 Attach 把线程「挂到 JVM」上拿到 `JNIEnv`，用完 `DetachCurrentThread`。
+**③ `AttachCurrentThread`**：`JNIEnv` 是线程局部的。C++ 工作线程不是 Java 创建的，没有 `JNIEnv`，直接用会崩。必须先 Attach 把线程「挂到 JVM」上拿到 `JNIEnv`——但**每线程 attach 一次就够**，不要每次回调都 attach/detach（见下方 Bug①）。
 
 **④ `jvm` 哪来的**：`env->GetJavaVM(&jvm)`。`JNIEnv` 线程局部不能跨线程用，但 `JavaVM*` 是进程唯一的，可以安全捕获进 lambda 跨线程使用。
+
+> [!CAUTION]
+> **三个经典回调 bug（拿旧写法对照）**
+>
+> **Bug① 每次回调都 Attach/Detach。** 旧写法在回调开头 `AttachCurrentThread`、结尾 `DetachCurrentThread`。Detach 会销毁该线程**全部**局部引用并解绑 JVM；若这是长期存在、还会再次回调的工作线程，反复 attach/detach 就是典型的 JNI 性能陷阱，还可能让缓存的引用悄悄失效。正确做法：**每线程 attach 一次**——`thread_local` RAII 守卫（如上），线程真正退出时才 detach。
+>
+> **Bug② 在回调里 `DeleteGlobalRef`。** 旧写法 `if (finished) envCb->DeleteGlobalRef(gHandler)`，想「末帧顺手释放」。但「末帧」不可信：乱序、重入、末帧重发，任何一次多余回调都是 **use-after-free**——全局引用槽位已被回收，甚至已被新对象复用，崩得毫无规律。正确做法：**释放由持有者单点完成**——native 对象析构、或 Java 侧显式 `close()`（与 §5.1 句柄模式的 `nativeDestroy` 走同一条路）；回调 lambda 只用、不释放。
+>
+> **Bug③ `CallVoidMethod` 之后不查异常。** 若 Java 的 `onReply` 抛了异常，异常会 pending 在当前线程上，**下一次 JNI 调用直接 abort 进程**。凡是可能进入 Java 代码的调用（`CallXxxMethod` 家族），之后都要 `ExceptionCheck()`；有异常就记日志后 `ExceptionClear()`（或有意向上抛）。Get/Release 配对的「铁律」只管内存，这一条管生死。
+
+> [!WARNING]
+> **native 线程上的 `FindClass` 陷阱**
+>
+> `FindClass` 靠「当前线程最近的 Java 栈帧」定位正确的 classloader。native 线程（`std::thread`/`pthread_create` 创建）上**没有 Java 栈帧**，即使 Attach 之后，`FindClass` 也只会用**系统 classloader**——`java/lang/String` 找得到，你的 `com/example/cockpitinfer/...` 找不到，抛 `ClassNotFoundException`；再叠加 Bug③（没查异常），下一步就是 abort。
+>
+> 这是回调场景的高频故障，且极具迷惑性：同样的代码在准备阶段（Java 线程）跑得好好的，挪进回调 lambda 就炸。**标准解法**：在 Java 线程上（`JNI_OnLoad` 是天然时机，见 §4.3）预先 `FindClass` 并 `NewGlobalRef` 缓存 `jclass`，回调侧只用缓存的全局 `jclass`。`jmethodID`/`jfieldID` 不是引用、与类同生命周期，可以安全长期缓存。
 
 ### 5.4 CMake 与 .so
 
@@ -407,11 +613,14 @@ edgeai::ScenarioReplyHandler cb = [jvm, gHandler, onReplyMid](const std::string&
 cmake_minimum_required(VERSION 3.22.1)
 project("modelinfer")
 
+set(CMAKE_CXX_STANDARD 17)          # 推理 SDK 头文件普遍要求 C++17
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 add_library(modelinfer SHARED modelinfer.cpp)   # SHARED = 动态库 .so
 
 target_include_directories(modelinfer PUBLIC     # 头文件搜索路径
     ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_SOURCE_DIR}/../../vllm_sdk/vllm_sdk/include)
+    ${CMAKE_SOURCE_DIR}/../../infer_sdk/include) # 预编译推理 SDK 的头文件
 
 target_link_directories(modelinfer PUBLIC ${CMAKE_SOURCE_DIR}/../jniLibs/arm64-v8a)
 
@@ -439,9 +648,9 @@ flowchart TB
 
 ### 6.1 NPU / Hexagon / QNN / FastRPC
 
-这是本项目「端侧 AI」的灵魂，概念链：
+这是「端侧 AI」的灵魂，概念链：
 
-- **Hexagon NPU**：高通芯片里的 AI 加速器（张量算力 ~70 TOPS），大模型推理靠它。
+- **Hexagon NPU**：高通芯片里的 AI 加速器（张量算力约 70 TOPS INT8，估算口径——见[硬件篇](hardware.html)开头的全站数据基准 NOTE），大模型推理靠它。
 - **QNN**：高通统一推理框架，`libQnnHtp.so` 是 HTP（Hexagon Tensor Processor）后端。
 - **FastRPC**：CPU（跑 Android/APK）和 DSP（跑 NPU 计算）是**不同处理器**，通信靠 FastRPC，`libcdsprpc.so` 就是 cDSP 的 FastRPC 库。
 - **Skel/Stub 模式**：FastRPC 把一次跨处理器调用拆成两半——CPU 侧叫 **Stub**（桩），DSP 侧叫 **Skel**（骨架）。
@@ -451,38 +660,99 @@ flowchart TB
 | 现象 | 原因 |
 | :--- | :--- |
 | 加载顺序先 `cdsprpc` 后 `modelinfer` | SDK 初始化就要经 FastRPC 跟 DSP 握手，FastRPC 库没加载就握不上 |
-| `Skel.so` 不能 strip | 它在 DSP 侧运行，CPU 链接器看不到它「被用」，strip 掉 DSP 就加载不了 |
-| 要设 `ADSP_LIBRARY_PATH` | DSP 侧 Skel 库不在标准路径，得靠这个环境变量告诉 FastRPC 去哪找 |
+| `Skel.so` 不能 strip | 它在 DSP 侧运行，CPU 链接器看不到它「被用」，strip 掉 DSP 就加载不了（§2.2） |
+| 要设 `ADSP_LIBRARY_PATH` | DSP 侧 Skel 库不在标准路径，得靠这个环境变量告诉 FastRPC 去哪找（取值与时机见 §3.1） |
 
 更底层的芯片/DSP/SSR 细节见 [硬件与系统底层](hardware.html)。
 
-### 6.2 前台服务 + 自愈（稳定性设计）
+### 6.2 SELinux 与模型文件访问（上机头号坑）
 
-端侧大模型 + NPU 是独占资源，native 层偶发卡死时，跑 JNI 的 Java 线程**无法被 `interrupt` 打断**（JNI 调用不响应中断），会永久占着 C++ 串行锁。分层兜底：
+比「模型怎么加载」更早到来的问题是：**模型文件你到底读不读得到**。
+
+Android 的 SELinux 是强制模式（Enforcing）的。普通安装的应用跑在 **`untrusted_app`** 域里，默认只能访问自己的沙箱（`/data/data/<包名>/`、经 FUSE 的外部存储等）和少数打标放行的公共路径。像 `/data/models` 这种**非标准根目录**，默认标签（如 `system_data_file`）对 `untrusted_app` 不开放，`open()` 直接返回 **EACCES**——Java 侧只能看到一句 `init failed`，真正的原因在内核审计日志里：
+
+```
+avc: denied { read open } for comm="...infer" path="/data/models/model.bin"
+     scontext=u:r:untrusted_app:s0 tcontext=u:object_r:system_data_file:s0
+     tclass=file permissive=0
+```
+
+**两条正路**：
+
+| 方案 | 做法 | 适用 |
+| :--- | :--- | :--- |
+| **① 模型放应用沙箱** | 模型下发到 `getFilesDir()` / `getCodeCacheDir()`（随 APK 内置，或运行时下载） | 普通应用、快速原型。零 sepolicy 工作；代价是模型与应用绑定、多应用难共享、大模型挤占应用配额 |
+| **② 共享系统目录 + 平台策略** | 整机厂在 `file_contexts` 给目录定专属标签（如 `/data/models(/.*)?  u:object_r:vendor_model_file:s0`），再在 sepolicy 里放行目标域（`untrusted_app`，或给平台签名应用划专属域）`search/read/open/getattr` | 量产车机。推理服务通常是**平台签名的系统应用**，模型目录由系统服务在首启时初始化并打标 |
+
+**排查命令**：
+
+```
+adb shell ls -Z /data/models            # 看文件实际的 SELinux 标签
+adb shell ps -Z | grep cockpitinfer     # 看应用进程跑在哪个域
+adb logcat | grep avc                   # 或 adb shell dmesg | grep avc
+adb shell getenforce                    # 确认 Enforcing（user 版恒为 Enforcing）
+```
+
+> [!TIP]
+> 三条经验：**①** 日志里 `permissive=0` 表示真拦截，不是警告；**②** user 版上不能靠 `setenforce 0`「先跑通再说」——userdebug 版验证通过不代表 user 版能过；**③** 凡是「文件明明在、就是打不开、应用层没有详细报错」，第一反应查 SELinux，而不是怀疑路径写错。
+
+### 6.3 前台服务 + 自愈（稳定性设计）
+
+端侧大模型 + NPU 是独占资源，native 层偶发卡死时，跑 JNI 的 Java 线程**无法被 `interrupt` 打断**（JNI 调用不响应中断），会永久占着 C++ 串行锁。**核心洞察：进程内无法安全解开卡死的 native 锁，唯一可靠的恢复是「重启进程」。**
+
+但「重启」要设计过才能用。朴素的「Java 侧 60 s 超时 × 连续 2 次 → `Process.killProcess(myPid())`」有四个问题，逐个升级：
+
+**① 推理放独立进程（`android:process=":infer"`）**。直接杀当前进程会连带杀掉 Activity 和整个 UI。给推理 Service 单独声明进程后，native 卡死只重启 `:infer` 进程，**UI 进程无感**。代价是 Activity 与 Service 不再共享内存对象，要走 `bindService` + AIDL（或 Messenger）通信——对推理服务这是值得的交换。新进程启动时会重新执行 `Application.onCreate()`，库加载与 `ADSP_LIBRARY_PATH` 天然就绪（§3.1 的设计在这里第二次兑现价值）。
+
+**② 两级看门狗，超时尽量短**。「60 s × 连续 2 次」意味着服务实际死亡最长 ~120 s 才恢复——对语音交互不可接受。改进：
+
+- 阈值按口径推导：**正常 P99 推理耗时 × 安全系数（如 3×）**——示例参数，请代入你自己模型的实测值；
+- 再加一级 **native watchdog**：C++ 线程监控推理心跳（每个 decode step 更新一个原子时间戳），心跳停滞超阈值就在 native 侧直接 `kill(getpid(), SIGKILL)`。它不依赖任何 Java 线程还活着——JNI 层整个卡死时，这是唯一还能动手的地方。
+
+**③ 对 `START_STICKY` 的可靠性要诚实**。系统对频繁重启的服务有**指数退避节流**。「崩溃（SIGABRT）≠ 可靠自愈，因为系统对崩溃有节流」这句话是对的——但 **`START_STICKY` 的重启受同一套节流约束**，不能把它当成绕过节流的旁路。真正能做的是：用 native watchdog 把「反复卡死」变成「单次卡死 + 修根因」，不把可用性押在重启速度上。
+
+**④ Android 12+ 的 FGS 后台启动限制**。被系统重启的 Service 再调 `startForeground` 时，可能抛 `ForegroundServiceStartNotAllowedException`。要 `try/catch` 并降级（记录 + 退避重试）；量产车机的推理服务通常是系统应用、不受此限，但按公开 SDK 规则写的代码必须处理它。
 
 ```mermaid
 flowchart TB
-    A["推理超时 60s"] --> B["连续超时计数 +1"]
-    B --> C{"计数 ≥ 2 ?"}
-    C -->|否| D["继续观察"]
-    C -->|是| E["Process.killProcess(myPid)主动结束进程"]
-    E --> F["START_STICKY 自动重新拉起服务清空卡死的 native 状态"]
-    style E fill:#e74c3c,color:#fff
-    style F fill:#2ecc71,color:#fff
+    A["两级看门狗native watchdog 心跳停滞 / Java 侧超时计数阈值 = P99 × 安全系数（示例参数）"] --> B["kill 仅 :infer 独立进程UI 进程不受影响"]
+    B --> C["START_STICKY 重新拉起受系统指数退避节流约束"]
+    C --> D["try/catch FGS 后台启动限制Android 12+ 可能抛异常 → 退避重试"]
+    D --> E["重建 QNN 会话与请求队列恢复服务"]
+    style B fill:#e74c3c,color:#fff
+    style E fill:#2ecc71,color:#fff
 ```
 
-核心洞察：**进程内无法安全解开卡死的 native 锁，唯一可靠的恢复是「重启进程」**，而 `START_STICKY` 让重启后服务能自动回来。代码里专门强调「崩溃（SIGABRT）≠ 可靠自愈」，因为系统对崩溃有节流，真正可靠的是主动 `killProcess`。
+### 6.4 HTTP 服务化（为什么是 HTTP）
 
-### 6.3 HTTP 服务化（为什么是 HTTP）
+`InferHttpServer` 用 NanoHTTPD 在应用内起一个 HTTP 服务。座舱里调用方五花八门（Android App、Linux 服务、Python 评测脚本），HTTP+JSON 是最大公约数：跨语言、无需共享接口定义、`curl` 直接联调。相对大模型几百毫秒~几秒的推理耗时，HTTP 的序列化开销可忽略。
 
-`TestHttpEndpoint` 用 NanoHTTPD 在 `0.0.0.0:8080` 起服务。座舱里调用方五花八门（Android App、Linux 服务、Python 评测脚本），HTTP+JSON 是最大公约数：跨语言、无需共享接口定义、`curl` 直接联调。相对大模型几百毫秒~几秒的推理耗时，HTTP 的序列化开销可忽略。
+**绑定地址默认 `127.0.0.1`**（回环，只有本机进程可达）。调试期为了从 PC `curl` 联调而临时绑 `0.0.0.0`，是**仅限调试窗口**的行为——为什么，见下一节。
 
-### 6.4 线程模型
+### 6.5 安全边界（车规必修）
+
+上面两处「顺手」的写法，在车规场景下是两个敞开的攻击面。
+
+**① Service `exported="true"` 且不带 permission** = 设备上**任意 App** 都能 start/bind 你的推理服务。白嫖推理算力是小事；若服务背后还挂着车控 Function Calling 通道，就是提权入口。规则：
+
+- 只被本应用调用 → **`exported="false"`**（默认且首选，§2.3 已这么写）；
+- 确需跨应用调用 → 声明 **`signature` 级自定义权限**（只有与你同证书签名的应用能调），或 AIDL 内校验调用方身份（`Binder.getCallingUid()` 对照白名单）。
+
+**② HTTP 绑 `0.0.0.0` 且无鉴权** = 把 LLM 推理能力（以及它背后的车控通道）暴露给**同网段任意主机**。车机不是网络孤岛：Wi-Fi 热点、OTA 通道、诊断口，都可能让攻击者进入同一网段。规则：
+
+- 量产形态：**绑 `127.0.0.1`**，跨进程调用走回环 + 调用方鉴权；
+- 确需网络访问：最低限度加 **token 鉴权**（token 不硬编码进 APK），再往上加 TLS；
+- `0.0.0.0` **仅在调试期开放**，并用构建变体/系统属性保证 release 构建物理上关得掉——而不是靠「上线前记得改回来」。
+
+> [!CAUTION]
+> **这不是可选项。** 汽车网络安全法规（UNECE R155 / ISO 21448 SOTIF 体系）对车载通信服务的要求就是「默认拒绝 + 最小暴露面」。一个无鉴权、对全网段开放的推理端口，在整车厂安全评审里几乎必然被打回。写 demo 时就把 `exported` 和绑定地址写对，是肌肉记忆问题。
+
+### 6.6 线程模型
 
 - **NanoHTTPD** 自己起线程收 HTTP 请求。
-- 推理用全局 `requestProcessingLock` 串行化（NPU 独占，同时只能跑一个）。
-- SDK 回调在 **native 工作线程**，经 `AttachCurrentThread` 回到 JVM。
-- `TaskScheduler` 提供 8 线程异步池 + 单线程调度池。
+- 推理请求用全局互斥锁串行化（NPU 独占，同时只能跑一个）。
+- SDK 回调在 **native 工作线程**，经 `AttachCurrentThread` 回到 JVM（用 §5.3 的 `thread_local` 守卫，每线程一次）。
+- 异步线程池 + 单线程调度器负责超时监控、心跳等辅助任务。
 
 ## 7. 动手练习路径
 
@@ -492,25 +762,11 @@ flowchart TB
 | :--- | :--- | :--- |
 | **1. 纯 Android** | 熟悉工程与生命周期 | New Project（Empty Views，Java，minSdk 33）→ 改 `MainActivity` 加按钮改文字 → 新建 Service 看 Logcat 生命周期 |
 | **2. Hello JNI** | 最小桥接 | New Project 勾选 **Include C++ support** → 读懂自动生成的 `stringFromJNI()` → 自己加 `native int add(int,int)` |
-| **3. 句柄模式** | 有状态对象 | C++ 写 `class Counter`，用 `nativeCreate/Increment/Destroy` + `jlong` 句柄暴露——**复刻本项目核心范式** |
-| **4. C++ 回调 Java** | 异步回调（最难） | 传 Java 回调接口，C++ 里 `NewGlobalRef` + `GetMethodID`，开 `std::thread` 延迟 1 秒后 `AttachCurrentThread` + `CallVoidMethod` |
-| **5. 读懂 edge\_vlm\_demo** | 融会贯通 | 重读 `ModelInference.java` + `modelinfer.cpp`，此时每行都应能说出「为什么」 |
+| **3. 句柄模式** | 有状态对象 | C++ 写 `class Counter`，用 `nativeCreate/Increment/Destroy` + `jlong` 句柄暴露——**复刻本示例核心范式**；再改成 `RegisterNatives` 注册（§4.3） |
+| **4. C++ 回调 Java** | 异步回调（最难） | 传 Java 回调接口，C++ 里 `NewGlobalRef` + `GetMethodID`，开 `std::thread` 延迟 1 秒后回调；再改造成 `thread_local` attach 守卫 + `ExceptionCheck`（对照 §5.3 的三个 bug） |
+| **5. 读懂 CockpitInferDemo** | 融会贯通 | 重读 `ModelInference.java` + `modelinfer.cpp`，此时每行都应能说出「为什么」 |
 
 > [!TIP]
 > **小结**
 >
-> 阶段 2–4 是 JNI 的全部核心，`edge_vlm_demo` 只是在这之上叠加了 NPU/QNN/服务化。把这三阶段做扎实，这类项目的 JNI 部分就没有秘密了。完整架构与实现细节见 [APK 集成与端侧服务化](../projects/lantu/apk-integration.html)。
-
-// Theme toggle
-var b=document.getElementById('themeBtn');
-b.onclick=function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('theme',h.dataset.theme)}catch(e){}};
-try{var s=localStorage.getItem('theme');if(s)document.documentElement.dataset.theme=s}catch(e){}
-// Sidebar scroll spy
-var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.remove('active')});var l=document.querySelector('.sidebar a[href="#'+e.target.id+'"]');if(l)l.classList.add('active')}})},{rootMargin:'-60px 0px -70% 0px'});
-document.querySelectorAll('h2[id],h3[id]').forEach(function(h){obs.observe(h)});
-// Mermaid init (wait for script to load)
-window.addEventListener('load',function(){
-try{
-if(typeof mermaid!=='undefined'){mermaid.initialize({startOnLoad:true,theme:document.documentElement.dataset.theme==='dark'?'dark':'default',securityLevel:'loose',flowchart:{useMaxWidth:true}})}
-}catch(e){console.warn('Mermaid init failed:',e)}
-});
+> 阶段 2–4 是 JNI 的全部核心，`CockpitInferDemo` 只是在这之上叠加了 NPU/QNN/服务化。把这三阶段做扎实，这类项目的 JNI 部分就没有秘密了。本篇是通识层：它给出的范式足以支撑你读懂**任何一个**端侧推理宿主 APK；具体量产项目的架构与实现细节，属于项目层文档的范畴（并应由项目层反向链接回本篇）。

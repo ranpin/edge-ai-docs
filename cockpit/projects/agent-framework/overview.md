@@ -313,4 +313,4 @@ TTS: "好的，已为您打开副驾车窗。"
 > [!NOTE]
 > **LLM 推理优化**
 >
-> KV Cache 优化、TTFT 优化、投机采样、约束解码、推理引擎对比等内容已整合到独立文档 → [**推理优化**](../../general/infer.html)
+> KV Cache、Roofline、推理引擎对比 → [**LLM 推理原理与性能模型**](../../general/infer-principles.html)；投机采样、约束解码、TTFT/端到端延迟优化 → [**端侧解码与服务化优化**](../../general/infer-serving.html)；量化 → [**端侧模型量化与压缩**](../../general/quantization.html)

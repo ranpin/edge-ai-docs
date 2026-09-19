@@ -203,7 +203,7 @@ gantt
 > [!NOTE]
 > **推理优化与量化工具**
 >
-> AIMET 量化工具、推理引擎对比等内容已整合到独立文档 → [**推理优化**](../../general/infer.html)
+> AIMET 量化工具、W4A16 机制 → [**端侧模型量化与压缩**](../../general/quantization.html)；推理引擎对比、Genie/QAIRT 运行时 → [**LLM 推理原理与性能模型**](../../general/infer-principles.html)
 
 ## 4. 集成部署方式
 
