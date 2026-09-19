@@ -300,6 +300,12 @@
       "name": "自动驾驶",
       "id": "ad",
       "note": "端到端与 BEV · 学习与面试",
+      "overview": {
+        "title": "自动驾驶端侧 AI：从领域知识到边缘实战",
+        "desc": "通识（学习文档 + 面试指南）→ Alpamayo-Edge 8B VLM Orin 量化实战的故事线导读",
+        "file": "ad/overview.html",
+        "badge": "导读"
+      },
       "general": [
         {
           "title": "自动驾驶面试指南",
@@ -311,6 +317,18 @@
           "tags": [
             "面试",
             "34 题"
+          ]
+        },
+        {
+          "title": "自动驾驶学习文档",
+          "file": "ad/general/learning.html",
+          "badge": "15 章",
+          "status": "done",
+          "desc": "端侧 AI 视角的自动驾驶全栈：算力平台、BEV 感知、3D 检测分割、端到端模型、端侧部署、驾驶 Agent、功能安全，15 章 4 Part",
+          "tags": [
+            "BEV",
+            "端到端",
+            "功能安全"
           ]
         }
       ],
@@ -330,24 +348,6 @@
                 "TensorRT-Edge-LLM",
                 "Jetson Orin",
                 "FMHA"
-              ]
-            }
-          ]
-        },
-        {
-          "name": "自动驾驶端到端与 BEV 感知",
-          "period": "2025.01 – 2026.06",
-          "docs": [
-            {
-              "title": "自动驾驶学习文档",
-              "file": "ad/projects/bev/learning.html",
-              "badge": "15 章",
-              "status": "done",
-              "desc": "BEV 感知、端到端模型、越野场景、数据飞轮、驾驶 Agent、功能安全，15 章 5 Part",
-              "tags": [
-                "BEV",
-                "端到端",
-                "功能安全"
               ]
             }
           ]
