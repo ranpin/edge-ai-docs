@@ -1,15 +1,15 @@
 # Android 开发 & JNI 基础
 
-*从创建工程到 JNI 桥接的完整学习路径  |  以座舱端侧大模型 APK `lantu_demo` 为教材*
+*从创建工程到 JNI 桥接的完整学习路径  |  以座舱端侧大模型 APK `edge_vlm_demo` 为教材*
 
 > [!TIP]
 > **本篇定位**
 >
-> 这是一篇**从零开始的教程**，讲 Android 工程结构与 JNI 的基础知识，所有例子都取自真实项目 `lantu_demo`（一个在高通 SA8397P 座舱上跑端侧大模型的宿主 APK）。想直接看这个 APK 的**架构与实现细节**，请读 [APK 集成与端侧服务化](../projects/lantu/apk-integration.html)；想懂底层芯片/DSP/FastRPC，请读 [硬件与系统底层](hardware.html)。本篇是「打基础」，那篇是「看实战」。
+> 这是一篇**从零开始的教程**，讲 Android 工程结构与 JNI 的基础知识，所有例子都取自示例工程 `edge_vlm_demo`（一个在高通 SA8397P 座舱上跑端侧大模型的宿主 APK）。想看一个真实量产项目的完整宿主 APK 实现，请读 [APK 集成与端侧服务化](../projects/lantu/apk-integration.html)；想懂底层芯片/DSP/FastRPC，请读 [硬件与系统底层](hardware.html)。本篇是「打基础」，那篇是「看实战」。
 
 ## 1. 学习路线总览
 
-`lantu_demo` 几乎覆盖了「Android + JNI + 端侧 NPU」的完整知识栈，所以它是极好的教材。整条链路如下，本篇按此顺序展开：
+`edge_vlm_demo` 几乎覆盖了「Android + JNI + 端侧 NPU」的完整知识栈，所以它是极好的教材。整条链路如下，本篇按此顺序展开：
 
 ```mermaid
 flowchart TB
@@ -30,10 +30,10 @@ flowchart TB
 
 ### 2.1 目录结构
 
-一个标准 Android 工程（对照 `lantu_demo`）：
+一个标准 Android 工程（对照 `edge_vlm_demo`）：
 
 ```
-lantu_demo/
+edge_vlm_demo/
 ├── settings.gradle          # ① 工程「目录」：有哪些模块、去哪下依赖
 ├── build.gradle             # ② 根构建脚本（工程级公共配置）
 ├── gradle.properties        # ③ Gradle 运行参数
@@ -180,7 +180,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);      // 加载布局 XML
-        infer = new BanmaModelInference();           // 创建 JNI 封装对象
+        infer = new ModelInference();           // 创建 JNI 封装对象
         infer.init("/AI/vllm_sdk/models", nativeLibraryDir);
         startMyService();                            // 拉起前台服务
     }
@@ -254,7 +254,7 @@ flowchart TB
 C++ 函数名 = `Java_` + 包名（`.`→`_`）+ `_类名_` + `方法名`：
 
 ```
-Java_com_example_myapplication_BanmaModelInference_nativeCreate
+Java_com_example_myapplication_ModelInference_nativeCreate
      └────────── 包名 ──────────────┘ └──── 类名 ────┘ └─方法名─┘
 ```
 
@@ -291,29 +291,29 @@ C++ 对象活在堆上，Java 没法直接持有它。办法：把 C++ 指针转
 ```
 // 创建：new 一个 C++ 对象，把指针当 long 返回
 JNIEXPORT jlong JNICALL Java_..._nativeCreate(JNIEnv* env, jclass) {
-    auto* p = new (std::nothrow) banma::ModelInference();
+    auto* p = new (std::nothrow) edgeai::ModelInference();
     return reinterpret_cast<jlong>(p);   // 指针 → long
 }
 
 // 使用：把 long 转回指针
 JNIEXPORT jboolean JNICALL Java_..._nativeInit(JNIEnv* env, jclass, jlong handle, ...) {
-    auto* p = reinterpret_cast<banma::ModelInference*>(handle);  // long → 指针
+    auto* p = reinterpret_cast<edgeai::ModelInference*>(handle);  // long → 指针
     bool ok = p->init(path);
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 
 // 销毁：delete
 JNIEXPORT void JNICALL Java_..._nativeDestroy(JNIEnv* env, jclass, jlong handle) {
-    delete reinterpret_cast<banma::ModelInference*>(handle);
+    delete reinterpret_cast<edgeai::ModelInference*>(handle);
 }
 ```
 
 Java 侧用 `nativeHandle` 字段保管这个 long，并实现 `AutoCloseable` 确保释放：
 
 ```
-public class BanmaModelInference implements AutoCloseable {
+public class ModelInference implements AutoCloseable {
     private long nativeHandle = 0;
-    public BanmaModelInference() { nativeHandle = nativeCreate(); }
+    public ModelInference() { nativeHandle = nativeCreate(); }
     @Override public void close() {
         if (nativeHandle != 0) { nativeDestroy(nativeHandle); nativeHandle = 0; }
     }
@@ -369,7 +369,7 @@ jobject gHandler = env->NewGlobalRef(handler);   // ① 升级成全局引用
 jmethodID onReplyMid = env->GetMethodID(cls, "onReply", "(Ljava/lang/String;Z)V");  // ② 缓存方法 ID
 
 // 回调 lambda（将来在 C++ 工作线程里执行）：
-banma::ScenarioReplyHandler cb = [jvm, gHandler, onReplyMid](const std::string& result, bool finished){
+edgeai::ScenarioReplyHandler cb = [jvm, gHandler, onReplyMid](const std::string& result, bool finished){
     JNIEnv* envCb = nullptr;
     // ③ 当前是 native 线程，没有 JNIEnv，必须先 Attach
     if (jvm->GetEnv((void**)&envCb, JNI_VERSION_1_6) == JNI_EDETACHED)
@@ -415,7 +415,7 @@ target_include_directories(modelinfer PUBLIC     # 头文件搜索路径
 
 target_link_directories(modelinfer PUBLIC ${CMAKE_SOURCE_DIR}/../jniLibs/arm64-v8a)
 
-target_link_libraries(modelinfer aadkcore log android_sdk)   # 链接依赖
+target_link_libraries(modelinfer inference_core log android_sdk)   # 链接依赖
 ```
 
 > [!NOTE]
@@ -430,7 +430,7 @@ flowchart TB
     A["jniLibs/arm64-v8a/*.so预编译二进制，按 CPU 架构分目录"] --> B["abiFilters 'arm64-v8a' 打包时只保留这个架构"]
     B --> C["装进 APK，安装时解压到 nativeLibraryDir"]
     C --> D["System.loadLibrary('modelinfer') 运行时按名字 dlopen 加载"]
-    D --> E["libmodelinfer.so 链接了 aadkcore/android_sdk→ 连带加载它依赖的所有 .so"]
+    D --> E["libmodelinfer.so 链接了推理框架库/宿主 SDK→ 连带加载它依赖的所有 .so"]
     style A fill:#eef2ff,color:#1a1a2e
     style D fill:#4361ee,color:#fff
 ```
@@ -494,12 +494,12 @@ flowchart TB
 | **2. Hello JNI** | 最小桥接 | New Project 勾选 **Include C++ support** → 读懂自动生成的 `stringFromJNI()` → 自己加 `native int add(int,int)` |
 | **3. 句柄模式** | 有状态对象 | C++ 写 `class Counter`，用 `nativeCreate/Increment/Destroy` + `jlong` 句柄暴露——**复刻本项目核心范式** |
 | **4. C++ 回调 Java** | 异步回调（最难） | 传 Java 回调接口，C++ 里 `NewGlobalRef` + `GetMethodID`，开 `std::thread` 延迟 1 秒后 `AttachCurrentThread` + `CallVoidMethod` |
-| **5. 读懂 lantu\_demo** | 融会贯通 | 重读 `BanmaModelInference.java` + `modelinfer.cpp`，此时每行都应能说出「为什么」 |
+| **5. 读懂 edge\_vlm\_demo** | 融会贯通 | 重读 `ModelInference.java` + `modelinfer.cpp`，此时每行都应能说出「为什么」 |
 
 > [!TIP]
 > **小结**
 >
-> 阶段 2–4 是 JNI 的全部核心，`lantu_demo` 只是在这之上叠加了 NPU/QNN/服务化。把这三阶段做扎实，这个项目的 JNI 部分就没有秘密了。完整架构与实现细节见 [APK 集成与端侧服务化](../projects/lantu/apk-integration.html)。
+> 阶段 2–4 是 JNI 的全部核心，`edge_vlm_demo` 只是在这之上叠加了 NPU/QNN/服务化。把这三阶段做扎实，这类项目的 JNI 部分就没有秘密了。完整架构与实现细节见 [APK 集成与端侧服务化](../projects/lantu/apk-integration.html)。
 
 // Theme toggle
 var b=document.getElementById('themeBtn');

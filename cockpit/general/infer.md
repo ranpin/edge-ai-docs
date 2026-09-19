@@ -929,7 +929,7 @@ flowchart TB
 
 ### 12.3 座舱多音区调度
 
-在 aadkcore 框架中，`ModelScheduler` 负责多请求的调度。座舱场景的 Continuous Batching 有其特殊性：
+端侧推理框架通常由**模型调度器**负责多请求的调度。座舱场景的 Continuous Batching 有其特殊性：
 
 | 座舱特点 | 对调度的影响 | 应对策略 |
 | :--- | :--- | :--- |
@@ -1041,7 +1041,7 @@ SA8397P Hexagon DSP 的 VTCM 约 4MB。FlashAttention 每次迭代需要在 VTCM
 
 ### 13.5 端侧实践
 
-在 aadkcore 的 vllm\_sdk 构建产物中，`libflash_attn.so`（约 31MB）即为 FlashAttention 的端侧实现库。该库针对 Hexagon HVX/HMX 指令集优化，在 HTP 上执行分块注意力计算。
+端侧推理框架的构建产物中，FlashAttention 通常以独立动态库形式存在（如 `libflash_attn.so`，约 31MB）。该库针对 Hexagon HVX/HMX 指令集优化，在 HTP 上执行分块注意力计算。
 
 | 适用场景 | FlashAttention 收益 | 说明 |
 | :--- | :--- | :--- |
