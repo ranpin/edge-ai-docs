@@ -1,6 +1,16 @@
 # 3. 推理优化
 
-*以 Qwen3-Omni-4B 为例  |  量化 · AIMET · KV Cache · 多核绑定 · 前缀缓存 · 投机采样 · 约束解码*
+*以 Qwen3-Omni-4B 为例  |  量化 · AIMET · KV Cache · 多核绑定 · 前缀缓存 · 投机采样 · 约束解码*
+
+> [!TIP]
+> **本篇讲什么**
+>
+> 以 Qwen3-Omni-4B 为例的端侧推理优化全景：
+>
+> - 模型量化基础、AIMET 量化工具、量化方案对比
+> - KV Cache 优化、前缀缓存（Prefix Caching）、投机采样、约束解码
+> - 推理引擎对比、ViT+LLM 多核绑定、TTFT 端到端优化
+> - Prefill/Decode 阶段分析、Continuous Batching
 
 ## 1. 模型量化基础
 
@@ -601,14 +611,14 @@ xychart-beta
 ```mermaid
 stateDiagram-v2
     [*] --> START
-    START --> IN_OBJECT: 生成 "{"
+    START --> IN_OBJECT: 生成 左花括号
     IN_OBJECT --> IN_KEY: 生成 引号
     IN_KEY --> KEY_DONE: 生成 function/arguments
-    KEY_DONE --> COLON: 生成 ":"
-    COLON --> IN_VALUE: 生成 引号/数字/{
+    KEY_DONE --> COLON: 生成 冒号
+    COLON --> IN_VALUE: 生成 引号/数字/左花括号
     IN_VALUE --> VALUE_DONE: 值结束
-    VALUE_DONE --> COMMA: 生成 ","
-    VALUE_DONE --> END_OBJECT: 生成 "}"
+    VALUE_DONE --> COMMA: 生成 逗号
+    VALUE_DONE --> END_OBJECT: 生成 右花括号
     COMMA --> IN_KEY: 生成 引号
     END_OBJECT --> [*]
 

@@ -243,7 +243,7 @@ Java 负责「服务化、协议、生命周期」，C++ 负责「推理」，JN
 
 ```mermaid
 flowchart TB
-    A["① Java 声明 native 方法private static native long nativeCreate();"] --> B["② 加载 .soSystem.loadLibrary("modelinfer")"]
+    A["① Java 声明 native 方法private static native long nativeCreate();"] --> B["② 加载 .soSystem.loadLibrary('modelinfer')"]
     B --> C["③ C++ 按命名规则实现同名函数Java_com_example_..._nativeCreate(...)"]
     C --> D["④ 运行时 JVM 按名字把 ① 和 ③ 绑定"]
     style A fill:#eef2ff,color:#1a1a2e
@@ -427,9 +427,9 @@ target_link_libraries(modelinfer aadkcore log android_sdk)   # 链接依赖
 
 ```mermaid
 flowchart TB
-    A["jniLibs/arm64-v8a/*.so预编译二进制，按 CPU 架构分目录"] --> B["abiFilters "arm64-v8a"打包时只保留这个架构"]
+    A["jniLibs/arm64-v8a/*.so预编译二进制，按 CPU 架构分目录"] --> B["abiFilters 'arm64-v8a' 打包时只保留这个架构"]
     B --> C["装进 APK，安装时解压到 nativeLibraryDir"]
-    C --> D["System.loadLibrary("modelinfer")运行时按名字 dlopen 加载"]
+    C --> D["System.loadLibrary('modelinfer') 运行时按名字 dlopen 加载"]
     D --> E["libmodelinfer.so 链接了 aadkcore/android_sdk→ 连带加载它依赖的所有 .so"]
     style A fill:#eef2ff,color:#1a1a2e
     style D fill:#4361ee,color:#fff
