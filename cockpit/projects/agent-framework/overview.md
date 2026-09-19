@@ -3,9 +3,14 @@
 *端侧大模型选型、Agent 框架设计概述与场景应用概览*
 
 > [!TIP]
-> **aadkcore + agent\_group 架构**
+> **本篇讲什么**
 >
-> 座舱端侧 Agent 系统由两个核心模块组成：**aadkcore** 提供统一模型接口、调度器、MCP/A2A 协议等基础设施（编译为 `libaadkcore.so`）；**agent\_group** 基于 aadkcore 的插件接口实现各场景 Agent（编译为 `libagent_group.so`，运行时动态加载）。详细文档请查看下方两个入口：
+> 座舱端侧 Agent 系统总览。系统由两个核心模块组成：
+>
+> - **aadkcore**：提供统一模型接口、调度器、MCP/A2A 协议等基础设施（编译为 `libaadkcore.so`）
+> - **agent\_group**：基于 aadkcore 的插件接口实现各场景 Agent（编译为 `libagent_group.so`，运行时动态加载）
+>
+> 本篇覆盖端侧大模型选型、Agent 框架设计概述与场景应用概览；两个核心模块的详细文档见下方「核心模块导读」。
 
 ## 1. 核心模块导读
 
