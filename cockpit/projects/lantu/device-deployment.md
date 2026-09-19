@@ -1,14 +1,14 @@
 # 4. 设备部署与上车流程
 
-*岚图 8397 · SDK 构建 → 设备目录 → adb push → android\_test / APK 运行 · JNI 接口 · VoyahAIProxy*
+*岚图 8397 · SDK 构建 → 设备目录 → adb push → android\_test / APK 运行 · JNI 接口*
 
 > [!TIP]
 > **本篇讲什么**
 >
-> 岚图 8397 上 GenAI 方案 SDK 的**设备部署与上车流程**——这是从框架层 [设备部署](../../agent-framework/deploy.html) 下沉的**岚图分支专属**部分（主线 agent\_core\_dev 不含 android\_sdk / android\_test / VoyahAIProxy）：
+> 岚图 8397 上 GenAI 方案 SDK 的**设备部署与上车流程**——这是从框架层 [设备部署](../../agent-framework/deploy.html) 下沉的**岚图分支专属**部分（主线 agent\_core\_dev 不含 android\_sdk / android\_test）：
 >
 > - 可执行文件部署：`build_8397_android.sh`（带 `ENABLE_LANTU_SDK`）构建 → `/AI/vllm_sdk/` 设备目录 → adb push → `android_test` 运行
-> - APK 集成 SO：`libandroid_sdk.so` 集成、JNI 接口（`model_inference.h`）、VoyahAIProxy NPU 资源管理
+> - APK 集成 SO：`libandroid_sdk.so` 集成、JNI 接口（`model_inference.h`）
 >
 > APK 应用层内部结构（MyApplication / 前台服务 / HTTP 服务化）见 [3. APK 集成与端侧服务化](apk-integration.html)。
 >
@@ -58,8 +58,7 @@ adb push build_8397_android/vllm_sdk/ /AI/vllm_sdk/
 │       └── ...
 ├── include/                    # 对外头文件
 │   ├── model_inference.h       # ModelInference 接口
-│   ├── data_message.h          # DataMessage 结构定义
-│   └── VoyahAIProxy.hpp        # NPU 资源管理接口
+│   └── data_message.h          # DataMessage 结构定义
 ├── example/
 │   ├── bin/android_test        # 测试可执行文件
 │   ├── src/android_sdk_test.cpp  # 测试源码
@@ -137,12 +136,15 @@ flowchart TB
 
 | 方法 | 参数 | 返回值 | 说明 |
 | :--- | :--- | :--- | :--- |
-| `requestNpuAccess` | `packageName` (string) | bool | 申请 NPU 硬件资源访问权限。通过 VoyahAIProxy 与系统 NPU 资源管理器交互，**必须在 init 之前调用** |
 | `init` | `model_path` (string) | bool | 初始化模型。model\_path 指向 models 目录的绝对路径，内部加载 runtime\_config.json 并初始化 MsgDeliverImpl |
-| `registerProfilingCallback` | `callback` (ProfilingCallback) | void | 注册性能监控回调，接收 QNN 模型执行的耗时数据（accelTime、hostRpcTime 等） |
 | `inference_msg` | `msg`, `stream`, `replyHandler` | bool | 发送推理请求。msg 包含文本/图像/音频输入，stream 控制流式输出，replyHandler 接收推理结果 |
-| `syncNpuProfile` | `info` (ProfileEventInfo) | bool | 将采集到的 NPU 性能数据同步到服务端（通过 VoyahAIProxy） |
-| `registerNpuResourceEventCallback` | `callback` (NpuResourceEventCallback) | void | 注册 NPU 资源竞争事件回调，当资源竞争级别变化时通知（NONE/MILD/MODERATE/SEVERE） |
+| `stopInferenceTask` | — | bool | 停止当前推理任务；无运行任务时返回 false |
+| `releaseModelResources` | — | bool | 释放模型资源（推理进行中返回 false）；释放后需重新 `init` |
+
+> [!NOTE]
+> **NPU 资源 / profile 接口已停用删除**
+>
+> 早期 SDK 有 `requestNpuAccess` / `syncNpuProfile` / `registerNpuResourceEventCallback` / `registerProfilingCallback` 及 `VoyahAIProxy.hpp`（NPU 资源管理与性能上报）。2026-08 需求变更后**全部停用删除**，`model_inference.h` 现仅剩上表 4 个方法（`setSTRStatus` 亦注释停用）；app 侧实际只调 `init` + `inference_msg`。背景见 [APK 集成与端侧服务化](apk-integration.html) 的 2.2 节。
 
 **DataMessage 结构**：
 
@@ -166,13 +168,10 @@ flowchart TB
 
 banma::ModelInference model;
 
-// 1. 申请 NPU 权限
-model.requestNpuAccess("com.voyah.ai.assistant");
-
-// 2. 初始化模型
+// 1. 初始化模型
 model.init("/AI/vllm_sdk/models");
 
-// 3. 构造推理请求
+// 2. 构造推理请求
 banma::DataMessage msg;
 msg.scenario_id = banma::OAI_INFERENCE;  // 通用推理
 msg.content = "今天天气怎么样？";
@@ -180,7 +179,7 @@ msg.msg_type = banma::TEXT;
 msg.request_type = banma::REQUEST;
 msg.stream = true;
 
-// 4. 发送推理请求
+// 3. 发送推理请求
 model.inference_msg(msg, true, [](const std::string& result, bool is_finished) {
     // 流式回调：result 为每次返回的文本片段
     // is_finished 为 true 时表示推理完成
@@ -202,13 +201,7 @@ model.inference_msg(msg, true, [](const std::string& result, bool is_finished) {
 | **Prompt 模板** | vllm\_sdk/models/template/ | /AI/vllm\_sdk/models/template/ | YAML 格式的 Agent 模板 |
 
 > [!NOTE]
-> **NPU 资源管理（VoyahAIProxy）**
->
-> APK 集成模式下，多个应用可能同时竞争 NPU 资源。`VoyahAIProxy` 提供统一的 NPU 资源管理：
->
-> * `requestNpuAccess(packageName)` — 以应用包名申请 NPU 访问权限，由系统资源管理器统一调度
-> * `registerNpuResourceEventCallback` — 监听资源竞争级别变化（NONE → MILD → MODERATE → SEVERE），应用可据此降级推理精度或推迟非关键任务
-> * `syncNpuProfileToServer` — 将 QNN 推理性能数据（accelTime, hostRpcTime, htpRpcTime）上报到服务端，用于远程性能监控
+> **调试数据录制**
 >
 > 调试时可通过 Android 系统属性控制数据录制：`adb shell setprop persist.aadk.data_dump 1` 开启，设为 0 关闭。
 
