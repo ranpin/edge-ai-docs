@@ -2,6 +2,15 @@
 
 *Qualcomm 第三代 Snapdragon Digital Chassis 座舱 SoC 硬件全景与 DSP 深度解析*
 
+> [!TIP]
+> **本篇讲什么**
+>
+> 高通 SA8397P 座舱 SoC 的硬件全景与 DSP 深度解析：
+>
+> - SoC 全景、Hexagon DSP 微架构、三大 DSP 子系统（CDSP/ADSP/SDSP）对比
+> - FastRPC 跨处理器通信、Hypervisor 与系统可靠性（PD/SSR）
+> - 内存带宽瓶颈、功耗与热管理、竞品芯片横向对比
+
 ## 1. SA8397P SoC 全景
 
 SA8397P 是高通第三代 Snapdragon Digital Chassis 平台的旗舰 SoC，目标是实现**座舱（Cockpit）与 ADAS 融合**。它将传统分立的座舱娱乐芯片和 ADAS 处理芯片整合到一颗 SoC 上，降低 BOM 成本、减少线束复杂度，同时通过 Hypervisor 实现功能安全隔离。
