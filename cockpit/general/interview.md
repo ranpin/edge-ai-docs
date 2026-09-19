@@ -75,7 +75,7 @@
 - **品牌演进线**：SNPE（Snapdragon Neural Processing Engine，早期，DLC 格式）→ QNN（Qualcomm AI Engine Direct，图级 API、Context Binary、多后端统一）→ **QAIRT（Qualcomm AI Runtime，2024 起把 QNN + SNPE 统一的运行时品牌，QNN 是其 SDK/API 层，工具随之改名如 `qairt-converter`）**。
 - SNPE 已进入维护模式，新芯片/新算子只在 QNN/QAIRT 深度优化；**新项目选 QNN/QAIRT**。
 - **迁移要点**：DLC → Context Binary；SNPE 的 UserBuffer → QNN 的 Tensor；后端选择方式不同。
-- **端侧 LLM** 走 QAIRT 里的 **Genie** 运行时（见 Q40/Q41 专题），不是普通 QNN graph。
+- **端侧 LLM** 走 QAIRT 里的 **Genie** 运行时（见 Q41/Q42 专题），不是普通 QNN graph。
 
 > 详解见 [硬件架构](hardware.html) 与 [推理原理 · 引擎与运行时](infer-principles.html)。
 
@@ -180,7 +180,7 @@
 - **算子兼容性**：全图算子须被 QNN HTP 原生支持，否则 fallback CPU 延迟剧增；选型期用 `qnn-net-run --backend libQnnHtp.so` 验证全图能否上 HTP。
 - **量化友好性（易错，别讲反）**：含大量 **depthwise conv / hard-swish** 的模型（如 MobileNetV3）是**公认的量化难点，掉点严重**，需 CLE + Bias Correction + AdaRound 补救——**不是"量化后损失小"**。
 - **推理延迟**：给方法（MACs 与内存带宽需求匹配 CDSP 能力），DMS 要满足帧率预算。
-- **模型大小**：本题讨论的是 **CNN 类小模型（MB 级）**；LLM 是 GB 级，另论（见 Q31）。
+- **模型大小**：本题讨论的是 **CNN 类小模型（MB 级）**；LLM 是 GB 级，另论（见 Q32）。
 
 > 详解见 [量化 · 量化友好性](quantization.html) 与 [训练微调 · 端侧模型选型](training.html)。
 
@@ -468,17 +468,31 @@
 
 </details>
 
+<details markdown="1">
+<summary>**Q31: 端侧大模型 APK 上机，模型放在非标准路径（如 /data/models）加载失败，最常见的根因是什么？怎么排查？** · `高级`</summary>
+
+**答题要点：**
+
+- **头号根因是 SELinux**：`untrusted_app` 域默认无权读取自定义根目录，`open()` 直接 EACCES，logcat 里只有 `avc: denied`。
+- **两条正路**：① 模型放应用沙箱内（context 天然可读）；② 自定义路径需 `file_contexts` 打标 + sepolicy 放行该域对 file 类的读权限。
+- **排查**：`dmesg | grep avc` / logcat 抓 denied，先确认是 SELinux 而非路径拼写；务必在 enforcing（permissive=0）下验证，别只在 userdebug 宽松态测。
+- **经验**：「文件在但打不开」先查 SELinux；JNI 侧还要区分 native 线程 `FindClass` 陷阱与 `RegisterNatives` 的解耦做法。
+
+> 详解见 [Android 开发 & JNI 基础 · SELinux 与模型文件访问](android-jni.html)。
+
+</details>
+
 ## 4. Agent 与大模型题
 
 <details markdown="1">
-<summary>**Q31: 如何为座舱选择合适的端侧大语言模型？评估标准是什么？** · `初级`</summary>
+<summary>**Q32: 如何为座舱选择合适的端侧大语言模型？评估标准是什么？** · `初级`</summary>
 
 **答题要点：**
 
 - **三硬约束**：内存/算力/延迟；参数量控制在 1B-4B 级，INT4 权重 GB 级。
 - **首选锚点 Qwen3-Omni-4B**（项目内部定制的 4B 级全模态模型，**非**公开 30B-A3B MoE）：原生支持文本/图像/音频/视频输入 + 音频输出，INT4 约 2.5 GB（示例），单模型替代传统 ASR + LLM + TTS 三段式。
 - **TTFT 给方法**：取决于 prefill 速度；目标按体验定，**口径要区分 P50/P95 与冷/热启动并全文统一**，别一处一个数。
-- **decode 吞吐给方法**：用带宽模型反推（见 Q51 估算题），匹配中文语音播报速度。
+- **decode 吞吐给方法**：用带宽模型反推（见 Q52 估算题），匹配中文语音播报速度。
 - **Function Calling 能力**：能把自然语言转结构化 API 调用。
 - **部署口径（修正）**：**整图在 HTP（Genie）上运行**；不要说"embedding 在 GPU、attention 在 CDSP"——embedding 是一次 gather、LM head 要全词表 logits，跨器件每步搬张量的代价远大于收益。
 
@@ -487,7 +501,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q32: 端侧 Function Calling 如何设计？与云端方案有什么区别？** · `中级`</summary>
+<summary>**Q33: 端侧 Function Calling 如何设计？与云端方案有什么区别？** · `中级`</summary>
 
 **答题要点：**
 
@@ -502,7 +516,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q33: 端侧 Agent 的 Tool Use 需要哪些安全沙箱级别？如何设计？** · `高级`</summary>
+<summary>**Q34: 端侧 Agent 的 Tool Use 需要哪些安全沙箱级别？如何设计？** · `高级`</summary>
 
 **答题要点：**
 
@@ -519,7 +533,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q34: 端侧 LLM 的 KV Cache 管理有哪些策略？内存不够时怎么办？** · `中级`</summary>
+<summary>**Q35: 端侧 LLM 的 KV Cache 管理有哪些策略？内存不够时怎么办？** · `中级`</summary>
 
 **答题要点：**
 
@@ -533,7 +547,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q35: 如何优化端侧 LLM 的 TTFT（首 Token 延迟）？** · `中级`</summary>
+<summary>**Q36: 如何优化端侧 LLM 的 TTFT（首 Token 延迟）？** · `中级`</summary>
 
 **答题要点：**
 
@@ -548,7 +562,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q36: Speculative Decoding（投机解码）的原理是什么？端侧能用吗？** · `高级`</summary>
+<summary>**Q37: Speculative Decoding（投机解码）的原理是什么？端侧能用吗？** · `高级`</summary>
 
 **答题要点：**
 
@@ -561,7 +575,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q37: 端云混合推理架构如何设计？如何决定哪些请求走端侧、哪些走云端？** · `中级`</summary>
+<summary>**Q38: 端云混合推理架构如何设计？如何决定哪些请求走端侧、哪些走云端？** · `中级`</summary>
 
 **答题要点：**
 
@@ -575,7 +589,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q38: 座舱端侧 Agent 的 Memory（记忆系统）如何设计？** · `高级`</summary>
+<summary>**Q39: 座舱端侧 Agent 的 Memory（记忆系统）如何设计？** · `高级`</summary>
 
 **答题要点：**
 
@@ -591,7 +605,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q39: MCP 与 A2A 有什么区别？座舱多 Agent 如何协作？** · `中级`</summary>
+<summary>**Q40: MCP 与 A2A 有什么区别？座舱多 Agent 如何协作？** · `中级`</summary>
 
 **答题要点：**
 
@@ -605,7 +619,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q40: QAIRT 与 Genie 是什么？端侧 LLM 运行时怎么选？** · `中级`</summary>
+<summary>**Q41: QAIRT 与 Genie 是什么？端侧 LLM 运行时怎么选？** · `中级`</summary>
 
 **答题要点：**
 
@@ -619,7 +633,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q41: 用 Genie 部署端侧 LLM 的完整流程是怎样的？** · `高级`</summary>
+<summary>**Q42: 用 Genie 部署端侧 LLM 的完整流程是怎样的？** · `高级`</summary>
 
 **答题要点：**
 
@@ -633,7 +647,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q42: W4A16 vs W8A8：HTP 上 LLM 的真实执行模式是什么？为什么激活留 16-bit？** · `高级`</summary>
+<summary>**Q43: W4A16 vs W8A8：HTP 上 LLM 的真实执行模式是什么？为什么激活留 16-bit？** · `高级`</summary>
 
 **答题要点：**
 
@@ -650,7 +664,7 @@
 ## 5. 综合系统设计题
 
 <details markdown="1">
-<summary>**Q43: 请设计一个完整的 DMS 系统，从传感器选型到量产部署。** · `高级`</summary>
+<summary>**Q44: 请设计一个完整的 DMS 系统，从传感器选型到量产部署。** · `高级`</summary>
 
 **答题要点：**
 
@@ -667,7 +681,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q44: 设计一个支持多模态输入的座舱 Agent 架构。** · `高级`</summary>
+<summary>**Q45: 设计一个支持多模态输入的座舱 Agent 架构。** · `高级`</summary>
 
 **答题要点：**
 
@@ -686,7 +700,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q45: 设计座舱多模型调度系统，同时管理 DMS、OMS、手势识别和语音模型。** · `高级`</summary>
+<summary>**Q46: 设计座舱多模型调度系统，同时管理 DMS、OMS、手势识别和语音模型。** · `高级`</summary>
 
 **答题要点：**
 
@@ -703,7 +717,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q46: 设计 DSP SSR 故障恢复策略，确保生产环境中 DMS 功能持续可用。** · `高级`</summary>
+<summary>**Q47: 设计 DSP SSR 故障恢复策略，确保生产环境中 DMS 功能持续可用。** · `高级`</summary>
 
 **答题要点：**
 
@@ -719,7 +733,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q47: ISO 21448 SOTIF 与 ISO/PAS 8800 是什么？AI 功能安全和传统功能安全有何不同？** · `高级`</summary>
+<summary>**Q48: ISO 21448 SOTIF 与 ISO/PAS 8800 是什么？AI 功能安全和传统功能安全有何不同？** · `高级`</summary>
 
 **答题要点：**
 
@@ -733,7 +747,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q48: ISO 26262 与 AI：ASIL 分解如何落到一个 AI 功能上？** · `高级`</summary>
+<summary>**Q49: ISO 26262 与 AI：ASIL 分解如何落到一个 AI 功能上？** · `高级`</summary>
 
 **答题要点：**
 
@@ -750,7 +764,7 @@
 ## 6. 系统设计答题框架
 
 <details markdown="1">
-<summary>**Q49: 面试中遇到系统设计题，应该用怎样的结构化思路作答？** · `中级`</summary>
+<summary>**Q50: 面试中遇到系统设计题，应该用怎样的结构化思路作答？** · `中级`</summary>
 
 **答题要点：**
 
@@ -766,7 +780,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q50: 用 RASCEF 框架回答：设计一个车载端侧多模态大模型交互系统。** · `高级`</summary>
+<summary>**Q51: 用 RASCEF 框架回答：设计一个车载端侧多模态大模型交互系统。** · `高级`</summary>
 
 **答题要点：**
 
@@ -782,7 +796,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q51: 系统设计题中如何做好「估算」环节？以 LLM 推理资源估算为例说明。** · `中级`</summary>
+<summary>**Q52: 系统设计题中如何做好「估算」环节？以 LLM 推理资源估算为例说明。** · `中级`</summary>
 
 **答题要点：**
 
@@ -799,7 +813,7 @@
 ## 7. 项目经验包装
 
 <details markdown="1">
-<summary>**Q52: 如何在面试中介绍「端侧 AI Agent 框架」项目经验？** · `中级`</summary>
+<summary>**Q53: 如何在面试中介绍「端侧 AI Agent 框架」项目经验？** · `中级`</summary>
 
 **答题要点：**
 
@@ -813,7 +827,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q53: 如何包装「模型量化与部署优化」相关的项目经验？** · `中级`</summary>
+<summary>**Q54: 如何包装「模型量化与部署优化」相关的项目经验？** · `中级`</summary>
 
 **答题要点：**
 
@@ -826,7 +840,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q54: 技术面试中如何讲述「调试排障」经历才能加分？** · `初级`</summary>
+<summary>**Q55: 技术面试中如何讲述「调试排障」经历才能加分？** · `初级`</summary>
 
 **答题要点：**
 
@@ -840,7 +854,7 @@
 ## 8. 行为面试准备
 
 <details markdown="1">
-<summary>**Q55: 「请介绍一个你主导的技术方案，说说你是如何推动落地的。」** · `中级`</summary>
+<summary>**Q56: 「请介绍一个你主导的技术方案，说说你是如何推动落地的。」** · `中级`</summary>
 
 **答题思路：**
 
@@ -851,7 +865,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q56: 「说说你和同事在技术方案上产生分歧时是如何解决的。」** · `初级`</summary>
+<summary>**Q57: 「说说你和同事在技术方案上产生分歧时是如何解决的。」** · `初级`</summary>
 
 **答题思路：**
 
@@ -862,7 +876,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q57: 「描述一次你犯的技术错误以及你从中学到了什么。」** · `中级`</summary>
+<summary>**Q58: 「描述一次你犯的技术错误以及你从中学到了什么。」** · `中级`</summary>
 
 **答题思路：**
 
@@ -873,7 +887,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q58: 行为面试通用准备清单与高频问题分类。** · `初级`</summary>
+<summary>**Q59: 行为面试通用准备清单与高频问题分类。** · `初级`</summary>
 
 **答题要点：**
 

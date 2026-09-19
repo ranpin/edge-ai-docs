@@ -1,4 +1,4 @@
-# 5. 调试与工具链
+# 6. 调试与工具链
 
 *端侧 AI 部署调试 · 精度 / 性能 / 稳定性排查 · 工具链与方法论*
 
@@ -92,18 +92,18 @@ FastRPC 是 ARM CPU 与 Hexagon DSP 之间的远程过程调用机制。FastRPC 
 > [!WARNING]
 > **常见陷阱**
 >
-> FastRPC 调用返回 `AEE_ECONNREFUSED`（错误码 -14）时，通常不是网络问题而是 DSP 侧 skeleton 库加载失败。请检查：(1) skeleton .so 文件是否推送到 `/vendor/lib/rfsa/dsp/`；(2) 文件权限是否为 755；(3) testsig 是否匹配。
+> FastRPC 调用返回 `AEE_ECONNREFUSED`（具体数值以 FastRPC 头文件 `AEEStdErr.h` 为准，勿在代码/文档中写死）时，通常不是网络问题而是 DSP 侧 skeleton 库加载失败。请检查：(1) skeleton .so 文件是否推送到 `/vendor/lib/rfsa/dsp/`；(2) 文件权限是否为 755；(3) testsig 是否匹配。
 
 ### 1.4 常见性能优化清单
 
-以下清单涵盖端侧推理的常见性能优化点，按优先级排序：
+本节聚焦**排障/诊断**视角：每项优化点给出"怎么检查、怎么判断"。优化手段本身的原理与推导见通识篇：量化 → [**端侧模型量化与压缩**](../../general/quantization.html)；roofline / 带宽模型 / 推理引擎 → [**LLM 推理原理与性能模型**](../../general/infer-principles.html)；投机采样、约束解码、延迟优化 → [**端侧解码与服务化优化**](../../general/infer-serving.html)。以下清单涵盖端侧推理的常见性能优化点，按优先级排序：
 
 | 优先级 | 优化项 | 检查方法 | 预期提升 | 注意事项 |
 | :--- | :--- | :--- | :--- | :--- |
 | **P0** | 消除 CPU fallback 算子 | `qnn-profile-viewer` 查看每个算子的 backend 字段 | 单算子 10-100x | Fallback 到 CPU 的算子会引入 CPU-DSP 数据搬运开销，是性能杀手。替换为 HTP 原生支持的算子或拆分为可支持的算子组合。 |
 | **P0** | 使用 Context Binary | 对比 `.so` 模式和 `.bin` 模式的加载时间 | 加载时间减少 50-80% | Context Binary 将图优化、内存规划等离线完成，避免运行时开销。生产环境必须使用 Context Binary。 |
-| **P1** | VTCM 利用率优化 | Hexagon Profiler 查看 VTCM hit/miss ratio | 10-30% | VTCM 是 DSP 的片上高速缓存（~4MB）。确保热点算子的权重和中间结果能放入 VTCM，避免 spill 到 DDR。 |
-| **P1** | 量化精度选择 | 对比 INT8 vs INT16 精度和速度 | INT8 比 INT16 快 1.5-2x | 优先使用 INT8；对精度敏感的层（如最后的分类头）可保持 INT16 混合精度。 |
+| **P1** | VTCM 利用率优化 | Hexagon Profiler 查看 VTCM hit/miss ratio | 10-30% | VTCM 是 DSP 的片上高速缓存（典型 8 MB，视 HTP 架构版本而定，以 `QnnHtpDevice` 实际查询为准）。确保热点算子的权重和中间结果能放入 VTCM，避免 spill 到 DDR。 |
+| **P1** | 量化精度选择 | 对比 INT8 vs INT16 精度和速度 | INT8 通常快于 INT16（幅度视具体 HTP 代际） | 优先使用 INT8；对精度敏感的层（如最后的分类头）可保持 INT16 混合精度。 |
 | **P1** | 输入预处理 offload | Snapdragon Profiler 对比 CPU vs GPU 预处理耗时 | 20-40% | 将 resize/normalize/color conversion 从 CPU offload 到 GPU 或 ISP，减少 CPU 负担和数据搬运。 |
 | **P2** | Batch 优化 | 测试不同 batch size 的吞吐量 | 10-30% | 在多路摄像头场景下，合并多路输入为 batch 推理可提高 NPU 利用率。但会增加单帧延迟。 |
 | **P2** | Pipeline 并行 | Snapdragon Profiler 时间线分析 | 20-50% | 将预处理、推理、后处理三个阶段 pipeline 化，利用 CPU/GPU/NPU 异构并行。需仔细设计 buffer 管理。 |
@@ -194,32 +194,38 @@ for layer_idx in range(num_layers):
 | 内存组成 | 大小估算 (Qwen3-Omni-4B INT4) | 是否随推理增长 | 说明 |
 | :--- | :--- | :--- | :--- |
 | **模型权重** | ~2.5 GB | 否（常驻） | INT4 量化后的全部参数 |
-| **KV Cache** | ~19 MB/512 tokens (INT8) | 是（随序列长度线性增长） | 每层 2 × n\_kv\_heads × head\_dim × seq\_len |
+| **KV Cache** | ~36 MB/512 tokens (INT8) | 是（随序列长度线性增长） | 每层 2 × n\_kv\_heads × head\_dim × seq\_len |
 | **激活值** | ~200-500 MB | 是（随 batch size） | 推理过程中的中间计算结果 |
 | **运行时开销** | ~100-200 MB | 否 | QNN 运行时、Context Binary 元数据、内存池 |
 | **Vision Encoder** | ~300-500 MB | 否（独立模型） | ViT 权重 + 图像预处理缓冲区 |
 | **总计** | ~3.5-4.0 GB（初始） | KV Cache 持续增长 | 峰值取决于最大序列长度和并发数 |
+
+> [!NOTE]
+> **估算口径**
+>
+> 上表以全站锚点模型 Qwen3-Omni-4B（内部定制 4B 级：36 层、32 个 Q head、8 个 KV head（GQA）、head\_dim 128）为例，数值为量级示例、非实测。实际部署请代入你自己的模型配置与平台参数推导。
 
 ### 3.2 KV Cache OOM 排障
 
 KV Cache 是端侧 LLM 最常见的 OOM 来源。随着对话轮次增加，KV Cache 持续增长直至内存耗尽：
 
 ```
-KV Cache 内存计算:
+KV Cache 内存计算（以 Qwen3-4B 级典型配置为例:
+n_layers=36, n_kv_heads=8 (GQA), head_dim=128, KV 用 INT8）:
 
   per_token = 2 × n_layers × n_kv_heads × head_dim × dtype_bytes
-            = 2 × 36 × 4 × 128 × 1B (INT8)
-            = 36,864 Bytes ≈ 36 KB/token
+            = 2 × 36 × 8 × 128 × 1B (INT8)
+            = 73,728 Bytes = 72 KB/token
 
   不同序列长度的 KV Cache 占用:
-    256 tokens:   36KB × 256   ≈ 9 MB
-    512 tokens:   36KB × 512   ≈ 18 MB
-    1024 tokens:  36KB × 1024  ≈ 36 MB
-    2048 tokens:  36KB × 2048  ≈ 72 MB
-    4096 tokens:  36KB × 4096  ≈ 144 MB
+    256 tokens:   72KB × 256   ≈ 18 MB
+    512 tokens:   72KB × 512   ≈ 36 MB
+    1024 tokens:  72KB × 1024  ≈ 72 MB
+    2048 tokens:  72KB × 2048  ≈ 144 MB
+    4096 tokens:  72KB × 4096  ≈ 288 MB
 
   多请求并发 (Continuous Batching):
-    4 个请求 × 1024 tokens/请求 ≈ 144 MB
+    4 个请求 × 1024 tokens/请求 ≈ 288 MB
 
   结合模型权重 2.5GB + 激活值 0.5GB:
     总内存 ≈ 3.0 GB + KV Cache
@@ -269,6 +275,7 @@ done
 | **FastRPC Timeout** | CPU→DSP 调用超时（默认 ~2s） | `fastrpc: invoke timed out` | DSP 侧是否死锁；模型推理是否超长；QNN Context 是否加载失败 |
 | **QNN Context 加载失败** | Context Binary 与硬件不匹配 | `QnnContext_createFromBinary failed` | 检查 Context Binary 编译目标 (SOC) 是否匹配当前硬件 |
 | **OOM Kill** | 系统内存不足触发 Low Memory Killer | `lowmemorykiller: kill process` | 检查内存使用曲线，定位内存泄漏或 KV Cache 未释放 |
+| **并发/竞态 Crash** | ModelScheduler 调度竞态、Tool 异步回调线程安全问题（多音区并发请求、回调与主线程共享状态未加保护） | crash 栈指向共享容器/锁内部，或对已释放地址的 use-after-free；复现率低、与并发负载正相关 | TSAN（ThreadSanitizer）检测数据竞争；核查回调线程安全与对象生命周期（释放后地址复用）；并发压测提高复现率 |
 
 ### 4.2 DSP Crash 分析流程
 
