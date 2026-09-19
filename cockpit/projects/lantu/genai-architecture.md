@@ -242,7 +242,7 @@ graph LR
 
 ### 5.2 评测链路构建
 
-详细评测方法与指标定义见 [4. 效果及性能测试](effect-performance.html)。
+详细评测方法与指标定义见 [5. 效果及性能测试](effect-performance.html)。
 
 ## 6. 关键数据核查记录
 

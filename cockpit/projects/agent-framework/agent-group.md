@@ -344,6 +344,8 @@ sequenceDiagram
 
 ## 6. 其他场景 Agent
 
+agent\_group 是**多项目共用**的场景 Agent 插件库：除框架通用 Agent 外，各项目通过编译开关（`ENABLE_<PROJECT>_SDK` / `FEATURE_*`）接入自己的定制 Agent。下表是当前树里的其他场景 Agent（含项目定制示例），体现框架的可扩展性；某个项目定制 Agent 的实现细节见对应项目文档（如岚图的着装/车内物品/车外问答见 [岚图项目](../lantu/genai-architecture.html)）。
+
 | Agent 名称 | 类名 | scenario\_id | 编译条件 | 核心功能 |
 | :--- | :--- | :--- | :--- | :--- |
 | **车辆哨兵** | `CarSentinelDispatcher` | 500 | `FEATURE_CAR_SENTINEL` | 停车后环境监控，通过 sentry 库进行视频分段摘要与风险评级。支持动态加载 sentry .so 库，注入视频进行推理分析。 |
@@ -358,7 +360,7 @@ sequenceDiagram
 > [!WARNING]
 > **注意事项**
 >
-> CarSentinelDispatcher 在岚图项目中标注为 "lantu not use"。部分 Agent（如 ProactiveSpeech、VideoChat）的 include 已被注释掉，处于暂停开发或未启用状态。
+> CarSentinelDispatcher 在部分项目中标注为未启用（"not use"）。部分 Agent（如 ProactiveSpeech、VideoChat）的 include 已被注释掉，处于暂停开发或未启用状态。
 
 ## 7. Prompt 模板工程
 

@@ -1,4 +1,4 @@
-# 6. GenAI方案和AIService方案端到端总耗时对比参考
+# 7. GenAI方案和AIService方案端到端总耗时对比参考
 
 *同设备（北京旧水冷）· infer_total 端到端总耗时 · 9 场景 28 用例*
 
