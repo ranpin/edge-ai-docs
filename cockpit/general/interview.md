@@ -347,7 +347,7 @@ Speculative Decoding（投机解码）的核心思想是用一个小而快的 dr
 
 **答案：**
 
-两者是互补的协议层。MCP（Model Context Protocol）解决 **Agent↔工具/数据** 的连接：把车控、导航、媒体、车辆状态等封装成标准化的 tool/resource，LLM 通过统一接口发现与调用（相当于"AI 的 USB-C"）。A2A（Agent-to-Agent）解决 **Agent↔Agent** 的协作：不同 Agent 之间通过 Agent Card 发现彼此能力、委派任务、交换中间结果。座舱典型分工：SystemAgent（总控）用 A2A 把用户意图分派给专职 Agent——车控 Agent、导航 Agent、闲聊 Agent、主动视觉 Agent；每个专职 Agent 再用 MCP 去调它自己那组工具。好处是解耦（新增场景 Agent 不动主控）、能力可组合、便于按安全级别隔离权限。端侧实现要点：A2A 消息与 Function Calling 结果共用统一 schema；跨 Agent 调用同样要过安全沙箱与速率限制（见 Q31），避免 Agent 间循环调用。
+两者是互补的协议层。MCP（Model Context Protocol）解决 **Agent↔工具/数据** 的连接：把车控、导航、媒体、车辆状态等封装成标准化的 tool/resource，LLM 通过统一接口发现与调用（相当于"AI 的 USB-C"）。A2A（Agent-to-Agent）解决 **Agent↔Agent** 的协作：不同 Agent 之间通过 Agent Card 发现彼此能力、委派任务、交换中间结果。座舱典型分工：主控 Agent（总控）用 A2A 把用户意图分派给专职 Agent——车控 Agent、导航 Agent、闲聊 Agent、主动视觉 Agent；每个专职 Agent 再用 MCP 去调它自己那组工具。好处是解耦（新增场景 Agent 不动主控）、能力可组合、便于按安全级别隔离权限。端侧实现要点：A2A 消息与 Function Calling 结果共用统一 schema；跨 Agent 调用同样要过安全沙箱与速率限制（见 Q31），避免 Agent 间循环调用。
 
 </details>
 
@@ -421,7 +421,7 @@ Speculative Decoding（投机解码）的核心思想是用一个小而快的 dr
 
 **R — 需求澄清**：平台为 SA8397P（CDSP ~70 TOPS INT8、16GB LPDDR5x、~68 GB/s 带宽）；需支持语音对话、图像理解（车内外摄像头）、主动场景推荐；首字延迟 <1s，decode 速率 >8 tok/s；同时运行 DMS/OMS 等安全模型不可中断；支持离线使用；需满足 PIPL 和《汽车数据安全管理若干规定》。
 
-**A — 顶层架构**：五层设计——(1) 感知层：4 路摄像头 + 麦克风阵列 + CAN 总线，ISP 硬件完成 RAW→YUV 转换；(2) 预处理层：图像 resize/crop 在 GPU 完成，音频 VAD 在 CPU 完成；(3) 推理引擎层：ModelScheduler 管理模型生命周期，优先级调度 DMS(P0)/OMS(P1)/LLM(P3)，Qwen3-Omni-4B INT4 部署在 CDSP 上，使用 Continuous Batching 服务多区域请求；(4) Agent 决策层：SystemAgent 加载场景 Agent 插件（libagent\_group.so），通过 MCP 协议调用 Function Calling 完成导航/空调/媒体控制；(5) 输出层：流式 TTS 合成（Qwen3-Omni 原生支持音频输出），HMI 渲染通过 Fusion DataTransport 分发到各屏幕。
+**A — 顶层架构**：五层设计——(1) 感知层：4 路摄像头 + 麦克风阵列 + CAN 总线，ISP 硬件完成 RAW→YUV 转换；(2) 预处理层：图像 resize/crop 在 GPU 完成，音频 VAD 在 CPU 完成；(3) 推理引擎层：模型调度器管理模型生命周期，优先级调度 DMS(P0)/OMS(P1)/LLM(P3)，Qwen3-Omni-4B INT4 部署在 CDSP 上，使用 Continuous Batching 服务多区域请求；(4) Agent 决策层：主控 Agent 加载场景 Agent 插件（动态库），通过 MCP 协议调用 Function Calling 完成导航/空调/媒体控制；(5) 输出层：流式 TTS 合成（Qwen3-Omni 原生支持音频输出），HMI 渲染通过 Fusion DataTransport 分发到各屏幕。
 
 **S — 规模与存储**：Qwen3-Omni-4B INT4 权重 ~2.5GB；KV Cache 预算 ~2GB（支持 2048 token 上下文）；DMS/OMS 模型共 ~200MB；系统总内存占用控制在 6GB 以内，留 10GB 给 Android 系统和 HMI。DDR 带宽分析：decode 阶段 LLM 需 ~5 GB/s（权重读取），DMS 30fps 需 ~3 GB/s，ISP ~8 GB/s，DPU ~6 GB/s，总计 ~22 GB/s，低于 68 GB/s 上限。模型从 Flash 冷加载约 8-10s，可通过预加载到 DDR 实现亚秒级切换。
 
@@ -463,7 +463,7 @@ Speculative Decoding（投机解码）的核心思想是用一个小而快的 dr
 
 **T — 挑战**：「核心挑战有三个：第一，4B 参数的多模态模型需要在仅 ~70 TOPS 算力和 16GB 内存的边缘设备上达到可用的推理速度；第二，模型推理不能影响 DMS 等安全关键功能的实时性；第三，需要支持多分区乘客同时使用且座舱处于离线状态也要可用。」——用数字量化挑战难度。
 
-**A — 行动**：「我主导设计并实现了 aadkcore 框架，这是一个 C++17 的端侧 AI Agent 核心库。具体做了：(1) 实现了 ModelScheduler 模块，支持优先级抢占式多模型调度，DMS/OMS 等安全模型以 P0 优先级执行，LLM 推理在间隙时段运行；(2) 基于 Continuous Batching 思想实现了 iteration 级别的请求调度，支持多区域请求并发；(3) 设计了 Agent 插件化架构，场景 Agent 以动态库（libagent\_group.so）形式加载，通过 MCP 协议暴露 Function Calling 能力；(4) 适配了三种部署模式——Linux systemd 服务、Android NDK 可执行文件和 APK SO 集成，覆盖开发到量产全流程。」——展示技术深度和系统性。
+**A — 行动**：「我主导设计并实现了端侧 Agent 框架，这是一个 C++17 的端侧 AI Agent 核心库。具体做了：(1) 实现了模型调度器模块，支持优先级抢占式多模型调度，DMS/OMS 等安全模型以 P0 优先级执行，LLM 推理在间隙时段运行；(2) 基于 Continuous Batching 思想实现了 iteration 级别的请求调度，支持多区域请求并发；(3) 设计了 Agent 插件化架构，场景 Agent 以动态库形式加载，通过 MCP 协议暴露 Function Calling 能力；(4) 适配了三种部署模式——Linux systemd 服务、Android NDK 可执行文件和 APK SO 集成，覆盖开发到量产全流程。」——展示技术深度和系统性。
 
 **R — 成果**：用可量化的指标。例如「框架上线后 LLM 首字延迟稳定在 800ms 以内，decode 速率 10+ tok/s，DMS 帧率始终保持 30fps 不受 LLM 推理影响。多区域并发场景下 throughput 相比串行处理提升 60%。」
 
@@ -516,13 +516,13 @@ Speculative Decoding（投机解码）的核心思想是用一个小而快的 dr
 
 此题考察 技术领导力 和 推动执行力。用 STAR 结构作答，重点放在 Action 和 Result 上：
 
-**参考回答方向（基于 aadkcore 项目）**：
+**参考回答方向（基于端侧 Agent 框架项目）**：
 
 **S**：团队最初使用的是将模型推理逻辑直接嵌入各业务模块的方式，每个功能（语音、视觉、推荐）各自管理模型加载和推理调用，导致资源冲突频发、代码重复度高、新功能接入周期长。
 
 **T**：我提出将推理能力抽象为统一的 Agent 框架，但需要说服团队接受这个额外的架构层——大家担心框架引入额外延迟和学习成本。
 
-**A**：(1) 先做了一个最小可行原型（MVP），用 2 周时间实现了核心的 ModelScheduler 和消息分发机制，在内部 demo 上展示了多模型并发调度的效果——DMS 帧率不受 LLM 推理影响这一点直接打消了性能顾虑；(2) 编写了接入文档和示例代码，降低新功能接入门槛——新场景 Agent 只需实现一个插件接口即可复用整个推理和调度基础设施；(3) 与 Android 端和 Linux 端同事协作，确保框架支持三种部署模式，不同平台团队可以用同一套代码。
+**A**：(1) 先做了一个最小可行原型（MVP），用 2 周时间实现了核心的模型调度器和消息分发机制，在内部 demo 上展示了多模型并发调度的效果——DMS 帧率不受 LLM 推理影响这一点直接打消了性能顾虑；(2) 编写了接入文档和示例代码，降低新功能接入门槛——新场景 Agent 只需实现一个插件接口即可复用整个推理和调度基础设施；(3) 与 Android 端和 Linux 端同事协作，确保框架支持三种部署模式，不同平台团队可以用同一套代码。
 
 **R**：框架上线后新功能接入周期从 2 周缩短到 2 天；资源冲突导致的 crash 率下降 90%+；后续 3 个新场景 Agent 均由其他同事独立开发完成，验证了插件化架构的可扩展性。
 
@@ -583,7 +583,7 @@ Speculative Decoding（投机解码）的核心思想是用一个小而快的 dr
 
 | 类别 | 高频问题示例 | 考察重点 | 项目中可用的素材方向 |
 | --- | --- | --- | --- |
-| 技术领导力 | 主导过什么技术方案？如何推动落地？ | 识别问题、方案设计、影响他人 | aadkcore 框架从 0 到 1 的设计与推广 |
+| 技术领导力 | 主导过什么技术方案？如何推动落地？ | 识别问题、方案设计、影响他人 | 端侧 Agent 框架从 0 到 1 的设计与推广 |
 | 协作沟通 | 技术分歧如何解决？跨团队合作经历？ | 尊重、数据驱动、共赢 | 端云协同方案选型、与 Android/Linux 平台团队协作 |
 | 失败复盘 | 犯过什么错？项目失败经历？ | 自省、改进、成长 | KV Cache 预分配导致 OOM、量化精度问题排查 |
 | 压力应对 | deadline 紧张时怎么处理？紧急线上问题？ | 优先级判断、冷静决策 | DSP SSR 线上崩溃的紧急定位与修复 |
