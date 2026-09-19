@@ -248,6 +248,12 @@
       "name": "通用机器人",
       "id": "robot",
       "note": "具身智能 · 学习与面试",
+      "overview": {
+        "title": "通用机器人端侧 AI：从领域知识到具身实践",
+        "desc": "通识（学习文档 + 面试指南）+ Datawhale 开源教程实战的故事线导读",
+        "file": "robot/overview.html",
+        "badge": "导读"
+      },
       "general": [
         {
           "title": "通用机器人面试指南",
@@ -262,6 +268,18 @@
           ]
         },
         {
+          "title": "通用机器人学习文档",
+          "file": "robot/general/learning.html",
+          "badge": "15 章",
+          "status": "done",
+          "desc": "端侧 AI 视角的通用机器人全栈：算力平台、推理框架、ROS2 集成、VLA 模型、Sim2Real、端侧部署、实时控制、Embodied Agent，15 章 4 Part",
+          "tags": [
+            "Jetson",
+            "VLA",
+            "ROS2"
+          ]
+        },
+        {
           "title": "Datawhale 具身智能教程 · every-embodied",
           "file": "https://github.com/datawhalechina/every-embodied",
           "kind": "参考",
@@ -272,26 +290,6 @@
             "具身智能",
             "VLA",
             "开源教程"
-          ]
-        }
-      ],
-      "projects": [
-        {
-          "name": "通用机器人端侧落地",
-          "period": "2023.05 – 2024.02",
-          "docs": [
-            {
-              "title": "通用机器人学习文档",
-              "file": "robot/projects/edge-deploy/learning.html",
-              "badge": "15 章",
-              "status": "done",
-              "desc": "Jetson/RK3588 平台、VLA 模型、ROS2 集成、Embodied Agent，15 章 4 Part",
-              "tags": [
-                "Jetson",
-                "VLA",
-                "ROS2"
-              ]
-            }
           ]
         }
       ]
