@@ -35,8 +35,8 @@ LLM 自回归推理分为两个计算特性截然不同的阶段。理解这一�
 | **处理方式** | 并行处理 S 个输入 token | 逐个生成 token（自回归） |
 | **每步计算量** | ~2N × S FLOPs（N=参数量） | ~2N FLOPs / token |
 | **权重读取** | 读全部权重 1 次，服务 S 个 token | 每生成 1 个 token 都要读全部权重 |
-| **算术强度（W4A16）** | ~4×S OPs/Byte | ~4 OPs/Byte |
-| **瓶颈类型** | Compute-bound（S 足够大时） | Memory-bound（始终） |
+| **算术强度（W4A16）** | ~4×S OPs/Byte | ~4×B OPs/Byte（B=1 时 ~4） |
+| **瓶颈类型** | Compute-bound（S 足够大时） | Memory-bound（B=1 时，见 §2.2） |
 | **核心指标** | TTFT（Time To First Token） | TPOT（Time Per Output Token） |
 | **输出** | 首 token + 完整 KV Cache | 每步 1 个 token + 追加 KV |
 
@@ -57,6 +57,8 @@ FLOPs = 2 × batch × H_in × H_out
 > **常见误用：AI 只除权重字节**
 >
 > 简化式 `AI ≈ 2×batch / bytes_per_weight` 只在"权重读取占绝对主导"时成立。**长上下文 decode 时，KV Cache 的读取量会随 seq\_len 线性增长，甚至反超权重成为主导**——此时必须把 `KV_bytes(seq_len)` 算进分母，否则会高估算术强度、误判 bound 类型。权重 INT4 时：Prefill `AI ≈ 4S`，Decode（短上下文）`AI ≈ 4`。
+>
+> **把"反超点"量化**（示例参数）：权重读取约 2.5 GB/token 趟（§2.3），KV 读取 144 KB/token（FP16，§3.1），则 KV 读取追平权重读取需要 `2.5 GB ÷ 144 KB ≈ 1.7 万 token` 的上下文；INT8 KV（72 KB/token）则约 3.4 万 token。座舱典型上下文远小于此——**权重仍主导、简化式成立**；但方法上必须保留 `KV_bytes(seq_len)` 项：一旦进入长上下文场景，该项会成为主导项。
 
 ## 2. Roofline 性能模型
 
@@ -75,23 +77,26 @@ Knee Point = 峰值算力 ÷ 内存带宽
 > [!IMPORTANT]
 > **量纲必须对齐：W4A16 负载不能用 INT8 TOPS 去判 bound。**
 >
-> 锚点 LLM 在 HTP 上以 **W4A16** 执行——权重 INT4、激活 FP16，matmul 走 **FP16 通路、FP32 累加**（见 [量化 · W4A16](quantization.html)）。HMX 的 FP16 峰值算力**远低于** INT8 TOPS（量级上约为其几分之一）。若拿 INT8 的 ~70 TOPS 去除以带宽算 Knee Point，再拿去判一个 W4A16 负载，得到的 bound 阈值就是错配的产物，不可信。
+> 锚点 LLM 在 HTP 上以 **W4A16** 执行——权重 INT4、激活 FP16，matmul 走 **FP16 通路、FP32 累加**（见 [量化 · W4A16](quantization.html)）。HMX 的 FP16 峰值算力**低于** INT8 TOPS（同口径下常见约为其 1/2，见下方示例）。若拿 INT8 的 ~70 TOPS 去除以带宽算 Knee Point，再拿去判一个 W4A16 负载，得到的 bound 阈值就是错配的产物，不可信。
 >
 > **正确做法**：先声明执行模式，再用**该模式下的峰值算力**算 Knee Point。
 
 ```text
 示例参数（非实测，代入你的平台实际峰值）:
   INT8 峰值 (CNN/W8A8):  ~70 TOPS
-  W4A16 的 FP16 峰值:    ~70/4 ≈ 17 TFLOPS   ← LLM 实际走的通路
+  W4A16 的 FP16 峰值:    以 HTP 手册为准，常见约为 INT8 的 1/2（同口径）
+                        → ~35 TFLOPS；保守估算可再取低（~17 TFLOPS）
   带宽:                  ~68 GB/s
 
-  Knee(W4A16) = 17e12 / 68e9 ≈ 250 OPs/Byte
+  Knee(W4A16) = FP16 峰值 ÷ 68 GB/s ≈ 250~515 OPs/Byte（随 FP16 峰值取值）
 ```
+
+> 口径说明：INT8 TOPS 与 FP16 TFLOPS **都按 1 次 MAC 记 2 ops**，所以"FP16 约为 INT8 的 1/2"已是同口径比较。若见到"÷4"式的折算（70 TOPS → 17 TFLOPS），通常是把"FP16 速率折半"与"TOPS→TFLOPS 按 2 ops/MAC 再折半"**叠了两次折扣**——后者是量纲误用，TFLOPS 并不比 TOPS 少记 ops。
 
 由此判断锚点模型的 bound 类型：
 
-- **Decode 永远 Memory-bound**：AI ≈ 4，远低于 Knee ≈ 250，生成速度完全由带宽决定。
-- **Prefill 在 S 较大时转 Compute-bound**：AI ≈ 4S，当 `4S > 250` 即 **S > ~60**（示例）时转入算力受限。座舱典型 prompt（System + 用户输入 + 视觉 token）远超此值，故 Prefill 通常是 Compute-bound。
+- **Decode（B=1）Memory-bound**：AI ≈ 4，远低于 Knee ≈ 250~515，生成速度完全由带宽决定。注意 decode 的算术强度是 **AI ≈ 4·B**（B = batch size）：batching 把 AI 线性抬高，是**把 decode 从 memory-bound 推向 compute-bound 的唯一手段**——"decode 永远 memory-bound"只在 B=1 时成立。端侧并发少（B 通常为个位数），decode 几乎总是带宽受限，但概念上不能说死。
+- **Prefill 在 S 较大时转 Compute-bound**：AI ≈ 4S，当 `4S > Knee` 即 **S > ~60~130**（示例，随 FP16 峰值取值：250÷4≈62，515÷4≈129）时转入算力受限。座舱典型 prompt（System + 用户输入 + 视觉 token）远超此区间，故 Prefill 通常是 Compute-bound。
 - 对比：若错误地用 INT8 峰值算出 Knee ≈ 1029，会把 Compute-bound 阈值推到 S ≈ 258——这正是量纲错配导致的偏差。
 
 ### 2.3 Decode 带宽模型：速度的推导链
@@ -102,15 +107,21 @@ Decode 每生成一个 token 都要读取全部权重，速度上限可精确推
 decode 理论上限 = 有效带宽 ÷ 每 token 读取字节
 
 每 token 读取字节 (W4A16, 锚点模型):
-  ① 权重:     ~4B × 0.5 Byte      ≈ 2.0 GB   (主导)
+  ① 权重:     INT4 transformer 权重 + 保留 FP16 的 embedding/LM head
+              ≈ 2.5 GB   (主导，即全站"INT4 权重 ~2.5 GB"口径)
   ② KV Cache: 2×36层×8 KV头×128×seq_len×dtype
               (INT8 KV, seq_len=512 时约 36 MB)
   ③ 激活等:   数 MB (相对可忽略)
 
 推导（示例效率系数，非实测）:
-  理想上限  = 68 GB/s ÷ ~2.0 GB ≈ 34 tok/s
+  理想上限  = 68 GB/s ÷ ~2.5 GB ≈ 27 tok/s
   × 内存效率 × 带宽共享折扣 × 调度折扣 → 落到实际可用区间
 ```
+
+> [!IMPORTANT]
+> **LM head 是每 token 带宽读取里占比最大的单块**
+>
+> 2.5 GB 不是均匀的 INT4：transformer 权重是 INT4，**embedding / LM head 保留 FP16**（对精度敏感，见 §8.1）。其中 LM head = vocab × hidden × 2B ≈ 150K × 2560 × 2 ≈ **768 MB**（示例参数），decode 时**每个 token 都要全量读一遍**、做稠密 GEMV——单块约占每 token 带宽读取的 **30%**。这就是端侧常做 **LM head 量化、tied embedding（embedding 与 LM head 共享权重）、词表裁剪**的原因：LM head 量化与词表裁剪直接压低每 token 带宽读取，tied embedding 主要省一份权重内存（GEMV 读取本身不变）。
 
 > [!NOTE]
 > **为什么端侧 Decode 远慢于云端？**
@@ -147,6 +158,11 @@ KV_bytes/token = 2(K,V) × n_layers × n_kv_heads × head_dim × bytes_per_elem
 
 > 上表由 §3.1 公式直接推出（144 KB/token × 长度），是**示例口径**，不是实测。代入你的层数 / KV head / head\_dim 即可得到自己的数。
 
+> [!IMPORTANT]
+> **多模态口径：视觉 token 是 KV 的大头**
+>
+> 上表是纯文本视角。对全模态锚点模型，**每帧画面 ≈ 576 个视觉 token**（口径见 [解码服务化 §1.3](infer-serving.html)），单帧 KV 占用 ≈ 576 × 144 KB ≈ **81 MB（FP16）/ 41 MB（INT8）**（示例参数）。换句话说，**2048 token 的上下文只装得下 ≈ 3.5 帧画面**——多模态场景做 KV 容量规划必须按"帧"数，而不是按"对话轮数"。
+
 ### 3.3 KV Cache 优化策略
 
 ```mermaid
@@ -175,6 +191,8 @@ graph TB
 > **端侧推荐组合**
 >
 > 在 SA8397P 上部署锚点模型，推荐 **GQA（原生）+ KV INT8 + Sliding Window**。这套组合能把 KV Cache 控制在百 MB 级，为权重和运行时留出内存。
+>
+> **全模态补充**：由 §3.2，视觉 token 是 KV 大头——连续视频流下必须对视觉 token 施加更激进的策略：**驱逐最旧帧的 KV、视觉 KV 不入缓存（用完即弃）、或只对视觉 token 做滑窗**，否则几帧画面就能把 KV 预算吃光。
 
 ## 4. FlashAttention
 
@@ -193,25 +211,29 @@ graph TB
 
 ### 4.2 FlashAttention 分块计算原理
 
-FlashAttention（Dao et al., 2022）把 Q、K、V 分块（tiling），每次只加载一小块到片上（端侧即 VTCM），在片上完成 `QK^T → softmax → ×V` 全流程，**避免把 N×N 矩阵写回 DDR**：
+FlashAttention（Dao et al., 2022；FA2：Dao et al., 2023）把 Q、K、V 分块（tiling），每次只加载一小块到片上（端侧即 VTCM），在片上完成 `QK^T → softmax → ×V` 全流程，**避免把 N×N 矩阵写回 DDR**。下图按 **FA2 的循环顺序**画：
 
 ```mermaid
 flowchart TB
     A["输入 Q K V 各 N×d"] --> B["分块: Q→Tr块 K,V→Tc块"]
-    B --> C["外循环 j:加载 K_j V_j 到 VTCM"]
-    C --> D["内循环 i:加载 Q_i 到 VTCM"]
+    B --> C["外循环 i:加载 Q_i 到 VTCM O_i/m_i/l_i 累加器常驻片上"]
+    C --> D["内循环 j:加载 K_j V_j 到 VTCM"]
     D --> E["VTCM 内计算S_ij = Q_i · K_j^T"]
     E --> F["Online Softmax增量更新 max 和 sum"]
     F --> G["累加 O_i += softmax · V_j"]
     G --> D
-    D -->|"Q 块遍历完"| C
-    C -->|"KV 块遍历完"| H["输出 O (N×d)内存 O(N) 非 O(N²)"]
+    D -->|"KV 块遍历完"| H["O_i 归一化只写回 DDR 一次"]
+    H --> C
+    C -->|"Q 块遍历完"| I["输出 O (N×d)内存 O(N) 非 O(N²)"]
 
     style E fill:#2ecc71,color:#fff
     style F fill:#2ecc71,color:#fff
     style G fill:#2ecc71,color:#fff
-    style H fill:#4361ee,color:#fff
+    style H fill:#f39c12,color:#fff
+    style I fill:#4361ee,color:#fff
 ```
+
+**循环顺序是 FA1/FA2 的分水岭**：上图是**外 Q、内 KV**（FA2 顺序）——当前 Q 块的 O/m/l 累加器**全程常驻片上**，KV 块遍历完后 O 才归一化并**只写回 DDR 一次**。**FA1→FA2 的关键改进正是把外循环从 KV 换成 Q**：FA1 外循环遍历 KV 块，O 要随每趟 KV 块反复读写 DDR；FA2 让每个 O 块一生只写回一次，省掉这部分反复搬运（GPU 上是 HBM，端侧即 DDR，同理）——高频面试点。
 
 **Online Softmax** 是关键：标准 softmax 要看到全部 N 个元素才能算归一化分母，但通过维护 running max 和 running sum，可以逐块增量更新，无需存完整 N×N 矩阵。
 
@@ -228,10 +250,12 @@ flowchart TB
   K_block:  Bc×d×2B  = 128×128×2 = 32 KB
   V_block:  Bc×d×2B  = 128×128×2 = 32 KB
   S_block:  Br×Bc×4B = 128×128×4 = 64 KB   ← FP32 累加
-  O_block:  Br×d×4B  = 128×128×4 = 64 KB   ← FP32 累加器
-  m, l:     Br×2×4B  = 128×2×4   =  1 KB   ← Online Softmax 状态
+  O_block:  Br×d×4B  = 128×128×4 = 64 KB   ← FP32 累加器（常驻，不双份）
+  m, l:     Br×2×4B  = 128×2×4   =  1 KB   ← Online Softmax 状态（常驻）
   合计 ≈ 225 KB / 单次迭代
-  双缓冲 (隐藏 DDR 加载) ≈ 450 KB
+  双缓冲只加在流式搬运的操作数（K/V，必要时 Q）上，
+  O/S/m/l 等累加器单份常驻、不复制:
+  ≈ 225 KB + (K+V+Q ≈ 96 KB) ≈ 0.3 MB
 ```
 
 GQA 下 1 个 KV head 服务 4 个 Q head（32/8），可按 KV 组并行。**8 MB VTCM（估算）** 能容纳双缓冲分块 + 若干头并行 + HVX 寄存器余量，但**余量比"按 1 Byte 估算"要紧**——结论不是"VTCM 充裕"，而是"**VTCM 容量是 FlashAttention 分块尺寸的实际上限约束**"，分块尺寸要按实际查询到的 VTCM 调。
@@ -267,17 +291,21 @@ FlashAttention kernel 通常以**针对 HVX/HMX 指令集优化的库**形式随
 
 ### 5.1 多模态架构与"只有一个 cDSP"
 
-锚点模型是原生多模态模型，包含 **ViT 视觉编码器** 与 **LLM 语言解码器** 两个主要计算模块，二者都以 graph 形式跑在 HTP 上：
+锚点模型是原生多模态模型，包含**视觉编码器（ViT）**、**音频编码器**与 **LLM 语言解码器**等计算模块，都以 graph 形式跑在 HTP 上。本篇以视觉链路为例展开；音频支路结构与视觉同构（编码器 graph → projection 进语言空间 → 同一个 LLM），音频侧细节本篇不展开：
 
 ```mermaid
 flowchart LR
     A["摄像头图像"] --> B["ViT 视觉编码器(graph)"]
-    B --> C["Projection视觉特征→语言空间"]
+    M["麦克风音频流"] --> AU["音频编码器(graph)"]
+    B --> C["Projection多模态特征→语言空间"]
+    AU --> C
     C --> D["LLM 解码器(graph)"]
     D --> E["输出 Token"]
 
     style A fill:#3498db,color:#fff
+    style M fill:#3498db,color:#fff
     style B fill:#e74c3c,color:#fff
+    style AU fill:#e74c3c,color:#fff
     style C fill:#f39c12,color:#fff
     style D fill:#4361ee,color:#fff
     style E fill:#2ecc71,color:#fff
@@ -331,6 +359,20 @@ gantt
 
 > 面试若被问"多模态怎么提速"，先分清对方问的是**吞吐**还是**单请求延迟**，再答时分复用 / 优先级调度——把吞吐收益说成延迟下降是概念错误。
 
+### 5.5 混批干扰与 chunked prefill（TPOT 抖动）
+
+座舱多模态最典型的延迟问题：在途 decode（正在流式输出语音回复）时，**一帧 ViT 编码或一段长 prompt 的 prefill 插进来，会直接抬高 decode 的 TPOT**——用户感知为"回答突然卡顿"。这是 §5.2 时分复用的必然代价：decode 单步很短，但 ViT / prefill 单次执行长，一旦插入，decode 步只能整段等待。
+
+缓解手段两板斧：
+
+| 手段 | 原理 | 效果 |
+| :--- | :--- | :--- |
+| **chunked prefill** | 把 prompt 切成 128/256 token 的块（示例块大小），与 decode 步交错执行 | 长 prefill 化整为零，decode 不再整段等待，TPOT 抖动幅度降到块级 |
+| **优先级调度** | 在途 decode 给高优先级，ViT 帧 / 新请求排队或让出时间片 | 保住进行中对话的 TPOT，代价是新请求的 TTFT |
+
+> [!TIP]
+> **chunked prefill 是 TTFT 与 TPOT 抖动的权衡旋钮**：块越小，decode 越平滑；但 prefill 被切得越碎，权重就要多读几趟（每个 chunk 各读一遍全部权重），prefill 的 compute-bound 优势被稀释、TTFT 变长。语音交互优先保 TPOT 稳定（小块），纯文本批处理优先保 TTFT（大块）。
+
 ## 6. 推理引擎与运行时选型
 
 ### 6.1 选型维度（而不是背速度表）
@@ -349,7 +391,7 @@ gantt
 > [!NOTE]
 > **内存占用的物理下限**
 >
-> 任何引擎跑 INT4 锚点模型，总内存都 **不可能低于"权重 2.5 GB + KV Cache + 激活 + runtime"**。看到"INT4 模型总占用 1.6 GB"这类数字可以直接判定为错——权重本身就装不下。
+> 任何引擎跑 INT4 锚点模型，总内存都 **不可能低于"权重 2.5 GB + KV Cache + 激活 + runtime"**——其中 2.5 GB = INT4 transformer 权重 + 保留 FP16 的 embedding/LM head（口径见 §2.3）。看到"INT4 模型总占用 1.6 GB"这类数字可以直接判定为错——权重本身就装不下。
 
 ### 6.2 Genie 与 QAIRT：高通端侧 LLM 的正解
 
@@ -363,7 +405,7 @@ SNPE (早期 DSP 推理) → QNN (统一神经网络 SDK) → QAIRT (2024 起统
   QNN 是其 SDK/API 层；Genie 是面向端侧 LLM 对话的运行时。
 ```
 
-在 SA8397P 上，**整图（含 embedding / attention / LM head）跑在 HTP** 是 Genie 的默认部署形态。把 embedding 或 LM head 单独切到 GPU/CPU 通常不划算——那意味着每步都要跨器件搬张量，代价大于收益（除非有明确 profiling 证据）。
+Genie 最初面向移动 Snapdragon 平台，**车规 SA8397P 的 QAIRT 组件集与支持范围未必与移动端完全相同**——整图（含 embedding / attention / LM head）能否全部落在 HTP 上，应以**随附 QAIRT 版本文档与实际 profile 为准**，不要默认断言"Genie 在移动端怎么做、这里就怎么做"。一般性结论仍然成立：把 embedding 或 LM head 单独切到 GPU/CPU 通常不划算——那意味着每步都要跨器件搬张量，代价大于收益（除非有明确 profiling 证据）。
 
 ## 7. Genie / QAIRT 的 LLM 部署流程
 
@@ -393,6 +435,11 @@ flowchart LR
 >
 > CNN 小模型走 `ONNX → qnn-onnx-converter → context binary`；**LLM 走 Genie + W4A16 导出**，且多了对话状态与 KV 管理。把 CNN 的转换链路直接套到 LLM 上是常见误区。
 
+> [!IMPORTANT]
+> **端侧基本事实：prefill 与 decode 是两套编译图**
+>
+> prefill（固定 chunk 形状，如 128/256 token 一块，配合 §5.5 的 chunked prefill）与 decode（seq=1）的张量 shape 不同，是**两套分别编译的 graph / context binary**，由运行时按需加载与调度——不是"一张图通吃任意长度"。**KV Cache 以 graph I/O 的形式表达**：每步执行读入历史 KV、把新 token 的 KV 写到**环形缓冲（ring buffer）**的尾部，容量按上下文上限一次性划定、写满回绕。理解这一点，就能理解为什么运行时不能随意改序列长度、为什么 KV 管理是运行时（Genie）层的事而不是图内的事。
+
 ## 8. 端侧 Tokenizer / Detokenizer
 
 推理链路的两端——把文本变 token、把 token 变回文本——常被忽略，但它们真实占用内存并贡献延迟。
@@ -405,10 +452,15 @@ embedding 表和 LM head 的大小由词表决定：
 embedding / LM_head ≈ vocab_size × hidden × bytes_per_elem
 
 示例（非实测）: vocab ~150K, hidden 2560, FP16
-  → 单层 ~150000 × 2560 × 2 B ≈ 数百 MB
+  → 单表 150000 × 2560 × 2 B ≈ 768 MB
 ```
 
-这两层通常是 **gather/scatter** 操作、且对精度敏感，**一般保留 FP16 而不做 INT4**——因此它们是权重内存预算里不可忽视的一块。词表越大，这块越重。
+二者的执行形态完全不同，别笼统归为"gather/scatter"：
+
+- **输入 embedding = gather**：只从表里取当前 token 对应的行，读取量与 token 数成正比，开销可忽略；
+- **LM head = 稠密 GEMV/GEMM**：decode 每个 token 都要**全量**读一遍 vocab×hidden 做稠密矩阵-向量乘，是**每 token 带宽读取里占比最大的单块**（约 30%，与 §2.3 的带宽账打通）。
+
+两层都对精度敏感、**一般保留 FP16 而不做 INT4**——因此它们是权重内存预算里不可忽视的一块。词表越大，这块越重；这也是端侧做"LM head 量化 / tied embedding / 词表裁剪"的动机（§2.3）。
 
 ### 8.2 BPE 耗时与 TTFT
 
