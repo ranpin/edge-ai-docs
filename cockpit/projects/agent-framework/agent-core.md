@@ -95,6 +95,11 @@ graph TD
 >
 > 上层 Agent 代码通过 `aadkapi/` 中的统一接口（ModelInstance、ChatHistory 等）开发，无需感知底层推理后端差异。切换平台只需更换构建脚本和模型文件，Agent 业务逻辑代码零修改。
 
+> [!NOTE]
+> **统一接口并非处处等价：时间片挂起/恢复仅 Orin 可用**
+>
+> "屏蔽后端差异"在大多数接口上成立，但 `pauseGenerate/resumeGenerate`（时间片挂起/恢复，保留 KV）是例外——只有 Lape/Orin 实现了它们，SA8397P / 云端开启 `enable_timeslice` 会因基类抛 `Not implemented` 且无人捕获而**崩进程**。详见 §3.4 的平台陷阱。
+
 ## 2. 统一模型接口 — ModelInstance
 
 `ModelInstance`（定义于 `aadkapi/model_instance.hpp`）是面向 Agent 开发者的核心模型交互类。它封装了单个 LLM 模型实例，提供流式/非流式生成、多模态输入、LoRA 热加载等能力，屏蔽 Lape / QNN / Bailian 后端差异。
@@ -103,13 +108,15 @@ graph TD
 
 | API | 返回类型 | 说明 |
 | :--- | :--- | :--- |
-| `streamGenerate(messages, history, callback, ...)` | `ModelResponse` | 流式生成，通过 `StreamCallback` 逐 token 回调，支持指定 lora\_id、InferParams |
-| `generate(messages, callback, ...)` | `ModelResponse` | 非流式一次性生成，通过 `CompletionCallback` 返回完整结果 |
-| `preprocessImage(image)` | `optional<shared_ptr<vector<float>>>` | 图像预处理为 embedding，支持 ImageBlob 和 ImageUrlContent 两种输入 |
+| `streamGenerate(messages, history, callback, user_data, lora_id, infer_params, stream, tools)` | `ModelResponse` | 流式生成，通过 `StreamCallback` 逐 token 回调；末尾 `tools`（`vector<shared_ptr<BaseTool>>`，默认空）把工具声明随请求下发（见下方 NOTE） |
+| `generate(messages, callback, user_data, lora_id, infer_params, tools)` | `ModelResponse` | 非流式一次性生成，通过 `CompletionCallback` 返回完整结果；同样接受末尾 `tools` 参数 |
+| `preprocessImage(image)` | `vector<shared_ptr<vector<float>>>` | 图像预处理为 embedding **列表**（一张图可能产出多个 embedding），支持 ImageBlob 和 ImageUrlContent 两种输入 |
 | `preprocessAudio(audio)` | `optional<shared_ptr<vector<float>>>` | 音频预处理为 embedding，输入 AudioBlob |
 | `addLora(lora_paths)` | `vector<int>` | 热加载 LoRA 适配器，返回 lora\_id 列表，后续推理可指定 lora\_id |
 | `suspend(deinit) / resume()` | `void` | 暂停/恢复模型推理；suspend 时可选择是否卸载底层资源释放内存 |
-| `stopGenerate()` | `bool` | 中断当前正在进行的生成任务 |
+| `stopGenerate(req_id)` | `bool` | 中断指定 `req_id` 的生成任务（**带参**，签名是 `stopGenerate(const string& req_id)`，不是无参） |
+| `pauseGenerate(req_id) / resumeGenerate(req_id)` | `bool` | 挂起/恢复指定请求的生成，**保留 KV Cache**；仅 Lape/Orin 后端实现，其余后端默认抛异常（见 §3.4 平台陷阱） |
+| `getModelName()` | `const string&` | 返回模型名称 |
 | `setConfig(config) / getConfig()` | `void / optional<ModelConfig>` | 设置/获取模型配置参数 |
 | `is_ready()` | `bool` | 查询模型是否已就绪 |
 
@@ -118,6 +125,9 @@ graph TD
 >
 > `StreamCallback = function<void(const string& content, bool is_finished, void* user_data)>` — 流式回调，每生成一个 token 调用一次，`is_finished` 为 true 表示生成结束。
 > `CompletionCallback = function<void(const string& content, void* user_data)>` — 非流式回调，生成完成后一次性返回。
+> `CompletionCallbackResponse = function<void(const string& content, void* user_data, const ModelResponse& response)>` — 非流式回调的**三参变体**，额外回传 `ModelResponse`（含 ttft / token 统计等），需要性能指标时用它。
+>
+> **关于 `tools` 参数**：`streamGenerate` / `generate` 末尾的 `tools` 只负责把工具**声明**下发给后端（Lape 会以 `<tools>` XML 注入 system prompt，让模型"看到"函数签名）。但"解析模型输出的 `FunctionCall` → 执行工具 → 回灌再推理"这条闭环**不是自动的**，受 `USE_TOOL` 门控且默认未启用，详见 [协议与运行时执行 · §4.1](agent-protocols.html#sec-16)。
 
 ### 2.2 多模态消息类型系统
 
@@ -283,37 +293,52 @@ flowchart LR
 score = priority * weight_priority + wait_time_ms * weight_wait * 0.001
 ```
 
-`CompareTask` 的默认构造给出 `weight_priority = 2.0`、`weight_wait = 0.5`（另有一个 `weight_type` 槽位用于按任务类型加权，当前评分公式中未参与计算）。实际生效的权重取决于 `ModelScheduler` 构造时传给优先队列的 `CompareTask(wp, ww, wt)` 实参，**不同分支/配置可能不同**，调优前请先确认自己分支上的构造实参。
+`CompareTask` 有一个默认构造器（`weight_priority = 2.0`、`weight_wait = 0.5`、`weight_type = 1.0`），但**它从未被使用**——`ModelScheduler` 构造时显式传入 `CompareTask(2, 0.1, 0.5)`（`model_scheduler.cpp`），因此本分支实际生效的是 `weight_priority = 2`、`weight_wait = 0.1`（`weight_type` 槽位当前未参与评分公式）。**不同分支/配置的构造实参可能不同**，调优前请先确认自己分支上传给优先队列的 `CompareTask(wp, ww, wt)` 实参，不要照搬默认构造器的值。
 
 > [!WARNING]
-> **"避免饥饿"需要限定条件：默认权重下的饥饿窗口是分钟级**
+> **"避免饥饿"需要限定条件：本分支实参下的饥饿窗口是 10 分钟级**
 >
-> 等待项确实会随时间抬高 `score`，但它的增长速率很慢。按 `weight_priority = 2.0`、`weight_wait = 0.5` 推导，一个 `LOW` 任务追平一个**刚入队**（等待时间为 0）的 `CRITICAL` 任务所需的等待时长为：
+> 等待项确实会随时间抬高 `score`，但它的增长速率很慢。按本分支构造实参 `weight_priority = 2`、`weight_wait = 0.1` 推导，一个 `LOW` 任务追平一个**刚入队**（等待时间为 0）的 `CRITICAL` 任务所需的等待时长为：
 >
 > ```
-> 优先级分差 = (40 - 10) * 2.0            = 60 分
-> 等待项速率 = 0.5 * 0.001                = 0.0005 分/ms
-> 追平所需时间 = 60 / 0.0005              = 120000 ms ≈ 120 s
+> 优先级分差 = (40 - 10) * 2              = 60 分
+> 等待项速率 = 0.1 * 0.001                = 0.0001 分/ms
+> 追平所需时间 = 60 / 0.0001              = 600000 ms = 600 s ≈ 10 分钟
 > ```
 >
-> 也就是说：只要高优先级任务持续到达，`LOW` 任务最坏要等约 **2 分钟**才有机会出队。若把 `weight_wait` 调小到 0.1（部分分支的构造实参），同一推导给出 `60 / 0.0001 = 600 s ≈ 10 分钟`。
+> 也就是说：只要高优先级任务持续到达，`LOW` 任务最坏要等约 **10 分钟**才有机会出队。（注意：若误用从未生效的默认构造器 `weight_wait = 0.5` 推导，会得到 `60 / 0.0005 = 120 s` 这个**偏小 5 倍**的错误结论——这正是"先确认构造实参"的原因。）
 >
-> **结论**：评分公式只能保证低优先级任务**最终不会永久饿死**，不能当作"防饥饿"机制来依赖。上面这个算式应当作为**推导模板**使用——代入你自己分支的 `weight_priority` / `weight_wait` 与业务能容忍的最大等待时长，反解出需要的权重，而不是照抄 120 s 这个数字。若业务对后台任务（日志摘要、离线分析）的时效有要求，正确做法是调大 `weight_wait`（或调小 `weight_priority`）把窗口压到可接受范围。
+> **结论**：评分公式只能保证低优先级任务**最终不会永久饿死**，不能当作"防饥饿"机制来依赖。上面这个算式应当作为**推导模板**使用——代入你自己分支的 `weight_priority` / `weight_wait` 与业务能容忍的最大等待时长，反解出需要的权重，而不是照抄 600 s 这个数字。若业务对后台任务（日志摘要、离线分析）的时效有要求，正确做法是调大 `weight_wait`（或调小 `weight_priority`）把窗口压到可接受范围。
 >
 > 框架实际提供的兜底是另外两条路径，而非评分公式本身：
 >
 > - **超时自动提权**：`SubmitTask` 同步等待结果，超过 `timeout_s`（配置项，默认 100 s）未返回时自动调用 `BoostPriority(task_id, +10)`；再等一个 `timeout_s` 仍未完成则 `StopTask` 并返回 `TASK_TIMEOUT`。
 > - **提权有上限**：`BoostPriority` 会拒绝把优先级抬到 **30 以上**的请求（`p_value > 30` 直接 return），因此无法通过 boost 把任务提到 `CRITICAL` 档；且它只扫描**等待队列**，对已在执行的任务无效。
 
+**ModelScheduler 运行时配置项**（从构造入参 `config` 指向的 JSON 读取，括号内为代码默认值）：
+
+| 配置项 | 默认值 | 说明 |
+| :--- | :--- | :--- |
+| `capacity` | 10 | 等待队列容量；满时 `SubmitTask` 阻塞等待、`PreemptAndSubmit` 触发挤占 |
+| `worker_count` | 8 | `SchedulerLoop` 工作线程数；`generate_concurrent` 为 true 时这些线程可**并发**跑 `onProcessing`（未被钳到 `hardware_concurrency()`，对应 `assert` 已注释） |
+| `batch_count` | 8 | 时间片轮转每轮允许并发执行的任务数（仅 `enable_timeslice` 为 true 时生效） |
+| `timeout_s` | 100 | `SubmitTask` 同步等待超时；超时触发 `BoostPriority(+10)`，再超时则 `StopTask` |
+| `generate_concurrent` | true | 是否允许并发执行；true 时 `SchedulerLoop` **不取** `generate_mutex_`（见 §3.4） |
+| `enable_timeslice` | false | 是否启动 `TimeSliceLoop` 做 pause/resume 时间片轮转（**仅 Orin/Lape 可安全开启**，见 §3.4 平台陷阱） |
+| `timeslice_ms` | 200 | 时间片轮转周期（ms） |
+
 ### 3.3 抢占机制与 ModelRunner
 
 | 调度操作 | 说明 |
 | :--- | :--- |
-| `SubmitTask(task)` | 提交任务到优先级队列，按评分排序等待执行 |
-| `PreemptAndSubmit(task)` | 中断当前正在执行的任务，立即执行高优先级任务 |
+| `Gethandle(config, runner)` (static) | 获取 `ModelScheduler` 单例（首次调用时按 `config` JSON 构造） |
+| `Start() / Stop()` | 启动 / 停止调度器；`Start` 拉起 `worker_count` 个 `SchedulerLoop`，`enable_timeslice` 为 true 时再拉起一个 `TimeSliceLoop`；`Stop` 置位 `stop_all`、取消 RUNNING 任务并清空队列 |
+| `SubmitTask(task)` | 提交任务到优先级队列，**同步阻塞**等待结果（超时触发提权/停止，见 §3.2） |
+| `PreemptAndSubmit(task)` | 挤占式提交：队列满时把最低优任务移出队列，再按 `break_tag` 决定是否打断在跑任务；**末尾 `result_future.get()` 同步阻塞**直到新任务完成，并非"提交后立即返回" |
 | `BoostPriority(task_id, delta)` | 动态提升指定任务的优先级（上限 30，仅作用于等待队列） |
-| `StopTask(task_id, scenario_id)` | 停止指定任务 |
-| `ListAllTasks()` | 列出所有任务及其状态 |
+| `StopTask(task_id, scenario_id)` | 停止指定任务；对 RUNNING 任务还会调 `runner_->stopGenerate(scenario_id, task_id)` |
+| `GetTaskStatus(task_id)` | 查询单个任务状态（返回 `TaskResponse`，`status` 为 `TASK_ALREADY_EXISTS` / `TASK_NOT_FOUND`） |
+| `ListAllTasks()` | 列出所有任务及其状态（返回 `vector<TaskUpdate>`） |
 
 **ModelRunner 单例**（`aadkapi/model_runner.h`）是调度器的上层封装：
 
@@ -335,15 +360,19 @@ score = priority * weight_priority + wait_time_ms * weight_wait * 0.001
 > 两者在 `ModelRunner` 内部会被**桥接**：推理时把 `data_message.scenario_id` 当作 `scene_id` 去查 `scene_model_details_`。由此产生一个容易踩的静默失败：
 >
 > - 命中 → 使用该 `scene_id` 对应的模型 / LoRA；
-> - **未命中 → `getModelDetailsByScene()` 回落到 `CHITCHAT_SCENARIO_ID` 的 `ModelDetails`**（而不是报错）。
+> - **未命中 → `getModelDetailsByScene()` 回落到 `scene_model_details_.begin()->second`**——即 `std::map` 中 **`scene_id` 最小**的那条 `ModelDetails`（与 `CHITCHAT` 无关，纯粹取决于配置里谁的 `scene_id` 最小），而不是报错。
 >
-> 所以新增 Agent 时，`constant_ids.h` 里的 `scenario_id` 与模型配置里的 `scene_id` **必须对齐**，否则会出现"消息路由正确、但模型/LoRA 悄悄走了闲聊默认配置"的问题——现象是回答风格/能力不对，日志里却没有明显错误。
+> 回落时还会**同时重置两项**：`lora_id = -1`（退回 base model）、`infer_params = InferParams()`（把该场景配置的温度 / `ebnf_path` / 采样参数**一并静默丢掉**）。所以新增 Agent 时，`constant_ids.h` 里的 `scenario_id` 与模型配置里的 `scene_id` **必须对齐**，否则会出现"消息路由正确、但模型/LoRA/采样参数悄悄走了最小 `scene_id` 的默认配置"的问题——现象是回答风格/能力不对，日志里却没有明显错误。（`constant_ids.h` 的完整 `scenario_id` 常量表见 [协议与运行时执行 · §3.1 AgentPlugin 插件接口](agent-protocols.html#sec-12)。）
 >
-> 另需注意：带 LoRA 名的重载 `getModelDetailsByScene(scene_id, lora_name)` **没有这层回落**，查不到指定名字的 LoRA 时直接返回 `nullopt` 并打 `LOG_E`。
+> 两个重载的实际行为还有三处与直觉相反，务必注意：
+>
+> - **带 LoRA 名的重载同样回落，而非返回 `nullopt`**：`getModelDetailsByScene(scene_id, lora_name)` 查不到指定名字的 LoRA 时，打一条 `LOG_E("... use base model")` 后**也回落到 `begin()->second` 的 base model**（同样 `lora_id = -1` + 重置 `infer_params`），**从不返回 `nullopt`**。
+> - **两个重载实际永不返回 `nullopt`**：未命中分支总是构造一个 `ModelDetails` 返回，因此调用方的 `if (!model_details)` 判空是**死代码**，不要依赖它来发现"场景没配模型"。
+> - **空 map → UB**：若 `scene_model_details_` 为空，`begin()` 等于 `end()`，`begin()->second` 是对尾后迭代器解引用，属**未定义行为**（通常直接崩溃）。框架没有对"一个模型都没注册"做任何保护。
 
 ### 3.4 抢占时的任务状态与中间态处理
 
-抢占是端侧调度里最容易误解的一环：**它不是强制 kill，也不支持断点续算**。
+抢占是端侧调度里最容易误解的一环：**它不是强制 kill**；取消（cancel）路径不支持断点续算，但框架另有一条**保留 KV 的时间片挂起/恢复**路径（仅 Orin/Lape 可用，见下方 CAUTION）。
 
 ```mermaid
 flowchart TD
@@ -355,7 +384,7 @@ flowchart TD
     CMP -->|"是"| DROP["最低优任务移出队列promise 兑现 TASK_PREEMPTED"]
     DROP --> ENQ
     ENQ --> TAG{"新任务 break_tag == true?"}
-    TAG -->|"是"| CANCEL["遍历 active_tasks置位 cancel_flag"]
+    TAG -->|"是"| CANCEL["遍历 active_tasks 置位 cancel_flag<br/>(POP 任务无条件取消 / RUNNING 任务需新任务优先级更高)"]
     TAG -->|"否"| WAIT["仅排队，不打断在跑任务"]
     CANCEL --> COOP["在跑任务的 onProcessing()轮询到 cancel_flag 后自行退出"]
 
@@ -368,28 +397,44 @@ flowchart TD
 
 | 机制 | 实际行为 |
 | :--- | :--- |
-| **协作式取消** | `PreemptAndSubmit` / `StopTask` 只是把目标 `TaskEntry::cancel_flag` 置位（`StopTask` 对 RUNNING 任务还会调 `runner_->stopGenerate(scenario_id)`）。真正停止依赖任务的 `onProcessing(stop_all, cancel_flag)` **主动轮询**这两个原子标志并退出。**任务实现若不轮询，抢占就不会生效**。 |
-| **`break_tag` 是打断开关** | 只有构造 `CommonSchedulerTask` 时传入 `break_tag = true` 的新任务，才会去遍历 `active_tasks` 置位 `cancel_flag` 打断在跑任务；否则新任务只是插队，等待当前任务自然结束。 |
+| **协作式取消** | `PreemptAndSubmit` / `StopTask` 只是把目标 `TaskEntry::cancel_flag` 置位（`StopTask` 对 RUNNING 任务还会调 `runner_->stopGenerate(scenario_id, task_id)`）。真正停止依赖任务的 `onProcessing(stop_all, cancel_flag)` **主动轮询**这两个原子标志并退出。**任务实现若不轮询，抢占就不会生效**。 |
+| **`break_tag` 是打断开关** | 只有构造 `CommonSchedulerTask` 时传入 `break_tag = true` 的新任务，才会去遍历 `active_tasks` 置位 `cancel_flag` 打断在跑任务；否则新任务只是插队，等待当前任务自然结束。打断判定按目标状态分两档（见上方流程图 CANCEL 节点）：对 `POP`（已出队、尚未进入 RUNNING）的任务**无条件取消**，不比较优先级；对 `RUNNING` 的任务则要求**新任务优先级严格更高**才取消。 |
 | **被抢占任务不会自动重排** | 队列满时被选中的最低优任务**直接从队列移除**，其 promise 以 `error_code::TASK_PREEMPTED` 兑现。调度器不会把它重新入队，也不会自动重试——**是否重新 `SubmitTask` 由调用方决定**。 |
-| **执行权是串行的** | 模型执行由 `generate_mutex_` 保护：即使 `worker_count` > 1（上限为 `hardware_concurrency()`），同一时刻也只有一个任务真正在跑模型，其余 worker 阻塞在锁上。所以抢占抢的是**队列位置与执行权**，不是并行计算资源。 |
+| **执行权默认是并发的，不是串行的** | 由配置项 `generate_concurrent`（**默认 true**）决定：为 true 时 `SchedulerLoop` **不取** `generate_mutex_`，`worker_count`（默认 8）个 worker 可**同时**跑各自任务的 `onProcessing`，即同一时刻可以有多个任务真正在跑模型；只有显式配置 `generate_concurrent: false` 才退化为"取锁串行、其余 worker 阻塞在 `generate_mutex_` 上"。注意 `worker_count` 并**没有**被钳到 `hardware_concurrency()` 上限（对应 `assert` 已注释），配置多大就起多少线程。**这一项直接改变抢占语义**：并发执行下，新任务无法靠"抢执行权"挤掉在跑任务（大家本来就在并行跑），真正能打断在跑任务的只有 `break_tag` 触发的 `cancel_flag`；只有串行模式（`generate_concurrent: false`）下才存在"抢执行权"这回事。 |
 
 > [!CAUTION]
-> **KV Cache 与中间态：抢占即丢弃，恢复等于重跑 prefill**
+> **中间态有两条路径：抢占(cancel)=丢弃重跑，时间片(pause/resume)=保留 KV 的挂起恢复（仅 Lape/Orin）**
 >
-> 调度器层**不做任何检查点（checkpoint）**。被抢占/取消的任务，其已生成的部分输出与底层推理引擎为该请求建立的 KV Cache 会随任务结束一并释放，**没有"挂起后恢复"的路径**。
+> 调度器层**不做检查点（checkpoint）**，但"挂起后恢复"并非完全不存在——取决于走哪条路径：
 >
-> 因此恢复一个被抢占的任务，唯一方式是调用方重新 `SubmitTask`，而这等于**从 prefill 完整重跑**：
+> **路径一：抢占 / 取消（`cancel_flag`）= 丢弃重跑。** 被抢占/取消的任务，其已生成的部分输出与底层推理引擎为该请求建立的 KV Cache 会随任务结束一并释放。恢复它的唯一方式是调用方重新 `SubmitTask`，等于**从 prefill 完整重跑**：
 >
 > - 代价 ≈ 一次完整 prefill。对长 prompt 任务（多模态输入、长对话历史、RAG 注入）尤其昂贵——在端侧带宽受限平台上，prefill 往往就是整个请求的延迟大头。
 > - 已经流式回调给上层（如已播报给用户的 TTS 片段）的内容**不会被撤回**，重跑会产生重复输出。业务侧需要自己按 `request_id` 做幂等/去重。
 > - 这正是 `break_tag` 默认关闭、只让真正紧急的任务（如安全类指令）开启打断的原因：**打断不是免费的**。
 >
-> 设计建议：把可打断性当作任务属性来显式声明，而不是全局打开。长任务（视觉解码、长文本生成）应保持 `break_tag = false` 靠排队解决；只有延迟敏感且 prompt 短的任务才适合开启打断。
+> **路径二：时间片轮转（`enable_timeslice` + `TimeSliceLoop`）= 保留 KV 的挂起/恢复。** 开启后，`TimeSliceLoop` 每 `timeslice_ms` 检查一次 RUNNING 任务：当并发数超过 `batch_count` 时，按"已暂停优先 → 暂停次数多优先 → 入队早优先"排序，对超出额度的任务调 `runner_->pauseGenerate(scene_id, task_id)`、对回到额度内的调 `resumeGenerate(...)`。这条链路最终落到 `ModelInstance::pauseGenerate/resumeGenerate` → `LapeModel::PauseRequest/ResumeRequest`，**保留 KV Cache**，是真正的"挂起后恢复"，无需重跑 prefill。
+>
+> 设计建议：把可打断性当作任务属性来显式声明，而不是全局打开。长任务（视觉解码、长文本生成）应保持 `break_tag = false` 靠排队解决；只有延迟敏感且 prompt 短的任务才适合开启打断。需要"挂起不丢 KV"的并发复用，只在 Orin 上开 `enable_timeslice`，并确认 `batch_count` 与显存预算匹配。
+
+> [!WARNING]
+> **平台陷阱：时间片目前只有 Orin/Lape 能安全开启，8397P / 云端开启会崩进程**
+>
+> `pauseGenerate/resumeGenerate` 在基类 `BaseLlm`（`include/models/model.hpp`）里的默认实现是 **`throw std::runtime_error("Not implemented")`**，只有 `LapeModel` 覆写了它们：
+>
+> - `QnnModel`（SA8397P）只实现了 `stopGenerate()`，**没有** pause/resume；
+> - `Bailian`（云端 x86）连 `stopGenerate()` 都直接 `return false`，pause/resume 同样走基类的 throw。
+>
+> 而 `ModelRunner::pauseGenerate/resumeGenerate` 与 `TimeSliceLoop` **都不捕获异常**。因此在 8397P / 云端把 `enable_timeslice` 配成 `true`，一旦触发轮转就会在 `TimeSliceLoop` 线程抛出未捕获异常 → `std::terminate` **崩掉整个进程**。
+>
+> 结论：**`enable_timeslice: true` 仅在 Orin/Lape 后端可用**；其他平台保持默认 `false`，靠路径一的排队 + `break_tag` 解决并发。
 
 > [!NOTE]
-> **TaskResponse 结构**
+> **TaskResponse 结构：性能指标在嵌套的 `model_response` 里**
 >
-> 每个任务完成后返回 `TaskResponse`，包含：`task_id`（任务ID）、`status`（error\_code 枚举）、`ttft`（首 token 延迟 ms）、`input_tokens`、`output_tokens`、`tokens_per_second`（吞吐量），可用于性能监控和调优。
+> 每个任务完成后返回 `TaskResponse`，它**只有四个成员**：`task_id`（任务ID）、`status`（`error_code` 枚举）、`info`（描述字符串）、`model_response`（嵌套的 `ModelResponse`）。
+>
+> `ttft`（首 token 延迟 ms）、`input_tokens`、`output_tokens`、`tokens_per_second`（吞吐量）这些性能指标**不在 `TaskResponse` 顶层**，而是经 `model_response` 暴露——读取时要走 `resp.model_response.ttft` 这样的路径。`ModelResponse` 除上述四项外还含 `ts_start` / `ts_vit` / `ts_first_token` / `ts_end`（各阶段时间戳）、`request_id`、`priority`、`lora_path`，可用于性能监控和调优。
 >
 > `error_code` 中与调度相关的取值：`SUCCESS(0)`、`TASK_CANCELED(1)`、`TASK_NOT_FOUND(2)`、`TASK_STOP(3)`、`TASK_ALREADY_EXISTS(4)`、`TASK_PREEMPT_FAILED(5)`、`TASK_PREEMPTED(6)`、`TASK_TIMEOUT(7)`、`TASK_UNKNOWN_ERROR(8)`，以及模型侧的 `MODEL_NOT_FOUND(-1)`、`MODEL_NOT_READY(-2)`、`MODEL_SUSPENDED(-3)`、`MODEL_GEN_STOPPED(-4)`。**调用方必须区分 `TASK_PREEMPTED` 与 `TASK_CANCELED`**：前者意味着"被更高优任务挤掉、可考虑重提"，后者意味着"被显式停止、通常不应重提"。
 
@@ -457,10 +502,10 @@ flowchart LR
 | :--- | :--- | :--- |
 | `getHistoryByNum(rounds)` | `size_t rounds` | 获取最近 N 轮对话（含 query/response/info） |
 | `getHistoryByPeriod(start, end)` | `int64_t start_time, end_time` | 获取指定时间段的对话；-1 表示不限；可用 alias 替代音区名 |
-| `getHistoryByTokenLimit(limit, counter)` | `size_t limit, optional<function>` | 获取不超过 token 限制的对话；支持自定义 token 计数器 |
+| `getHistoryByTokenLimit(limit, counter)` | `size_t limit, optional<function>` | 获取不超过 token 限制的对话；支持自定义 token 计数器。**只遍历 `messages_`，不含 UserInfo**——返回的历史里不会带关键人物条目 |
 | `getHistoryByUserinfo(alias, start, end)` | `string alias, int64_t` | 获取特定关键人物所在音区的对话历史 |
 | `removeHistoryByAudioZone(zone, start, end)` | `int zone, int64_t` | 删除指定音区的对话记录 |
-| `removeUserinfoByAlias(alias, remove_history)` | `string, bool` | 删除关键人物，可选同时删除其对话记录 |
+| `removeUserinfoByAlias(alias, remove_history)` | `string, bool` | 删除关键人物，可选同时删除其对话记录。**存在多个同名 alias 时只删除最近添加的一个**（从后往前找到第一个匹配即 `break`），不会批量清理同名人物 |
 | `clear()` | - | 清空所有历史记录和 UserInfo |
 
 > [!WARNING]

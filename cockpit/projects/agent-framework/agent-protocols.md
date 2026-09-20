@@ -238,23 +238,31 @@ flowchart TD
 | `clear_memory()` | `bool` | 清除对话历史 |
 | `set_data_dump_flag(flag)` | `void` | 设置数据录制标志（默认空实现） |
 
-**场景 ID 常量**（`constant_ids.h`）：
+**场景 ID 常量**（`constant_ids.h`，按值排序）：
 
 | 常量 | ID | 场景 |
 | :--- | :--- | :--- |
-| `SYSTEM_AGENT_SCENARIO_ID` | 1001 | 系统总控 Agent |
-| `CAR_CONTROL_SCENARIO_ID` | 1002 | 车控 Agent |
-| `CHITCHAT_SCENARIO_ID` | 1003 | 闲聊 Agent |
 | `VIDEOCHAT_SCENARIO_ID` | 100 | 视频对话 |
 | `PROACTIVE_SPEECH_SCENARIO_ID` | 200 | 主动语音 |
 | `ACTIVE_VISION_SCENARIO_ID` | 300 | 主动视觉 |
+| `RAIN_DECTION_SCENARIO_ID` | 400 | 雨天检测 |
+| `SPORT_MODE_SCENARIO_ID` | 500 | 运动模式 |
+| `OAI_INFERENCE_SCENARIO_ID` | 600 | OAI 推理 |
 | `WELCOME_MODE_SCENARIO_ID` | 700 | 迎宾模式 |
+| `SYSTEM_AGENT_SCENARIO_ID` | 1001 | 系统总控 Agent |
+| `CAR_CONTROL_SCENARIO_ID` | 1002 | 车控 Agent |
+| `FUNCTION_CALL_SCENARIO_ID` | 1002 | 函数调用（**与 `CAR_CONTROL_SCENARIO_ID` 同值的别名**，不是独立场景） |
+| `CHITCHAT_SCENARIO_ID` | 1003 | 闲聊 Agent |
+| `NAVI_POI_SCENARIO_ID` | 1007 | 导航 POI |
+| `TRIP_PLANNING_SCENARIO_ID` | 1009 | 行程规划 |
+| `ACTIVE_SESSION_SCENARIO_ID` | 1600 | 主动会话（由 `registerStaticAgents` 静态注册，见 §3.3） |
+| `GUI_AGENT_NEW_SCENARIO_ID` | 2000 | GUI Agent（新版） |
 | `BROADCAST_SCENARIO_ID` | 65535 | 广播消息 |
 
 > [!NOTE]
 > **`scenario_id` 是消息路由键，不是模型路由键**
 >
-> 本表中的 `scenario_id` 决定 `DataMessage` 投递给哪个 `AgentPlugin`。它与模型/LoRA 路由用的 `scene_id` 是两套 ID，两者在 `ModelRunner` 内部会被桥接，未对齐时会静默回落到闲聊默认模型——两者的区分与对齐要求见 [aadkcore 核心框架 · ModelScheduler](agent-core.html) 中的 `scene_id` vs `scenario_id` 说明。
+> 本表中的 `scenario_id` 决定 `DataMessage` 投递给哪个 `AgentPlugin`。它与模型/LoRA 路由用的 `scene_id` 是两套 ID，两者在 `ModelRunner` 内部会被桥接，未对齐时会**静默回落到 `scene_model_details_` 中 `scene_id` 最小的那条配置**（并重置 `lora_id` 与 `infer_params`，而**不是**回落到"闲聊模型"）——两者的区分、对齐要求与回落的真实行为见 [aadkcore 核心框架 · §3.3 抢占机制与 ModelRunner](agent-core.html#sec-13) 中的 `scene_id` vs `scenario_id` 说明。
 
 ### 3.2 动态加载机制
 
@@ -308,9 +316,9 @@ extern "C" void destroy_dispatcher(std::unique_ptr<AgentPlugin> plugin);
 ```mermaid
 flowchart LR
     LOAD["dlopen(libagent_group.so)"] --> CREATE["create_dispatcher逐个创建"]
-    CREATE --> RUN["dispatchers_ 持有unique_ptr<AgentPlugin>"]
-    RUN --> STOP["停止 ModelScheduler / ThreadWorker"]
-    STOP --> DESTROY["destroy_dispatcher逐个销毁(应然)"]
+    CREATE --> RUN["dispatchers_ 持有unique_ptr<AgentPlugin>(dlopen 插件 + 静态 Agent 混合)"]
+    RUN --> STOP["停止 ModelScheduler(若启用) /两个具名 ThreadWorker"]
+    STOP --> DESTROY["destroy_dispatcher逐个销毁(应然，仅 dlopen 插件)"]
     DESTROY --> CLEAR["清空 dispatchers_"]
     CLEAR --> DLCLOSE["dlclose(handle)"]
 
@@ -321,47 +329,71 @@ flowchart LR
 > [!CAUTION]
 > **当前运行时的卸载顺序存在隐患：先 `dlclose`，后析构插件**
 >
-> 在 `msg_deliver_impl.cpp` 的析构函数中，实际顺序是：停止 `ModelScheduler` 与 `ThreadWorker` → **直接 `dlclose(dl_handle_)`**，而持有所有插件的 `dispatchers_` 是成员变量，它的析构发生在**析构函数体执行完之后**——也就是 `dlclose` 之后。此时 `libagent_group.so` 已被解除映射，再去调用 `AgentPlugin` 的虚析构（其代码与 vtable 都在刚被卸载的 `.so` 里）属于**未定义行为**。
+> 在 `msg_deliver_impl.cpp` 的析构函数中，实际顺序是：（仅在 `ENABLE_MULTI_PROCESS` 下）`modelscheduler_->Stop()` → 停止 `main_thread_worker_` 与 `critical_thread_worker_` 两个具名 worker → **直接 `dlclose(dl_handle_)`**，而持有所有插件的 `dispatchers_` 是成员变量，它的析构发生在**析构函数体执行完之后**——也就是 `dlclose` 之后。此时 `libagent_group.so` 已被解除映射，再去调用 `AgentPlugin` 的虚析构（其代码与 vtable 都在刚被卸载的 `.so` 里）属于**未定义行为**。
 >
 > 同时，`destroy_dispatcher` 这个工厂函数**虽然声明了，但运行时并未 `dlsym` 它、也从未被调用**——即当前实现没有走"显式销毁插件"这条路。
 >
-> **正确的卸载顺序**应为：
+> **正确的卸载顺序**应为（注意 `dispatchers_` 是"dlopen 插件 + 静态 Agent"的混合容器，不能一刀切）：
 >
-> 1. 停止 `ModelScheduler` 与所有 `ThreadWorker`（确保没有消息还在 `deliver_msg` 里）；
-> 2. 对 `dispatchers_` 中每个插件调用 `destroy_dispatcher(std::move(plugin))`，把析构交回插件模块；
-> 3. `dispatchers_.clear()`；
-> 4. 最后才 `dlclose(dl_handle_)`。
+> 1. 停止 `ModelScheduler`（若启用）与 `main_thread_worker_` / `critical_thread_worker_`（确保没有消息还在 `deliver_msg` 里）；
+> 2. **只对经 `dlopen` 创建的插件**调用 `destroy_dispatcher(std::move(plugin))`，把析构交回插件模块；
+> 3. **静态注册的 Agent 不走 `destroy_dispatcher`**：`registerStaticAgents()` 会把 `ActiveSessionAgent`(1600)、`MemoryAgent` 用 `make_unique` 直接塞进**同一个** `dispatchers_`，它们的代码与 vtable 在主程序/`libaadkcore.so` 内、并非来自 `libagent_group.so`，对其调用 `destroy_dispatcher` 是错的——这类直接 `reset()` / 让 `unique_ptr` 正常析构即可；
+> 4. `dispatchers_.clear()`；
+> 5. 最后才 `dlclose(dl_handle_)`。
 >
-> 在常驻进程里这个问题可能被掩盖（进程退出时 OS 统一回收），但在**热卸载 / 插件热替换 / 单元测试反复构造析构**的场景下会暴露为崩溃或内存损坏。改造插件生命周期时应以上述顺序为准。
+> 在常驻进程里这个问题可能被掩盖（进程退出时 OS 统一回收），但在**热卸载 / 插件热替换 / 单元测试反复构造析构**的场景下会暴露为崩溃或内存损坏。改造插件生命周期时应以上述顺序为准，并按"是否来自 `.so`"区分两类 Agent 的销毁方式。
 
 ## 4. LLM Flow 与 Tool 系统
 
-`BaseLlmFlow`（定义于 `include/flow/base_llm_flow.hpp`）实现了 LLM 推理流水线的标准模式，负责预处理、调用模型、后处理和 Tool 调用循环。`BaseTool`（定义于 `include/tools/base_tool.hpp`）定义了工具的统一抽象接口。
+`BaseLlmFlow`（定义于 `include/flow/base_llm_flow.hpp`）实现了 LLM 推理流水线的标准模式，负责预处理、调用模型、后处理（**Tool 调用循环为设计目标，受 `USE_TOOL` 门控，默认未启用**，见 §4.1 的边界说明）。`BaseTool`（定义于 `include/tools/base_tool.hpp`）定义了工具的统一抽象接口。
 
 ### 4.1 BaseLlmFlow 流水线
 
 ```mermaid
 flowchart TD
-    START["run_async(context)"] --> PRE["_preprocess_async请求处理器链"]
-    PRE --> BM["_handle_before_model_callback"]
-    BM --> CALL["_call_llm_async调用模型推理"]
-    CALL --> AM["_handle_after_model_callback"]
-    AM --> POST["_postprocess_async响应处理器链"]
+    START["run_async(context)"] --> STEP["_run_one_step_async(单步，无循环)"]
+    STEP --> PRE["_preprocess_async请求处理器链"]
+    PRE -.->|"USE_TOOL 未定义"| TOOLREG["工具注册 canonical_tools(编译期被裁掉)"]
+    PRE --> CALL["_call_llm_async调用模型推理"]
+    CALL -.->|"被条件编译/注释屏蔽"| BM["_handle_before_model_callback(未激活)"]
+    CALL -.->|"被条件编译/注释屏蔽"| AM["_handle_after_model_callback(未激活)"]
+    CALL --> POST["_postprocess_async响应处理器链(默认空)"]
+    POST --> FIN["_finalize_model_response_event返回最终结果"]
     POST --> FC{"存在 FunctionCall?"}
-    FC -->|"是"| HANDLE["_postprocess_handle_function_calls_sync执行工具调用"]
-    HANDLE --> PRE
-    FC -->|"否"| FIN["_finalize_model_response_event返回最终结果"]
+    FC -->|"是"| HANDLE["_postprocess_handle_function_calls_sync(函数体受 USE_TOOL 门控，实际空操作)"]
+    FC -->|"否"| FIN
+    HANDLE -.->|"无回边：不再推理"| FIN
 
     style START fill:#4361ee,color:#fff
     style CALL fill:#f39c12,color:#fff
-    style HANDLE fill:#e74c3c,color:#fff
     style FIN fill:#2ecc71,color:#fff
+    style TOOLREG fill:#95a5a6,color:#fff
+    style BM fill:#95a5a6,color:#fff
+    style AM fill:#95a5a6,color:#fff
+    style HANDLE fill:#95a5a6,color:#fff
 ```
 
-**SingleFlow** 是 `BaseLlmFlow` 的标准实现，预注册了两个请求处理器：
+**SingleFlow** 是 `BaseLlmFlow` 的标准实现，预注册了两个请求处理器（注意：实际生效的是**裸指针** `&basic::request_processor` / `&instructions::request_processor`，`std::make_shared` 版本整段在 `#if 0` 内未启用）：
 
 - `basic::request_processor` — 基础请求构建
 - `instructions::request_processor` — 将 Agent 的 instructions 注入到请求中
+
+`response_processors` 默认为**空**（`nl_planning` / `code_execution` 等都被注释掉），因此 `_postprocess_run_processors_sync` 默认不产生任何事件。
+
+> [!NOTE]
+> **重要：Tool 执行循环与 before/after 回调默认未启用（受 `USE_TOOL` 门控）**
+>
+> 上图灰色节点与虚线边**不是当前生效的控制流**。经代码核实：
+>
+> - **`USE_TOOL` 在整个仓库从未被定义**（CMake / 各 `build_*.sh` 均无 `-DUSE_TOOL`），因此所有 `#ifdef USE_TOOL` 块在编译期被裁掉，包括：`_preprocess_async` 里的工具注册（`canonical_tools` / `register_tool`）、`_postprocess_handle_function_calls_sync` 的整个函数体（`handle_function_calls_sync` / `generate_auth_event`）、以及 `LlmAgent` 的工具成员。
+> - **`_handle_before_model_callback` / `_handle_after_model_callback` 在 `_call_llm_async` 里分别被 `#if 0` 和 `/* */` 注释掉**，两个回调函数自身的函数体也是 `#if 0`——它们不是"激活的流水线节点"。
+> - **`run_async` 只调一次 `_run_one_step_async`（单步）**：preprocess → call_llm → postprocess 走完即返回，**没有回到 preprocess 的循环、没有第二次推理**。即使 `_postprocess_async` 检测到 `FunctionCall` 并调用了 `_postprocess_handle_function_calls_sync`，后者因 `USE_TOOL` 未定义而返回空，**不会执行工具、也不会触发再推理**。
+>
+> **仍然可用的部分**：工具**声明**可以经 `ModelInstance::streamGenerate/generate` 的 `tools` 参数下发，并由 `LapeModel::buildLlmsPrompt` 以 `<tools>...</tools>` XML 注入 system prompt——即模型能"看到"工具签名并按约定输出 `FunctionCall`。但**解析 `FunctionCall`、执行工具、把 `FunctionResponse` 回灌再推理**这一闭环**不是自动的**，需要业务侧自行实现（或定义 `USE_TOOL` 并补齐相应代码）。
+>
+> 引用本节流程图时请勿把灰色/虚线部分当作现有行为。这与 §6 安全沙箱"设计目标 vs 已实现接口"的标注口径一致。
+>
+> 另注：当前既然是单步、谈不上循环，自然也**没有迭代上限**；未来若补齐 Tool 闭环（`HANDLE → PRE` 回边），必须同时引入 `max-iteration` 上限，防止模型反复发起工具调用导致失控循环。
 
 ### 4.2 BaseTool 工具基类
 
@@ -390,7 +422,7 @@ struct ToolParameters {
 };
 ```
 
-LLM 根据所有注册 Tool 的 `ToolDefinition` 生成结构化的 `FunctionCall`，Flow 引擎解析后调用对应 Tool 的 `run_async()`，结果通过 `FunctionResponse` 回传给 LLM 继续推理。
+LLM 根据所有注册 Tool 的 `ToolDefinition` 生成结构化的 `FunctionCall`，Flow 引擎解析后调用对应 Tool 的 `run_async()`，结果通过 `FunctionResponse` 回传给 LLM 继续推理。（**注意**：这条"解析 → 执行 → 回灌再推理"的闭环受 `USE_TOOL` 门控，当前默认未启用——`run_async()` 的执行与再推理都不会自动发生，详见 §4.1 的边界说明。）
 
 ### 4.3 端到端调用链
 
@@ -417,16 +449,16 @@ sequenceDiagram
     MS-->>MR: ModelResponse
     MR-->>FL: 返回推理结果
 
+    Note over FL,TL: ↓ Tool 执行与再推理为设计目标（USE_TOOL 门控，当前未实现，见 §4.1 NOTE）
     FL->>FL: _postprocess_async (检测到 FunctionCall)
-    FL->>TL: run_async({temperature: 24})
-    TL-->>FL: FunctionResponse: {status: success}
-
-    FL->>MR: 再次推理（含 FunctionResponse）
+    FL->>TL: run_async({temperature: 24})  [未启用]
+    TL-->>FL: FunctionResponse: {status: success}  [未启用]
+    FL->>MR: 再次推理（含 FunctionResponse）  [未实现：run_async 单步返回]
     MR->>MS: SubmitTask
     MS->>LLM: streamGenerate
     LLM-->>FL: "已将空调温度设置为 24°C"
 
-    FL-->>AP: 最终响应
+    FL-->>AP: 最终响应（当前实现即首次推理结果）
     AP-->>AR: 回传结果
     AR-->>U: TTS 播报
 ```
