@@ -29,8 +29,11 @@ flowchart LR
 
 | 文档 | 讲什么 |
 | :--- | :--- |
-| [通用机器人学习文档](general/learning.html) | 端侧 AI 视角的通用机器人全栈：算力平台、推理框架、ROS2 集成、感知/VLA 训练、Sim2Real、端侧部署、实时控制、传感器融合、Embodied Agent、Tool Use、多模态接地、记忆与规划（15 章 4 部分） |
-| [通用机器人面试指南](general/interview.html) | 32 道精选题，覆盖平台选型、算法训练、部署实时控制、Agent 大模型与系统设计 |
+| [机器人端侧算力与框架](general/platforms.html) | 算力平台全景、推理框架对比、ROS2 + 端侧 AI 集成 |
+| [感知与 VLA 训练](general/algorithms.html) | 感知训练、VLA（π0/OpenVLA/GR00T/RDT）、扩散策略、遥操作、Sim2Real、世界模型 |
+| [端侧部署与实时控制](general/deployment.html) | 端侧推理部署、实时控制、传感器融合、MoveIt2、SLAM、人形全身控制 |
+| [端侧 Embodied Agent](general/embodied-agent.html) | Agent 架构、端侧 LLM 引擎、Tool Use、多模态接地、记忆与规划 |
+| [通用机器人面试指南](general/interview.html) | 34 道精选题，覆盖平台选型、算法训练、部署实时控制、Agent 大模型与系统设计 |
 
 ### 2.2 第二层 · 具身实践（开源教程）
 

@@ -1,11 +1,11 @@
 # 通用机器人 — 面试指南
 
-*32 道精选面试题 — 覆盖平台选型、算法训练、部署控制、Agent 大模型与系统设计*
+*34 道精选面试题 — 覆盖平台选型、算法训练、部署控制、Agent 大模型与系统设计*
 
 > [!TIP]
 > **本篇讲什么**
 >
-> 通用机器人端侧 AI 面试指南，32 道精选题（每题**点击展开**参考答案）：
+> 通用机器人端侧 AI 面试指南，34 道精选题（每题**点击展开**参考答案）：
 >
 > - 平台选型与基础、算法与训练、部署与实时控制
 > - Agent 与大模型、系统设计题
@@ -62,7 +62,7 @@ DDS QoS（Quality of Service）配置直接影响 AI 推理节点的数据接收
 
 **答案：**
 
-ROS2 提供了 Managed Node（也称 Lifecycle Node）机制，通过定义明确的状态机来规范节点的启动、运行和关闭过程。生命周期节点包含四个主要状态：Unconfigured（创建后的初始状态）、Inactive（已配置但不处理数据）、Active（正常运行处理数据）、Finalized（终止状态）。状态间通过 Transition 触发切换：configure（配置资源）、activate（开始处理）、deactivate（暂停处理）、cleanup（释放资源）、shutdown（关闭节点）。每个 Transition 对应两个回调函数 on\_xxx 和 on\_error，开发者在回调中实现具体逻辑，如 on\_configure 中加载模型和参数，on\_activate 中启动传感器订阅，on\_deactivate 中停止推理线程。生命周期管理的核心价值在于：确保节点按正确顺序启动（如先启动传感器驱动再启动推理节点）、支持运行时动态启停（如切换工作模式时 deactivate 旧节点 activate 新节点）、以及优雅的错误恢复（error 状态可尝试恢复到 Unconfigured）。在机器人系统中，通常使用 `launch` 文件配合 `lifecycle_manager` 统一管理多个生命周期节点的启动顺序和依赖关系。
+ROS2 提供了 Managed Node（也称 Lifecycle Node）机制，通过定义明确的状态机来规范节点的启动、运行和关闭过程。生命周期节点包含四个主要状态：Unconfigured（创建后的初始状态）、Inactive（已配置但不处理数据）、Active（正常运行处理数据）、Finalized（终止状态）。状态间通过 Transition 触发切换：configure（配置资源）、activate（开始处理）、deactivate（暂停处理）、cleanup（释放资源）、shutdown（关闭节点）。每个 Transition 在节点侧对应注册的回调（on\_configure / on\_cleanup / on\_activate / on\_deactivate / on\_shutdown，以及出错时的 on\_error），开发者在回调中实现具体逻辑，如 on\_configure 中加载模型和参数，on\_activate 中启动传感器订阅，on\_deactivate 中停止推理线程。生命周期管理的核心价值在于：确保节点按正确顺序启动（如先启动传感器驱动再启动推理节点）、支持运行时动态启停（如切换工作模式时 deactivate 旧节点 activate 新节点）、以及优雅的错误恢复（error 状态可尝试恢复到 Unconfigured）。在机器人系统中，通常使用 `launch` 文件配合 `lifecycle_manager` 统一管理多个生命周期节点的启动顺序和依赖关系。
 
 </details>
 
@@ -136,7 +136,7 @@ LoRA（Low-Rank Adaptation）通过在预训练模型的注意力层旁注入低
 
 **答案：**
 
-VLA 的关键设计之一是**动作如何表征与解码**，它直接决定延迟与控制方式，主流有三条路线：（1）离散动作 token——RT-1/RT-2/OpenVLA 把每个连续动作维度（如末端位姿的 Δx/Δy/Δz/Δ姿态与夹爪开合）离散成约 256 个 bin，当作"词"由自回归 LM 逐个吐出；OpenVLA 直接把这些 bin 覆盖到 LLaMA 词表中最少用的 token 上，复用语言模型头。（2）扩散 / 流匹配动作头——Octo 用 diffusion action head，π0 在 VLM（PaliGemma）之上接一个 flow-matching 的"action expert"，一次前向输出连续动作，避免逐 token 解码。（3）回归 MLP——最简单，直接回归动作，但多模态动作分布容易被平均化。Action Chunking（动作分块，ACT / Diffusion Policy / π0）是让慢速策略可用于实时控制的关键技巧：一次预测未来一段动作序列（如 8–50 步）而非单步，配合 temporal ensembling 平滑衔接，于是一个 5–10Hz 的策略也能输出高频控制流。这也呼应 Q20 的延迟预算——VLA 常以"低频出块 + 高频执行"的方式落地。
+VLA 的关键设计之一是**动作如何表征与解码**，它直接决定延迟与控制方式，主流有三条路线：（1）离散动作 token——RT-1/RT-2/OpenVLA 把每个连续动作维度（如末端位姿的 Δx/Δy/Δz/Δ姿态与夹爪开合）离散成约 256 个 bin，当作"词"由自回归 LM 逐个吐出；OpenVLA 直接把这些 bin 覆盖到 LLaMA 词表中最少用的 token 上，复用语言模型头。（2）扩散 / 流匹配动作头——Octo 用 diffusion action head，π0 在 VLM（PaliGemma）之上接一个 flow-matching 的"action expert"，一次前向输出连续动作，避免逐 token 解码。（3）回归 MLP——最简单，直接回归动作，但多模态动作分布容易被平均化。Action Chunking（动作分块，ACT / Diffusion Policy / π0）是让慢速策略可用于实时控制的关键技巧：一次预测未来一段动作序列（如 8–50 步）而非单步，配合 temporal ensembling 平滑衔接，于是一个 5–10Hz 的策略也能输出高频控制流。这也呼应 Q22 的延迟预算——VLA 常以"低频出块 + 高频执行"的方式落地。
 
 </details>
 
@@ -158,10 +158,28 @@ VLA 的关键设计之一是**动作如何表征与解码**，它直接决定延
 
 </details>
 
+<details markdown="1">
+<summary>**Q17: 机器人策略训练数据怎么来？遥操作与数据采集方案** · `中级`</summary>
+
+**答案：**
+
+模仿学习与 VLA 的上限由示范数据的质量与规模决定，遥操作（Teleoperation）是目前获取高质量真机数据的主要手段。主流方案分几类。主从臂双映射（以 ALOHA / Mobile ALOHA 为代表）：用同构主臂驱动从臂，1:1 记录关节轨迹，成本低、保真度高，适合精细双臂操作数据采集，是当前应用最广的方案。VR/头显遥操作：用 Apple Vision Pro、Quest 等设备捕捉人的手臂与手部姿态，retarget 到机械臂或人形上肢，操作者无需在机器人旁，适合人形上半身任务的大规模采集。低成本机构（GELLO 式连杆随动、外骨骼手套等）：进一步压低单套硬件成本，便于铺设多套并行采集。无机器人手持采集（以 UMI 为代表）：用手持夹爪 + 腕部相机直接在真实环境中收集操作数据，靠视觉 SLAM 恢复夹爪轨迹，无需机器人本体即可积累数据，采集与机器人保有量解耦。选型要权衡数据保真度、单条数据成本与本体匹配度。关键工程点包括：相机、关节编码器等多模态数据的时间对齐；成功/失败标注与质量过滤（低质量轨迹会直接拖累策略）；跨本体的动作空间归一化——这是 Open X-Embodiment 类混合数据集能联合训练的前提。趋势上，人体视频 retarget 与世界模型合成数据（见 Q18）正在作为真机采集的补充。
+
+</details>
+
+<details markdown="1">
+<summary>**Q18: 世界模型（World Model）是什么？对机器人意味着什么？** · `高级`</summary>
+
+**答案：**
+
+世界模型是从数据中学到的环境动力学模型：给定当前状态（和动作），预测环境接下来如何演化。它对机器人有三层价值。第一，基于模型的规划与强化学习：策略在世界模型的潜空间里"想象"候选动作的后果并评估，大幅减少昂贵且有安全风险的真机交互，代表是 Dreamer 系列的 latent imagination。第二，作为训练数据引擎：带动作条件的世界模型可以生成多样的"未来帧"，为下游策略提供合成训练数据，缓解真机数据瓶颈。第三，部署前评测：策略先在世界模型中 rollout，暴露明显失败，降低真机试错成本。随着视频生成模型的发展，视觉世界模型成为 2024-2025 的前沿热点——GAIA-1、UniSim、Genie、NVIDIA Cosmos 等尝试用大规模视频预训练建模物理世界动力学，为自动驾驶与机器人提供可交互的仿真环境与合成数据。面试中要澄清两个误区：其一，世界模型不等于视频生成——可用的世界模型必须动作可控（以动作输入为条件），且预测能转化为策略的训练信号，仅画面逼真并不够；其二，当前瓶颈在物理一致性（生成画面真实但可能违背物理规律）、长时程预测漂移，以及缺乏可靠评测指标（FID 衡量不了物理正确性）。端侧视角：大规模想象训练在云端进行，端侧更多是世界模型做短时程预测，服务于安全预检与辅助规划。
+
+</details>
+
 ## 3. 部署与实时控制
 
 <details markdown="1">
-<summary>**Q17: TensorRT 优化全流程** · `中级`</summary>
+<summary>**Q19: TensorRT 优化全流程** · `中级`</summary>
 
 **答案：**
 
@@ -170,7 +188,7 @@ TensorRT 模型优化的完整流程包含以下步骤。第一步模型导出�
 </details>
 
 <details markdown="1">
-<summary>**Q18: Dynamic shape 的处理策略** · `中级`</summary>
+<summary>**Q20: Dynamic shape 的处理策略** · `中级`</summary>
 
 **答案：**
 
@@ -179,7 +197,7 @@ Dynamic Shape 是指模型输入尺寸在推理时可能变化的情况，如不
 </details>
 
 <details markdown="1">
-<summary>**Q19: 多模型共享 GPU 显存的调度方法** · `高级`</summary>
+<summary>**Q21: 多模型共享 GPU 显存的调度方法** · `高级`</summary>
 
 **答案：**
 
@@ -188,7 +206,7 @@ Dynamic Shape 是指模型输入尺寸在推理时可能变化的情况，如不
 </details>
 
 <details markdown="1">
-<summary>**Q20: 实时控制延迟预算如何分配** · `高级`</summary>
+<summary>**Q22: 实时控制延迟预算如何分配** · `高级`</summary>
 
 **答案：**
 
@@ -197,7 +215,7 @@ Dynamic Shape 是指模型输入尺寸在推理时可能变化的情况，如不
 </details>
 
 <details markdown="1">
-<summary>**Q21: RT-PREEMPT vs Xenomai 选择** · `中级`</summary>
+<summary>**Q23: RT-PREEMPT vs Xenomai 选择** · `中级`</summary>
 
 **答案：**
 
@@ -206,7 +224,7 @@ Dynamic Shape 是指模型输入尺寸在推理时可能变化的情况，如不
 </details>
 
 <details markdown="1">
-<summary>**Q22: 传感器时间同步方案设计** · `高级`</summary>
+<summary>**Q24: 传感器时间同步方案设计** · `高级`</summary>
 
 **答案：**
 
@@ -217,7 +235,7 @@ Dynamic Shape 是指模型输入尺寸在推理时可能变化的情况，如不
 ## 4. Agent 与大模型
 
 <details markdown="1">
-<summary>**Q23: Embodied Agent 与传统状态机架构的对比** · `中级`</summary>
+<summary>**Q25: Embodied Agent 与传统状态机架构的对比** · `中级`</summary>
 
 **答案：**
 
@@ -226,7 +244,7 @@ Dynamic Shape 是指模型输入尺寸在推理时可能变化的情况，如不
 </details>
 
 <details markdown="1">
-<summary>**Q24: 端侧 Function Calling 安全性设计** · `高级`</summary>
+<summary>**Q26: 端侧 Function Calling 安全性设计** · `高级`</summary>
 
 **答案：**
 
@@ -235,16 +253,16 @@ Dynamic Shape 是指模型输入尺寸在推理时可能变化的情况，如不
 </details>
 
 <details markdown="1">
-<summary>**Q25: 视觉-语言接地 (Grounding) 的技术挑战** · `高级`</summary>
+<summary>**Q27: 视觉-语言接地 (Grounding) 的技术挑战** · `高级`</summary>
 
 **答案：**
 
-视觉-语言接地（Visual-Language Grounding）是指将自然语言描述中的实体准确映射到图像或 3D 场景中的具体物体/区域，是 Embodied Agent 理解指令的关键能力。核心技术挑战包括：指称歧义——"拿那个红色的杯子" 场景中可能有多个红色杯子，需要结合上下文（对话历史、手势方向、用户注视点）消歧；空间关系理解——"放在书的右边" 需要模型同时理解目标物体检测和物体间的空间关系，这要求模型具备 3D 空间推理能力而不仅是 2D 图像识别；开放词汇——用户可能用任意自然语言描述物体（"那个像小猫的玩具"），需要模型具有开放词汇的检测和分割能力，如 Grounding DINO + SAM 的组合方案。3D 接地也是核心难题：2D 图像中的检测框需要投影到 3D 空间获得物体的 6DoF 姿态，才能指导机械臂抓取，这涉及深度估计、坐标变换和姿态估计等复杂流程。端侧部署的额外挑战是 Grounding 模型（如 Grounding DINO）参数量大（约 170M），需要量化或蒸馏后才能在边缘设备上实时运行。当前的解决趋势是用 VLM（如 Qwen3-Omni-4B）直接输出目标坐标，将语言理解和视觉定位统一在一个模型中。
+视觉-语言接地（Visual-Language Grounding）是指将自然语言描述中的实体准确映射到图像或 3D 场景中的具体物体/区域，是 Embodied Agent 理解指令的关键能力。核心技术挑战包括：指称歧义——"拿那个红色的杯子" 场景中可能有多个红色杯子，需要结合上下文（对话历史、手势方向、用户注视点）消歧；空间关系理解——"放在书的右边" 需要模型同时理解目标物体检测和物体间的空间关系，这要求模型具备 3D 空间推理能力而不仅是 2D 图像识别；开放词汇——用户可能用任意自然语言描述物体（"那个像小猫的玩具"），需要模型具有开放词汇的检测和分割能力，如 Grounding DINO + SAM 的组合方案。3D 接地也是核心难题：2D 图像中的检测框需要投影到 3D 空间获得物体的 6DoF 姿态，才能指导机械臂抓取，这涉及深度估计、坐标变换和姿态估计等复杂流程。端侧部署的额外挑战是 Grounding 模型（如 Grounding DINO）参数量大（约 170M），需要量化或蒸馏后才能在边缘设备上实时运行。当前的解决趋势是用 VLM（如 Qwen3-4B）直接输出目标坐标，将语言理解和视觉定位统一在一个模型中。
 
 </details>
 
 <details markdown="1">
-<summary>**Q26: 端侧向量数据库选型 (FAISS-lite vs Hnswlib)** · `中级`</summary>
+<summary>**Q28: 端侧向量数据库选型 (FAISS-lite vs Hnswlib)** · `中级`</summary>
 
 **答案：**
 
@@ -253,7 +271,7 @@ Dynamic Shape 是指模型输入尺寸在推理时可能变化的情况，如不
 </details>
 
 <details markdown="1">
-<summary>**Q27: KV Cache 管理策略对比** · `高级`</summary>
+<summary>**Q29: KV Cache 管理策略对比** · `高级`</summary>
 
 **答案：**
 
@@ -262,7 +280,7 @@ KV Cache 是 LLM 自回归推理的核心优化：缓存已计算 token 的 Key-
 </details>
 
 <details markdown="1">
-<summary>**Q28: Speculative Decoding 在端侧的可行性** · `高级`</summary>
+<summary>**Q30: Speculative Decoding 在端侧的可行性** · `高级`</summary>
 
 **答案：**
 
@@ -273,7 +291,7 @@ Speculative Decoding（推测解码）使用一个小型 draft 模型快速生�
 ## 5. 系统设计题
 
 <details markdown="1">
-<summary>**Q29: 设计人形机器人的端到端感知-决策-执行系统** · `高级`</summary>
+<summary>**Q31: 设计人形机器人的端到端感知-决策-执行系统** · `高级`</summary>
 
 **答案：**
 
@@ -282,16 +300,16 @@ Speculative Decoding（推测解码）使用一个小型 draft 模型快速生�
 </details>
 
 <details markdown="1">
-<summary>**Q30: 设计机械臂的自主抓取系统 (含 VLM 理解)** · `高级`</summary>
+<summary>**Q32: 设计机械臂的自主抓取系统 (含 VLM 理解)** · `高级`</summary>
 
 **答案：**
 
-基于 VLM 的机械臂自主抓取系统需要融合视觉语言理解和精确运动控制。感知模块：手眼相机（eye-in-hand）+ 场景相机（eye-to-hand）双视角配置，场景相机获取全局视野用于物体定位和场景理解，手眼相机在接近阶段提供精确位姿估计。视觉处理流水线：RGB 图像 → Grounding DINO（开放词汇检测） → SAM（精确分割） → 深度图 + 相机内参 → 3D 点云 → AnyGrasp/GraspNet（抓取位姿生成）。VLM 理解模块：接收用户自然语言指令（如 "把最大的红色积木放到蓝色盒子里"），VLM（如端侧的 Qwen3-Omni-4B-INT4，约 2.5GB 显存）解析指令：识别目标物体（最大的红色积木）、放置位置（蓝色盒子里）、操作类型（pick-and-place），生成结构化的任务描述传给执行模块。抓取规划模块：从候选抓取位姿中选择最优解——考虑抓取稳定性（force closure）、可达性（逆运动学可解）、无碰撞（运动规划可行）、以及任务约束（如杯子要竖直抓取）。运动执行模块：使用 MoveIt2 进行运动规划，分为 approach → grasp → lift → transport → place 五个阶段，每个阶段有独立的速度和力控参数。关键设计要点：抓取检测与执行的闭环——如果首次抓取失败（力传感器反馈未抓住），自动重新感知和规划；VLM 理解的缓存——对同一场景的重复查询做结果缓存避免重复推理。
+基于 VLM 的机械臂自主抓取系统需要融合视觉语言理解和精确运动控制。感知模块：手眼相机（eye-in-hand）+ 场景相机（eye-to-hand）双视角配置，场景相机获取全局视野用于物体定位和场景理解，手眼相机在接近阶段提供精确位姿估计。视觉处理流水线：RGB 图像 → Grounding DINO（开放词汇检测） → SAM（精确分割） → 深度图 + 相机内参 → 3D 点云 → AnyGrasp/GraspNet（抓取位姿生成）。VLM 理解模块：接收用户自然语言指令（如 "把最大的红色积木放到蓝色盒子里"），VLM（如端侧的 Qwen3-4B-INT4，约 2.5GB 显存）解析指令：识别目标物体（最大的红色积木）、放置位置（蓝色盒子里）、操作类型（pick-and-place），生成结构化的任务描述传给执行模块。抓取规划模块：从候选抓取位姿中选择最优解——考虑抓取稳定性（force closure）、可达性（逆运动学可解）、无碰撞（运动规划可行）、以及任务约束（如杯子要竖直抓取）。运动执行模块：使用 MoveIt2 进行运动规划，分为 approach → grasp → lift → transport → place 五个阶段，每个阶段有独立的速度和力控参数。关键设计要点：抓取检测与执行的闭环——如果首次抓取失败（力传感器反馈未抓住），自动重新感知和规划；VLM 理解的缓存——对同一场景的重复查询做结果缓存避免重复推理。
 
 </details>
 
 <details markdown="1">
-<summary>**Q31: 设计多机器人协作清洁系统的 Agent 架构** · `高级`</summary>
+<summary>**Q33: 设计多机器人协作清洁系统的 Agent 架构** · `高级`</summary>
 
 **答案：**
 
@@ -300,7 +318,7 @@ Speculative Decoding（推测解码）使用一个小型 draft 模型快速生�
 </details>
 
 <details markdown="1">
-<summary>**Q32: 设计服务机器人的长期记忆系统** · `高级`</summary>
+<summary>**Q34: 设计服务机器人的长期记忆系统** · `高级`</summary>
 
 **答案：**
 
