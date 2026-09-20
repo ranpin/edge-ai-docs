@@ -5,26 +5,32 @@
 > [!TIP]
 > **本篇讲什么**
 >
-> 座舱端侧 Agent 系统总览。系统由两个核心模块组成：
+> 座舱端侧 Agent 系统总览。系统由两个核心库组成：
 >
 > - **aadkcore**：提供统一模型接口、调度器、MCP/A2A 协议等基础设施（编译为 `libaadkcore.so`）
 > - **agent\_group**：基于 aadkcore 的插件接口实现各场景 Agent（编译为 `libagent_group.so`，运行时动态加载）
 >
-> 本篇覆盖端侧大模型选型、Agent 框架设计概述与场景应用概览；两个核心模块的详细文档见下方「核心模块导读」。
+> 本篇覆盖端侧大模型选型、Agent 框架设计概述与场景应用概览；aadkcore 的详解分为「运行时与模型」和「协议与运行时执行」两篇，加上场景 Agent 应用，见下方「核心模块导读」。
 
 ## 1. 核心模块导读
 
-### 1.1 aadkcore 核心框架
+### 1.1 aadkcore 核心框架 · 运行时与模型
 
-统一模型接口（ModelInstance）、模型调度器（ModelScheduler）、多音区对话管理、RAG 知识增强、MCP 工具协议、A2A 协议、运行时与插件机制、LLM Flow
+统一模型接口（ModelInstance）、模型调度器（ModelScheduler）、多音区对话管理（ChatHistory）、RAG 知识增强
 
-C++17MCPA2AModelScheduler
+`C++17` · `ModelScheduler` · `ChatHistory` · `RAG`
 
-### 1.2 场景 Agent 应用
+### 1.2 aadkcore · 协议与运行时执行
+
+MCP 工具协议、A2A 协议、运行时与插件机制、LLM Flow 与 Tool Use、端云协同与安全沙箱（设计方向）
+
+`MCP` · `A2A` · `插件` · `Tool Use`
+
+### 1.3 场景 Agent 应用
 
 车辆控制 Agent（30+ 技能）、主动视觉 Agent（6 大模式）、闲聊 Agent、GUI Agent、Prompt 模板工程、数据通路与 Fusion 通信
 
-车控主动视觉闲聊GUI Agent
+`车控` · `主动视觉` · `闲聊` · `GUI Agent`
 
 ## 2. 座舱大模型 Agent 架构
 
@@ -163,10 +169,10 @@ sequenceDiagram
 | :--- | :--- | :--- |
 | **工具注册** | JSON Schema 描述 | 每个工具通过 JSON Schema 定义函数名、参数类型、必填项和描述。LLM 根据 Schema 生成结构化调用参数，无需 Few-shot 示例。 |
 | **安全沙箱** | L1 / L2 / L3 三级分级 | 只读 / 可逆 / 不可逆分级确认，防止误操作与危险操作。分级定义与安全检查流水线见 [**协议与运行时执行**](agent-protocols.html)（设计方向）。 |
-| **延迟预算** | < 2s 端到端 | 从用户说完到执行完成 < 2 秒。其中 ASR ~300ms，LLM 推理 ~800ms，Tool 执行 ~500ms，TTS ~400ms。 |
+| **延迟预算** | < 2s 端到端（示例目标） | 从用户说完到执行完成 < 2 秒。以下数字为**预算分配示例（非实测）**：ASR ~300ms，LLM 推理 ~800ms，Tool 执行 ~500ms，TTS ~400ms。其中 LLM 项应按平台 roofline/带宽模型推导（TTFT 看算力、decode 看带宽），不要拍固定毫秒数，推导方法见 [**LLM 推理原理与性能模型**](../../general/infer-principles.html) 与 [**端侧解码与服务化优化**](../../general/infer-serving.html)。 |
 | **离线能力** | 本地优先 + 云端 fallback | 核心 Tools（车控、本地音乐、导航缓存）全部本地化。联网后自动同步云端 Tools（在线搜索、实时路况）。 |
 | **错误处理** | 重试 + 降级 + 告知 | Tool 调用失败时：先重试 1 次 → 尝试降级方案 → 告知用户并建议替代操作。 |
-| **并发调度** | DAG 依赖图 | 多个 Tool 调用时分析依赖关系，无依赖的并行执行（如上例空调和导航可并行），有依赖的串行执行。 |
+| **并发调度** | A2A 并行分发 + ModelScheduler 优先级调度 | 已记录的两层并发机制：Agent 层由 SystemAgent 把意图拆分为子任务，经 A2A **并行分发**给各场景 Agent（如上例空调和导航可并行）后汇总结果，见 [**协议与运行时执行**](agent-protocols.html) §2.4；模型层由 ModelScheduler 对多音区并发请求做优先级/抢占调度。基于 DAG 依赖分析的 Tool 自动并行为设计方向（未实现）。 |
 
 ### 3.3 记忆系统
 
