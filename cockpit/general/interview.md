@@ -2,12 +2,12 @@
 
 # 智能座舱面试指南
 
-*基于 Qualcomm SA8397P 平台 · 58 道精选题 · 覆盖硬件/训练/部署/Agent/系统设计/功能安全/面试方法论*
+*基于 Qualcomm SA8397P 平台 · 62 道精选题 · 覆盖硬件/训练/部署/Agent/系统设计/功能安全/面试方法论*
 
 > [!TIP]
 > **本篇讲什么**
 >
-> 基于 Qualcomm SA8397P 平台的智能座舱面试指南，58 道精选题（每题**点击展开**参考答案）：
+> 基于 Qualcomm SA8397P 平台的智能座舱面试指南，62 道精选题（每题**点击展开**参考答案）：
 >
 > - 硬件与系统、算法与训练、部署与优化、Agent 与大模型、综合系统设计
 > - 系统设计答题框架、项目经验包装、行为面试准备
@@ -75,7 +75,7 @@
 - **品牌演进线**：SNPE（Snapdragon Neural Processing Engine，早期，DLC 格式）→ QNN（Qualcomm AI Engine Direct，图级 API、Context Binary、多后端统一）→ **QAIRT（Qualcomm AI Runtime，2024 起把 QNN + SNPE 统一的运行时品牌，QNN 是其 SDK/API 层，工具随之改名如 `qairt-converter`）**。
 - SNPE 已进入维护模式，新芯片/新算子只在 QNN/QAIRT 深度优化；**新项目选 QNN/QAIRT**。
 - **迁移要点**：DLC → Context Binary；SNPE 的 UserBuffer → QNN 的 Tensor；后端选择方式不同。
-- **端侧 LLM** 走 QAIRT 里的 **Genie** 运行时（见 Q41/Q42 专题），不是普通 QNN graph。
+- **端侧 LLM** 走 QAIRT 里的 **Genie** 运行时（见 Q43/Q44 专题），不是普通 QNN graph。
 
 > 详解见 [硬件架构](hardware.html) 与 [推理原理 · 引擎与运行时](infer-principles.html)。
 
@@ -180,9 +180,9 @@
 - **算子兼容性**：全图算子须被 QNN HTP 原生支持，否则 fallback CPU 延迟剧增；选型期用 `qnn-net-run --backend libQnnHtp.so` 验证全图能否上 HTP。
 - **量化友好性（易错，别讲反）**：含大量 **depthwise conv / hard-swish** 的模型（如 MobileNetV3）是**公认的量化难点，掉点严重**，需 CLE + Bias Correction + AdaRound 补救——**不是"量化后损失小"**。
 - **推理延迟**：给方法（MACs 与内存带宽需求匹配 CDSP 能力），DMS 要满足帧率预算。
-- **模型大小**：本题讨论的是 **CNN 类小模型（MB 级）**；LLM 是 GB 级，另论（见 Q32）。
+- **模型大小**：本题讨论的是 **CNN 类小模型（MB 级）**；LLM 是 GB 级，另论（见 Q34）。
 
-> 详解见 [量化 · 量化友好性](quantization.html) 与 [训练微调 · 端侧模型选型](training.html)。
+> 详解见 [量化 · AIMET 核心技术（CLE/BC/AdaRound）与 Depthwise Conv 难点](quantization.html) 与 [训练微调 · 端侧模型选型](training.html)。
 
 </details>
 
@@ -224,9 +224,10 @@
 - **PTQ**（训练后量化）：无需重训，用小批标定数据统计激活范围；快，但对某些模型（深层、含 Concat/Add 分支）掉点可能较大。
 - **QAT**（量化感知训练）：训练中插 fake quantize 节点，让模型适应量化误差；需额外训练但掉点小。
 - **决策流程**：先 PTQ 验证精度 → 掉点在可接受阈值内用 PTQ；超阈值上 QAT；**安全相关模型（如 DMS 疲劳检测）建议无论 PTQ 精度如何都做 QAT**（边界样本漏检风险）。
+- **校准集（PTQ 质量关键）**：**无需标注**（只前向统计激活分布）、**数百~数千条**即可（边际收益递减）、**多样性优先于数量**、须**覆盖真实输入分布**（座舱场景：不同光照/肤色/姿态、不同长度/领域的指令）、并与**评测集隔离**（防量化参数对评测分布过拟合）。
 - 工具：`torch.ao.quantization` 或 Qualcomm **AIMET**。
 
-> 详解见 [量化 · PTQ vs QAT](quantization.html)。
+> 详解见 [量化 · PTQ vs QAT 与校准集选择](quantization.html)。
 
 </details>
 
@@ -283,16 +284,45 @@
 
 - 技术上可行但受限，仅适用于特定场景。
 - **关键事实**：**DSP 上的 QNN 只支持前向推理，不支持反向传播**；训练只能在 CPU/GPU 上做，而 SA8397P 的 GPU 面向图形渲染、训练效率低。
-- **挑战**：训练内存（梯度 + 优化器状态约为推理的 3-4 倍）、端侧缺标注数据。
+- **挑战（内存口径修正，别再说"3-4 倍"）**：训练内存按**字节/参数法**估——全参混合精度 ≈ **16 B/param**（params 2 + grads 2 + Adam master/m/v 各 4），而推理只需权重本身（fp16 2 B、INT4 0.5 B），即全参训练显存约是 fp16 推理的 **8×**、INT4 推理的 **32×**（4B 模型对应**数十 GB**，远超车机共享内存预算）；再叠加端侧缺标注数据。**这正是端侧只能做最末层微调 / LoRA 增量更新（每次约 200KB~2MB 权重差量、OTA 推送）的根本原因**。
 - **可行方案**：仅微调最后 1-2 个 FC 层（个性化适配）、特征提取 + 在线 SVM/KNN、联邦学习。
 - **最佳实践**：云端训练、端侧推理，仅在需要个性化时做最末层轻量微调。
 
-> 详解见 [训练微调 · 端侧微调可行性](training.html)。
+> 详解见 [训练微调 · 端侧微调可行性与训练资源估算](training.html)。
 
 </details>
 
 <details markdown="1">
-<summary>**Q19: ms-swift（SWIFT）在座舱 Qwen 系列模型微调中扮演什么角色？与 LoRA/蒸馏是什么关系？** · `中级`</summary>
+<summary>**Q19: 4B 模型微调显存怎么估？单卡够不够？** · `中级`</summary>
+
+**答题要点：**
+
+- **先给字节/参数法**：全参混合精度 ≈ **16 B/param**（params 2 + grads 2 + Adam master/m/v 各 4）——4B 全参对应数十 GB，单卡放不下，这是默认不做全参的直接原因。
+- **QLoRA 是端侧模型微调的主力**：基座量化到 4-bit（0.5 B/param）冻结、只训 LoRA 适配器——4B 基座约 **2 GB**，加上 LoRA 梯度/优化器与激活，**单张 24 GB 卡即可跑**。
+- **Gradient Checkpointing**：用重算换显存，激活内存从 O(层数) 降到 O(√层数)，代价约 **20-30% 额外计算**。
+- **多卡才需要的并行**：更大模型或全参用 DeepSpeed **ZeRO**（分片优化器状态/梯度/参数）或 PyTorch **FSDP**；4B 级 QLoRA 通常单卡即可。
+- **batch 不够就梯度累积**：显存受限时用 gradient accumulation 等效大 batch。
+
+> 详解见 [训练微调 · 训练资源与并行策略](training.html)。
+
+</details>
+
+<details markdown="1">
+<summary>**Q20: VLM/Omni 微调与纯文本 LLM 有何不同？** · `中级`</summary>
+
+**答题要点：**
+
+- **图像 token 预算与动态分辨率**：VLM 把图像切 patch（如 14×14），视觉 token 数 ≈ (H/patch)×(W/patch) 再经 patch merge 下采样；分辨率越高 token 越多，直接撑大 prefill 长度与显存——训练与推理都要按「图像 token 预算」约束输入分辨率（座舱常用 448×448 舱内 / 1024×768 舱外两档）。
+- **视觉编码器默认冻结**：常见做法是**冻结 vision encoder、只训 projector + LLM 侧 LoRA**（数据少时防过拟合、省显存）；只有视觉域差异大（如 IR 红外）才解冻视觉编码器微调。
+- **图文对齐数据质量是瓶颈**：多模态微调的瓶颈往往在数据——图像与指令/答案的对齐质量、OCR/grounding 标注精度，比模型结构更影响最终效果。
+- **Omni 的音频模态**：若用原生音频输入，需处理音频特征编码器与文本/视觉 token 的对齐与时长配比，训练数据的**音-文-图同步**质量是关键。
+
+> 详解见 [训练微调 · VLM/Omni 多模态微调要点](training.html)。
+
+</details>
+
+<details markdown="1">
+<summary>**Q21: ms-swift（SWIFT）在座舱 Qwen 系列模型微调中扮演什么角色？与 LoRA/蒸馏是什么关系？** · `中级`</summary>
 
 **答题要点：**
 
@@ -309,21 +339,21 @@
 ## 3. 部署与优化题
 
 <details markdown="1">
-<summary>**Q20: 请完整描述一个模型从训练到在 SA8397P 上运行的部署流水线（CNN 与 LLM 分别说）。** · `中级`</summary>
+<summary>**Q22: 请完整描述一个模型从训练到在 SA8397P 上运行的部署流水线（CNN 与 LLM 分别说）。** · `中级`</summary>
 
 **答题要点：**
 
 - **CNN/小模型路径**：ONNX 导出 → `qnn-onnx-converter` 转 QNN IR → **转换时量化**（`--input_list` 标定 + `--act_bw/--weight_bw` 生成 encoding）→ `qnn-context-binary-generator` 编译 Context Binary → 上板 `QnnContext_createFromBinary()` + `QnnGraph_execute()`。
 - **澄清（保留，常被混淆）**：`qnn-net-run` 是执行/验证工具，**不负责生成量化 encoding**。
-- **LLM 路径完全不同（重点）**：不走 `qnn-onnx-converter`，走 **QAIRT/Genie 的 W4A16 导出**——微调后导出 FP32/BF16 ONNX → AIMET/`qairt-converter` 做 W4A16 量化 → context binary → **Genie** 运行。**GPTQ/AWQ 打包好的 INT4 权重 QNN converter 吃不下**（那是 packed qweight 自定义算子格式）。
+- **LLM 路径完全不同（重点）**：不走 `qnn-onnx-converter`，走 **QAIRT/Genie 的 W4A16 导出**——微调后导出 FP32/BF16 ONNX → AIMET/`qairt-converter` 做 W4A16 量化 → context binary → **Genie** 运行。**走不通的是 HF 打包格式，不是算法思想**：GPTQ/AWQ 模型是 packed qweight 自定义算子格式，QNN converter 吃不下；但 AIMET/QAIRT 的 W4A16 校准**可选用类 AWQ（activation-aware）/类 GPTQ（逐层重建）的思想**——两者同为 weight-only INT4，**decode 速度相同、只差精度**（速度由每 token 读取的权重字节决定，与量化算法无关）。
 - 部署后用 `qnn-profile-viewer` 分析每层耗时、验证无算子 fallback。
 
-> 详解见 [推理原理 · 部署流水线与 Genie](infer-principles.html) 与 [量化 · W4A16 导出](quantization.html)。
+> 详解见 [推理原理 · 部署流水线与 Genie](infer-principles.html) 与 [量化 · W4A16 导出与量化算法选型](quantization.html)。
 
 </details>
 
 <details markdown="1">
-<summary>**Q21: Context Binary 预编译和动态加载（JIT 编译）有什么区别？各有什么优劣？** · `中级`</summary>
+<summary>**Q23: Context Binary 预编译和动态加载（JIT 编译）有什么区别？各有什么优劣？** · `中级`</summary>
 
 **答题要点：**
 
@@ -337,7 +367,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q22: 如何设计一条从摄像头到推理结果的零拷贝数据路径？** · `高级`</summary>
+<summary>**Q24: 如何设计一条从摄像头到推理结果的零拷贝数据路径？** · `高级`</summary>
 
 **答题要点：**
 
@@ -351,7 +381,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q23: 座舱中多个 AI 模型（DMS/OMS/手势/语音）如何调度以共享 CDSP？** · `高级`</summary>
+<summary>**Q25: 座舱中多个 AI 模型（DMS/OMS/手势/语音）如何调度以共享 CDSP？** · `高级`</summary>
 
 **答题要点：**
 
@@ -368,7 +398,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q24: 座舱 AI 系统的冷启动优化有哪些关键措施？** · `中级`</summary>
+<summary>**Q26: 座舱 AI 系统的冷启动优化有哪些关键措施？** · `中级`</summary>
 
 **答题要点：**
 
@@ -382,7 +412,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q25: 请设计一个完整的 DMS 推理管线，从传感器到决策输出。** · `高级`</summary>
+<summary>**Q27: 请设计一个完整的 DMS 推理管线，从传感器到决策输出。** · `高级`</summary>
 
 **答题要点：**
 
@@ -397,11 +427,11 @@
 </details>
 
 <details markdown="1">
-<summary>**Q26: 如何对端侧推理进行延迟 Profiling？常见瓶颈有哪些？** · `初级`</summary>
+<summary>**Q28: 如何对端侧推理进行延迟 Profiling？常见瓶颈有哪些？** · `初级`</summary>
 
 **答题要点：**
 
-- **工具**：`QnnProfile_create()` / `QnnProfile_getEvents()`；或 `qnn-net-run --profiling_level detailed` 生成报告 + `qnn-profile-viewer` 可视化。
+- **工具**：`QnnProfile_create()` / `QnnProfile_getEvents()`；或 `qnn-net-run --profiling_level detailed` 生成报告 + `qnn-profile-viewer` 可视化。DSP 侧异常另用 **mini-dm** 拉日志——DSP 的 `printf` 不进 logcat，mini-dm 是唯一出口（见 Q29）。
 - **瓶颈四类**：① **算子 fallback**（HTP 不支持回退 CPU，单层延迟从微秒级跳到毫秒级）；② **数据搬运**（没用共享内存，每帧经 FastRPC 拷贝）；③ **VTCM 溢出**（大 feature map 频繁访 DDR）；④ **混合精度转换开销**（INT8↔INT16）。
 - **针对优化**：替换 fallback 算子、改零拷贝、VTCM 溢出层做 tiling。
 
@@ -410,20 +440,20 @@
 </details>
 
 <details markdown="1">
-<summary>**Q27: FastRPC 调用超时如何排查和解决？** · `中级`</summary>
+<summary>**Q29: FastRPC 调用超时如何排查和解决？** · `中级`</summary>
 
 **答题要点：**
 
-- **排查步骤**：① 检查 DSP 状态（FastRPC 通道是否 ready、是否已 SSR）；② 看 DSP/驱动日志（`logcat -s adsprpc`，关注 invoke failed/timeout）；③ 检查 PD 签名（testsig/正式签名）；④ 检查内存映射（fd 须注册到 FastRPC）；⑤ 检查 DSP 负载（是否被打满）。
+- **排查步骤**：① 检查 DSP 状态（FastRPC 通道是否 ready、是否已 SSR）；② 看日志——**AP 侧 `logcat -s adsprpc`（关注 invoke failed/timeout）+ DSP 侧 `mini-dm`（`-mask` 控级别）**；DSP 的 `printf` 不进 logcat，**mini-dm 是 DSP 侧日志的唯一出口**；③ 检查 PD 签名（testsig/正式签名）；④ 检查内存映射（fd 须注册到 FastRPC）；⑤ 检查 DSP 负载（是否被打满）。
 - **路径口径（修正）**：sysfs devfreq 节点名**随 BSP 版本变化**，用 `ls /sys/class/devfreq/` 确认；ipc_logging 通常在 `/d/ipc_logging/<subsys>/log`；超时错误码以实际 FastRPC 版本为准（别硬背某个码名）。
 - **解决**：签名问题装 testsig；负载问题降并发/提频；映射问题确保 buffer 正确注册。
 
-> 详解见 [硬件架构 · FastRPC 调试与签名](hardware.html)。
+> 详解见 [硬件架构 · FastRPC 调试、DSP 签名(testsig) 与 mini-dm](hardware.html)。
 
 </details>
 
 <details markdown="1">
-<summary>**Q28: PTQ 精度不达标时，AIMET 有哪些"救精度"手段？per-channel / 对称量化为什么关键？** · `高级`</summary>
+<summary>**Q30: PTQ 精度不达标时，AIMET 有哪些"救精度"手段？per-channel / 对称量化为什么关键？** · `高级`</summary>
 
 **答题要点：**
 
@@ -434,12 +464,12 @@
 - **量化粒度是最重要的实操杠杆**：**per-channel**（逐输出通道各自 scale）远优于 per-tensor，权重尤甚；HTP 对权重偏好 **per-channel + 对称**（zero\_point=0，省零点补偿、更快），激活则常用 per-tensor 非对称。
 - **实践顺序**：per-channel 对称权重 → CLE → Bias Correction → AdaRound，仍不达标再上 QAT。
 
-> 详解见 [量化 · AIMET 救精度组合拳](quantization.html)。
+> 详解见 [量化 · AIMET 救精度组合拳与量化粒度（per-tensor/per-channel）](quantization.html)。
 
 </details>
 
 <details markdown="1">
-<summary>**Q29: 如何设计一次可信的端侧推理性能测量（benchmark 方法学）？** · `高级`</summary>
+<summary>**Q31: 如何设计一次可信的端侧推理性能测量（benchmark 方法学）？** · `高级`</summary>
 
 **答题要点：**
 
@@ -447,14 +477,14 @@
 - **锁频 vs 不锁频**：锁频（固定 CPU/DSP/DDR 频率）可排除 DVFS 干扰、结果可复现，但偏离真实调度；**报告时必须注明口径**。量产口径应在不锁频 + 真实热状态下测。
 - **多轮统计**：跑足够多轮，报告 **P50/P95**（不是单次最优、也不是简单均值），并剔除冷启动首轮。
 - **控制变量**：固定输入 shape/序列长度、固定后台负载、记录环境温度与器件频率。
-- **一句话总结**：可信的端侧 benchmark = 热稳态 + 明确锁频口径 + 多轮 P50/P95 + 全系统负载（见 Q30）。
+- **一句话总结**：可信的端侧 benchmark = 热稳态 + 明确锁频口径 + 多轮 P50/P95 + 全系统负载（见 Q32）。
 
 > 详解见 [推理原理 · 性能测量方法学](infer-principles.html) 与 [硬件架构 · 功耗与热管理](hardware.html)。
 
 </details>
 
 <details markdown="1">
-<summary>**Q30: 为什么端侧性能必须在「全系统负载 + 热稳态」下测？只测单模型空载会错在哪？** · `高级`</summary>
+<summary>**Q32: 为什么端侧性能必须在「全系统负载 + 热稳态」下测？只测单模型空载会错在哪？** · `高级`</summary>
 
 **答题要点：**
 
@@ -469,7 +499,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q31: 端侧大模型 APK 上机，模型放在非标准路径（如 /data/models）加载失败，最常见的根因是什么？怎么排查？** · `高级`</summary>
+<summary>**Q33: 端侧大模型 APK 上机，模型放在非标准路径（如 /data/models）加载失败，最常见的根因是什么？怎么排查？** · `高级`</summary>
 
 **答题要点：**
 
@@ -485,14 +515,14 @@
 ## 4. Agent 与大模型题
 
 <details markdown="1">
-<summary>**Q32: 如何为座舱选择合适的端侧大语言模型？评估标准是什么？** · `初级`</summary>
+<summary>**Q34: 如何为座舱选择合适的端侧大语言模型？评估标准是什么？** · `初级`</summary>
 
 **答题要点：**
 
 - **三硬约束**：内存/算力/延迟；参数量控制在 1B-4B 级，INT4 权重 GB 级。
 - **首选锚点 Qwen3-Omni-4B**（项目内部定制的 4B 级全模态模型，**非**公开 30B-A3B MoE）：原生支持文本/图像/音频/视频输入 + 音频输出，INT4 约 2.5 GB（示例），单模型替代传统 ASR + LLM + TTS 三段式。
 - **TTFT 给方法**：取决于 prefill 速度；目标按体验定，**口径要区分 P50/P95 与冷/热启动并全文统一**，别一处一个数。
-- **decode 吞吐给方法**：用带宽模型反推（见 Q52 估算题），匹配中文语音播报速度。
+- **decode 吞吐给方法**：用带宽模型反推（见 Q55 估算题），匹配中文语音播报速度。
 - **Function Calling 能力**：能把自然语言转结构化 API 调用。
 - **部署口径（修正）**：**整图在 HTP（Genie）上运行**；不要说"embedding 在 GPU、attention 在 CDSP"——embedding 是一次 gather、LM head 要全词表 logits，跨器件每步搬张量的代价远大于收益。
 
@@ -501,22 +531,26 @@
 </details>
 
 <details markdown="1">
-<summary>**Q33: 端侧 Function Calling 如何设计？与云端方案有什么区别？** · `中级`</summary>
+<summary>**Q35: 端侧 Function Calling 如何设计？与云端方案有什么区别？** · `中级`</summary>
 
 **答题要点：**
 
 - **工具集规模**：端侧 context window 有限，工具描述需精简；分核心工具集（空调/导航/音乐/电话）与扩展工具集，每次只注入意图相关子集。
 - **输出格式**：端侧模型 JSON 生成稳定性弱，用**约束解码**（logits mask 强制合法 JSON）或更简单的格式。
+- **上线前必须验证 grammar 真生效**：故意构造会被 grammar 拦截的输入，确认输出真被约束住，而非只检查"配置里挂了 EBNF"——本站实测 QNN 后端缺 EBNF 时仅 warn 一条日志后**静默降级**继续生成（你以为有约束，其实没有）。
+- **语法约束 ≠ 取值域约束**：`{"temp": -5}` 语法完全合法但语义非法；取值域要么在 grammar 里**枚举合法字面量**，要么**交执行器校验**（与 Q36 的工具安全分级呼应）——把"格式有效率 100%"当成"参数一定正确"是范畴错误。
+- **grammar 与模型先验冲突会劣化质量**：本站实测一个只约束外壳 `{"nlg": ...}`、不约束内容的 grammar 使完整句输出仅 **2/17**，去掉后 **17/17**——收益是"格式合法"，不自动等于"内容更好"，冲突时用 A/B 数据决定去留。
+- **代价与定位**：mask 是 **host 侧 CPU 每 token 开销**（对全词表写 allowed-mask + 推进 FSM），直接抬高 **TPOT**；约束解码省的是"重试"、作用在**端到端延迟**，对 **TTFT 零影响**。
 - **延迟**：端侧要快速完成意图识别 + 参数提取，不做多轮 chain-of-thought。
 - **fallback**：解析失败退回基于规则的 NLU（正则 + 槽位填充）。
 - **两阶段架构**：小意图分类器快速路由 + 仅在需要复杂理解时调 LLM。
 
-> 详解见 [服务化优化 · 约束解码与 Function Calling](infer-serving.html)。
+> 详解见 [服务化优化 · 语法约束≠取值域约束与约束解码权衡](infer-serving.html)。
 
 </details>
 
 <details markdown="1">
-<summary>**Q34: 端侧 Agent 的 Tool Use 需要哪些安全沙箱级别？如何设计？** · `高级`</summary>
+<summary>**Q36: 端侧 Agent 的 Tool Use 需要哪些安全沙箱级别？如何设计？** · `高级`</summary>
 
 **答题要点：**
 
@@ -533,49 +567,60 @@
 </details>
 
 <details markdown="1">
-<summary>**Q35: 端侧 LLM 的 KV Cache 管理有哪些策略？内存不够时怎么办？** · `中级`</summary>
+<summary>**Q37: 端侧 LLM 的 KV Cache 管理有哪些策略？内存不够时怎么办？** · `中级`</summary>
 
 **答题要点：**
 
 - **KV Cache 公式**：`2(K,V) × 层数 × KV头数 × head_dim × 字节数 × seq_len`。
 - **代入锚点（示例参数）**：36 层 / **8 个 KV head（GQA）** / head_dim 128 / FP16 → 单 token ≈ **144 KB**，2048 token ≈ **288 MB**；INT8 减半 ≈ 144 MB。**注意用 8 个 KV head 而非 32**（GQA），误用 32 会高估 4 倍。
 - **管理策略**：① 滑动窗口注意力（只留最近 N token）；② KV Cache 量化（FP16→INT8/INT4）；③ PagedAttention（分页按需分配，避免碎片）；④ 重要性驱动淘汰（按 attention score）。
-- 座舱对话通常较短，组合"滑动窗口 + KV INT8 量化"即可把内存压在预算内。
+- **多模态口径（视觉 token 是 KV 大头）**：每帧画面 ≈ **576 个视觉 token**，单帧 KV ≈ 576 × 144 KB ≈ **81 MB（FP16）/ 41 MB（INT8）**（示例参数）——**2048 token 的上下文只装得下 ≈ 3.5 帧画面**。连续视频流必须对视觉 KV 更激进：**驱逐最旧帧的 KV、视觉 KV 用完即弃（不入缓存）、或只对视觉 token 做滑窗**，否则几帧就吃光预算。
+- 组合"滑动窗口 + KV INT8 量化"：**纯文本短对话够用，一旦进图像/视频必须按"帧"数算 KV，而不是按"对话轮数"**。
 
-> 详解见 [推理原理 · KV Cache](infer-principles.html)。
+> 详解见 [推理原理 · KV Cache 内存估算与优化策略](infer-principles.html)。
 
 </details>
 
 <details markdown="1">
-<summary>**Q36: 如何优化端侧 LLM 的 TTFT（首 Token 延迟）？** · `中级`</summary>
+<summary>**Q38: 如何优化端侧 LLM 的 TTFT（首 Token 延迟）？** · `中级`</summary>
 
 **答题要点：**
 
+- **先分清指标**：**TTFT ≠ 端到端首屏响应**。TTFT = tokenize + ViT 编码 + Prefill 前向（末位 logits 即首 token）+ 采样/detokenize；把"生成剩余 token"算进 TTFT 是定义错误。统一分解式：`E2E = T_queue + TTFT + (N_out − 1)·T_POT + T_tail`。
 - **TTFT 由 prefill 决定**——处理完整个 prompt（system prompt + 工具描述 + 用户输入）才出首 token。
+- **排队也算用户感知首 token 延迟**：**T_queue 在 TTFT 之前**，端侧单 cDSP 多 graph 时分、忙时排队不可免——Continuous Batching / 优先级调度降排队，也是 TTFT 侧优化。
 - **Prompt 层**：缩短 system prompt；**前缀缓存**（system prompt 的 KV 预计算并复用，跳过其 prefill）。
-- **计算层**：**分块 prefill（Chunked Prefill）**，长 prompt 分 chunk 处理，降低对高优先级任务（DMS）的调度抖动。
+- **降低视觉 token 数是真实 TTFT 杠杆**：直接缩短 Prefill 序列 S（多模态请求里视觉 token 常占大头）。
+- **计算层**：**分块 prefill（Chunked Prefill）**，长 prompt 分 chunk 与 decode 步交错，降低对在途 decode 的 TPOT 抖动。
+- **W4A16 对 TTFT 基本无影响**：典型 prompt 已 compute-bound、matmul 仍走 FP16 峰值不变、dequant 反加开销——它真正降的是**内存占用、首次加载时间、decode TPOT**（TTFT 收益仅在 prefill 仍 memory-bound、S 低于 Knee 时成立）。
 - **GQA 口径（修正）**：GQA 主要省 **KV Cache 容量与 decode 带宽**；对 prefill 的收益**仅限 KV projection 那一小部分 FLOPs**（Q head 数没变）——别把 GQA 当 TTFT 优化主力。
+- **N_out 是端侧最被低估的杠杆**：TPOT ~37 ms × N_out 往往远大于 TTFT——压缩输出长度比任何 decode 加速都有效；且 decode 加速要**按 Amdahl 打折**（投机采样 1.43× 只作用 decode 项，f≈0.68 时端到端 ≈ **1.25×** 而非 1.43×）。
 - **TTFT 目标给口径**（区分 P50/P95、冷/热启动），不给单一死数。
 
-> 详解见 [服务化优化 · 前缀缓存与 TTFT](infer-serving.html) 与 [推理原理 · Prefill](infer-principles.html)。
+> 详解见 [服务化优化 · 端到端延迟分解与 TTFT 优化](infer-serving.html) 与 [推理原理 · 混批干扰与 chunked prefill](infer-principles.html)。
 
 </details>
 
 <details markdown="1">
-<summary>**Q37: Speculative Decoding（投机解码）的原理是什么？端侧能用吗？** · `高级`</summary>
+<summary>**Q39: Speculative Decoding（投机解码）的原理是什么？端侧能用吗？** · `高级`</summary>
 
 **答题要点：**
 
 - **原理**：小 draft 模型快速生成 K 个候选 token，大 target 模型一次并行验证，用 rejection sampling 接受/拒绝；接受率高时加速 decode，且**输出分布与 target 完全一致，不损质量**。
-- **三方案分类**：① **自回归 draft**（同架构更小模型，需双模型内存）；② **Self-Speculative**（target 自身浅层输出作 draft）；③ **Medusa/EAGLE 头**（最后一层接多个轻量预测头，复用 target 的 KV Cache，额外内存小）——端侧推荐方案三。
-- **端侧注意（诚实边界）**：单个 HTP 上 draft 与 target **只能串行**（不能并发），加速比受限；多模态场景 draft 看不到图像、视觉 token 接受率会降；draft 必须与 target **共享 tokenizer/词表**。
+- **标准加速比公式（别用错版）**：`Speedup = [(1 − α^(K+1))/(1 − α)] / (1 + K·c)`——α 为单 token 接受率、K 为每轮草稿数、c 为草稿单步/目标单步耗时比；分子是每轮期望产出，分母是每轮成本。**忽略草稿开销 c 会严重高估加速比**。
+- **三方案分类**：① **自回归 draft**（同架构更小模型，需双模型内存）；② **Self-Speculative**（target 自身浅层输出作 draft）；③ **Medusa/EAGLE 头**（最后一层接多个轻量预测头，复用 target 的权重与 KV，额外内存小）——端侧推荐方案三。
+- **端侧诚实上限**：单 cDSP 上 draft 与 target **只能串行**，c 由权重比决定（草稿 ~1 GB / 目标 ~2.5 GB → c≈0.4），α 在 0.7~0.9 时收益仅 **~1.1~1.6×**（理论上界 (K+1)/(1+K·c)，α→1 时 ≈ **1.92×**）；而独立草稿 ~1 GB 权重 + 自己的 KV 常驻内存，在内存紧张、要与 DMS 共存的车机上**很可能净亏损**。
+- **c 有 ~0.3 硬下界**：任何要输出全词表 logits 的草稿每步都得读一遍 LM head（锚点 ≈ **768 MB**，占每 token 带宽读取 ~30%）——哪怕草稿"权重为零" c 也降不到 0，端侧结论比权重比推算更悲观。
+- **K\* 由 (α, c) 决定、端侧偏小**：K 越大分母 (1+K·c) 线性变贵、草稿 token 边际产出按 α 幂衰减，平衡处才是 K\*；端侧 c 大 → K\* 偏小（示例 c=0.4、α=0.8 时 K\*=2 优于 K=4）。
+- **两个零草稿替代**：① **n-gram / prompt-lookup decoding**——从上下文与高频模板检索候选续写，草稿成本≈0、零额外内存，座舱车控话术高度模板化、命中率天然高；② **jump-forward decoding**——grammar 约束进入确定段（固定 key/标点/枚举值）时直接写入 token、不做前向，与 Function Calling 天然协同。
+- **其他限制**：多模态场景 draft 看不到图像、视觉 token 接受率会降；draft 必须与 target **共享 tokenizer/词表**。
 
-> 详解见 [服务化优化 · 投机采样](infer-serving.html)。
+> 详解见 [服务化优化 · 投机采样加速比与端侧替代方案](infer-serving.html)。
 
 </details>
 
 <details markdown="1">
-<summary>**Q38: 端云混合推理架构如何设计？如何决定哪些请求走端侧、哪些走云端？** · `中级`</summary>
+<summary>**Q40: 端云混合推理架构如何设计？如何决定哪些请求走端侧、哪些走云端？** · `中级`</summary>
 
 **答题要点：**
 
@@ -589,7 +634,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q39: 座舱端侧 Agent 的 Memory（记忆系统）如何设计？** · `高级`</summary>
+<summary>**Q41: 座舱端侧 Agent 的 Memory（记忆系统）如何设计？** · `高级`</summary>
 
 **答题要点：**
 
@@ -605,7 +650,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q40: MCP 与 A2A 有什么区别？座舱多 Agent 如何协作？** · `中级`</summary>
+<summary>**Q42: MCP 与 A2A 有什么区别？座舱多 Agent 如何协作？** · `中级`</summary>
 
 **答题要点：**
 
@@ -619,7 +664,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q41: QAIRT 与 Genie 是什么？端侧 LLM 运行时怎么选？** · `中级`</summary>
+<summary>**Q43: QAIRT 与 Genie 是什么？端侧 LLM 运行时怎么选？** · `中级`</summary>
 
 **答题要点：**
 
@@ -633,21 +678,21 @@
 </details>
 
 <details markdown="1">
-<summary>**Q42: 用 Genie 部署端侧 LLM 的完整流程是怎样的？** · `高级`</summary>
+<summary>**Q44: 用 Genie 部署端侧 LLM 的完整流程是怎样的？** · `高级`</summary>
 
 **答题要点：**
 
 - **流程**：微调后模型 → 导出 **FP32/BF16 ONNX** → AIMET/`qairt-converter` 做 **W4A16** 量化 → 生成 context binary → **Genie** 加载运行。
-- **关键坑**：**`AWQ/GPTQ INT4 → ONNX → QNN` 这条路走不通**——QNN/QAIRT converter 是从 FP32 ONNX 自己做量化，吃不下 GPTQ/AWQ 打包好的 packed qweight（导出后是自定义算子）。AWQ/GPTQ 只适用于 llama.cpp/vLLM 路线。
+- **关键坑（措辞要准）**：走不通的是 **HF 的打包格式**，不是算法思想——`AWQ/GPTQ INT4 → ONNX → QNN` 这条路吃不下 packed qweight（导出后是自定义算子），QNN/QAIRT converter 是从 FP32 ONNX 自己做量化；AWQ/GPTQ 的打包模型只适用于 llama.cpp/vLLM 路线。但 AIMET/QAIRT 的 W4A16 校准**可选用类 AWQ（activation-aware）/类 GPTQ（逐层重建）的思想**——两者同为 weight-only INT4，**decode 速度相同、只差精度**（速度由每 token 读取的权重字节决定）。
 - **多轮对话**：Genie 管理对话状态与 KV Cache 复用。
-- **部署后**：用 Q29/Q30 的 benchmark 方法学测 TTFT 与 decode（热稳态 + 全系统负载 + P50/P95）。
+- **部署后**：用 Q31/Q32 的 benchmark 方法学测 TTFT 与 decode（热稳态 + 全系统负载 + P50/P95）。
 
-> 详解见 [推理原理 · Genie 部署流程](infer-principles.html) 与 [量化 · W4A16 导出](quantization.html)。
+> 详解见 [推理原理 · Genie 部署流程](infer-principles.html) 与 [量化 · W4A16 导出与量化算法选型](quantization.html)。
 
 </details>
 
 <details markdown="1">
-<summary>**Q43: W4A16 vs W8A8：HTP 上 LLM 的真实执行模式是什么？为什么激活留 16-bit？** · `高级`</summary>
+<summary>**Q45: W4A16 vs W8A8：HTP 上 LLM 的真实执行模式是什么？为什么激活留 16-bit？** · `高级`</summary>
 
 **答题要点：**
 
@@ -655,6 +700,7 @@
 - **为什么激活留 16-bit**：LLM 激活有显著 **outlier**（少数通道幅值极大），A8 量化会严重掉点；而权重分布相对均匀，可压到 INT4。
 - **W4A16 机制**：权重 INT4 分组打包（group size 32/64/128），计算前反量化到 16-bit，走 HMX/HVX 的 16-bit 通路（FP16 matmul、FP32 累加）；group size 越小精度越好，但反量化开销与存储越大。
 - **decode 是 memory-bound**：W4 省的是**权重字节 → 带宽**；激活 16-bit 对 decode 带宽影响小（每 token 激活量小）。
+- **W4A16 不降 compute-bound 的 prefill/TTFT**：matmul 仍走 FP16 峰值、dequant 反加开销，典型 prompt 已 compute-bound——收益在**内存占用 + 首次加载时间 + decode TPOT**（TTFT 收益仅在 prefill 仍 memory-bound、S 低于 Knee 时成立）。
 - **与 CNN 对比**：CNN 激活 outlier 不显著，常用 W8A8；**LLM 与 CNN 的量化策略不同**，别混用。
 
 > 详解见 [量化 · W4A16 与位宽组合](quantization.html)。
@@ -664,7 +710,7 @@
 ## 5. 综合系统设计题
 
 <details markdown="1">
-<summary>**Q44: 请设计一个完整的 DMS 系统，从传感器选型到量产部署。** · `高级`</summary>
+<summary>**Q46: 请设计一个完整的 DMS 系统，从传感器选型到量产部署。** · `高级`</summary>
 
 **答题要点：**
 
@@ -681,7 +727,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q45: 设计一个支持多模态输入的座舱 Agent 架构。** · `高级`</summary>
+<summary>**Q47: 设计一个支持多模态输入的座舱 Agent 架构。** · `高级`</summary>
 
 **答题要点：**
 
@@ -691,6 +737,7 @@
   - **传统路线**——独立 ASR（如 Whisper 类）转文本再进 LLM。
   - 答题明确选哪条及理由，**别同一答案里两套语音架构打架**。
 - **视觉编码器口径（修正）**：用 **ViT/SigLIP 类** vision encoder，或**直接复用多模态模型自带的视觉编码器**——MobileViT 是分类/检测 backbone，**不是 VLM 的 vision encoder**。
+- **视觉 token 预算（决定 prefill 长度与 KV）**：视觉 token 数 ≈ (H/patch)×(W/patch) 再经 patch merge 下采样——座舱常用 **448×448 舱内 / 1024×768 舱外**两档；分辨率越高 token 越多，直接撑大 prefill 序列与 KV Cache（视觉 token 是 KV 大头，见 Q37），须按「图像 token 预算」约束输入分辨率。
 - **融合层**：早期融合（文本序列拼接）+ 晚期融合（图像特征作 visual token）。
 - **冲突消解**：模态优先级（语音 > 手势 > 注视 > 触屏）；按驾驶状态调模态权重（高速强化语音、停车开放全部）。
 - **Session Manager** 维护多轮对话状态与模态历史。
@@ -700,7 +747,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q46: 设计座舱多模型调度系统，同时管理 DMS、OMS、手势识别和语音模型。** · `高级`</summary>
+<summary>**Q48: 设计座舱多模型调度系统，同时管理 DMS、OMS、手势识别和语音模型。** · `高级`</summary>
 
 **答题要点：**
 
@@ -717,7 +764,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q47: 设计 DSP SSR 故障恢复策略，确保生产环境中 DMS 功能持续可用。** · `高级`</summary>
+<summary>**Q49: 设计 DSP SSR 故障恢复策略，确保生产环境中 DMS 功能持续可用。** · `高级`</summary>
 
 **答题要点：**
 
@@ -733,7 +780,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q48: ISO 21448 SOTIF 与 ISO/PAS 8800 是什么？AI 功能安全和传统功能安全有何不同？** · `高级`</summary>
+<summary>**Q50: ISO 21448 SOTIF 与 ISO/PAS 8800 是什么？AI 功能安全和传统功能安全有何不同？** · `高级`</summary>
 
 **答题要点：**
 
@@ -747,7 +794,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q49: ISO 26262 与 AI：ASIL 分解如何落到一个 AI 功能上？** · `高级`</summary>
+<summary>**Q51: ISO 26262 与 AI：ASIL 分解如何落到一个 AI 功能上？** · `高级`</summary>
 
 **答题要点：**
 
@@ -761,10 +808,25 @@
 
 </details>
 
+<details markdown="1">
+<summary>**Q52: 如何评测座舱端侧 LLM/Agent？怎么保证评测可信？** · `高级`</summary>
+
+**答题要点：**
+
+- **多维评估**：功能准确性（Function Calling 准确率/意图识别/多轮连贯/多模态理解）+ 推理性能（TTFT/生成速度/端到端延迟/内存）+ 安全合规（危险操作拒绝率/幻觉率/隐私）——三维缺一不可。
+- **Function Calling 评测拆四层**：工具选择 / 参数提取（完全匹配率）/ 多工具编排 / 拒绝能力（拒绝准确率单独以"应拒绝样本数"为分母，而不是总样本数）。
+- **评测集可信的前提**：**分层抽样**（按场景/难度/表达多样性，防只测高频简单场景导致分数虚高）、**污染检查**（数据飞轮回流易把评测集或其近重复混进训练集——评测集**版本冻结** + 近重复去重）、**统计显著性**（小评测集上 1-2 个点可能是噪声，需足够样本/置信区间才能下结论）。
+- **上线两道验证**：**OTA 前回归测试**（冻结评测集全场景跑，确认无能力退化——典型坑是新 LoRA 修好 A 却坏了 B）；**OTA 后 A/B 测试**（真实流量对比任务完成率/手动覆盖率/满意度）+ **灰度发布**（按车型/比例放量，设回滚判据、跌破阈值自动回滚）。
+- **漂移监控闭环**：上线后对意图/置信度/输入长度等算 **PSI**（>0.2 视为显著漂移），漂移时段样本优先纳入主动学习选样，形成「监控 → 选样 → 增量训练」闭环。
+
+> 详解见 [数据合规与评估 · 模型评估体系与数据飞轮](data-pipeline.html)。
+
+</details>
+
 ## 6. 系统设计答题框架
 
 <details markdown="1">
-<summary>**Q50: 面试中遇到系统设计题，应该用怎样的结构化思路作答？** · `中级`</summary>
+<summary>**Q53: 面试中遇到系统设计题，应该用怎样的结构化思路作答？** · `中级`</summary>
 
 **答题要点：**
 
@@ -773,14 +835,14 @@
 - **A — Architecture（顶层架构）**：画 3-5 个模块的架构图（采集 → 预处理 → 推理引擎 → 后处理决策 → 输出）。
 - **S — Scale & Storage（规模与存储）**：端侧的"规模"是**资源预算**而非 QPS（模型大小、KV Cache、带宽分配）。
 - **C — Core Algorithm（核心算法选型）**：模型大小、量化方案、注意力优化的选型依据。
-- **E — Engineering Details（工程细节）**：深入 1-2 个子系统展示深度（调度、Batching、KV 管理、SSR 恢复）。
+- **E — Engineering Details（工程细节）**：深入 1-2 个子系统展示深度（调度、Batching、KV 管理、SSR 恢复）。**谈端侧 Batching 先判运行时分支**——支持 batch 维（编译期固定 B + 共享 KV 池）才有真吞吐收益（B=2~4 时 TPOT 几乎不变、吞吐≈×B）；不支持就只是多 graph 时分（每请求 TPOT 随并发线性恶化，那是时分不是 batching），判据与展开见 Q54。
 - **F — Failure Handling（容错降级）**：端侧必谈——超时降级、崩溃恢复、离线退化、OTA 回滚。
 - 给时间分配建议，留几分钟给面试官追问。
 
 </details>
 
 <details markdown="1">
-<summary>**Q51: 用 RASCEF 框架回答：设计一个车载端侧多模态大模型交互系统。** · `高级`</summary>
+<summary>**Q54: 用 RASCEF 框架回答：设计一个车载端侧多模态大模型交互系统。** · `高级`</summary>
 
 **答题要点：**
 
@@ -788,21 +850,22 @@
 - **A**：五层（感知/预处理/推理引擎/Agent 决策/输出）。**去项目化**：用"消息分发模块""数据透传通道""主控加载场景插件"等**通用术语**，不用 `MsgDeliver`/`Fusion DataTransport` 等具体框架专名。
 - **S**：权重/KV Cache/带宽预算给**推导方法**。**decode 带宽口径（修正）**：`带宽 = 权重字节 × tok/s`（示例：2.5 GB × 10 tok/s ≈ **25 GB/s**，不是 5 GB/s）；总带宽与各单元分配用 roofline 方法推，别给互相矛盾的死数。
 - **C**：选 Omni 单模型替代三段式；**W4A16** 量化；FlashAttention 在 VTCM（约 8 MB 估算）上分 tile 计算。
-- **E**：Continuous Batching（iteration 粒度调度、prefill/decode 混批、PagedAttention、优先级插队）。
+- **E**：**Batching 先判运行时分支**——① 运行时支持 batch 维（编译期固定 B + 多请求共享 KV 池）：B=2~4 时 decode AI = 4·B 仍远低于 Knee、每步 TPOT 几乎不变、吞吐≈×B，这才是真 batching；② 不支持 batch 维：只能多 graph 时分，每请求 TPOT 随并发线性恶化——那是时分不是 batching。**判据**：profile 单请求 TPOT vs 并发 2 的每请求 TPOT（≈不变→真 batch；≈2×→时分）。Orca 式 prefill/decode 混批在端侧做不到（prefill/decode 是两套静态 shape 编译图），PagedAttention 也要看 attention kernel 是否支持按 page table 取 KV。
 - **F**：超时降级、SSR 恢复、离线、OTA A/B 回滚、热保护。
 
-> 详解见 [服务化优化 · Continuous Batching](infer-serving.html) 与 [推理原理 · Roofline](infer-principles.html)。
+> 详解见 [服务化优化 · 端侧 Batching 可行性](infer-serving.html) 与 [推理原理 · Roofline](infer-principles.html)。
 
 </details>
 
 <details markdown="1">
-<summary>**Q52: 系统设计题中如何做好「估算」环节？以 LLM 推理资源估算为例说明。** · `中级`</summary>
+<summary>**Q55: 系统设计题中如何做好「估算」环节？以 LLM 推理资源估算为例说明。** · `中级`</summary>
 
 **答题要点：**
 
 - **三类核心估算**：内存 / 延迟 / 带宽。
-- **内存**：权重 = 参数量 × 位宽 / 8；**KV Cache = 2 × 层数 × KV头数 × head_dim × 字节 × seq_len**。代入锚点（36 层 / **8 个 KV head** / 128 / FP16）：单 token ≈ **144 KB**，2048 token ≈ **288 MB**（示例参数）。**注意：用 GQA 的 8 个 KV head，不是 32**——误用 32 会把结果高估约 4 倍（原"32 层/32 KV/512KB/1GB"是错误示范）。
-- **延迟**：Prefill = 输入 token × 每 token FLOPs / 算力（compute-bound）；Decode = 权重加载时间 = 模型大小 / 有效带宽（memory-bound）。给方法 + 示例参数，并说明 MFU/利用率假设。
+- **内存**：权重 = 参数量 × 位宽 / 8；**KV Cache = 2 × 层数 × KV头数 × head_dim × 字节 × seq_len**。代入锚点（36 层 / **8 个 KV head** / 128 / FP16）：单 token ≈ **144 KB**，2048 token ≈ **288 MB**（示例参数）。**注意：用 GQA 的 8 个 KV head，不是 32**——误用 32 会把结果高估约 4 倍（原"32 层/32 KV/512KB/1GB"是错误示范）。**多模态提醒**：视觉 token 是 KV 大头，1 帧 ≈ 576 token ≈ **81 MB（FP16）/ 41 MB（INT8）**，2048 token 只装 ≈ **3.5 帧**——按"帧"数算，不是按"对话轮数"。
+- **延迟（先声明执行模式再算）**：Prefill = 输入 token × 每 token FLOPs / 算力（compute-bound）；**算力要用执行模式的 FP16 峰值（W4A16 常见 ~35 TFLOPS、保守 ~17 TFLOPS），不是 INT8 的 ~70 TOPS**——先声明执行模式，再用该模式峰值算 Knee（W4A16 ≈ **250~515** OPs/Byte）。Decode = 权重加载时间 = 模型大小 / 有效带宽（memory-bound）。给方法 + 示例参数，并说明 MFU/利用率假设。
+- **decode 的 AI ≈ 4·B**：「decode 永远 memory-bound」**只在 B=1 成立**——batching 把算术强度线性抬高（AI≈4·B），是把 decode 推向 compute-bound 的唯一手段；端侧并发少（B 个位数）才几乎总是带宽受限。
 - **带宽**：DDR 总带宽在多单元间分配，留给 DSP 的有效带宽按 roofline 推；"先算理论值再打折给工程预估"。
 - **估算技巧**：数量级正确即可、记锚点数字推导、给结论后主动说明假设与误差范围。
 
@@ -813,7 +876,7 @@
 ## 7. 项目经验包装
 
 <details markdown="1">
-<summary>**Q53: 如何在面试中介绍「端侧 AI Agent 框架」项目经验？** · `中级`</summary>
+<summary>**Q56: 如何在面试中介绍「端侧 AI Agent 框架」项目经验？** · `中级`</summary>
 
 **答题要点：**
 
@@ -827,7 +890,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q54: 如何包装「模型量化与部署优化」相关的项目经验？** · `中级`</summary>
+<summary>**Q57: 如何包装「模型量化与部署优化」相关的项目经验？** · `中级`</summary>
 
 **答题要点：**
 
@@ -840,7 +903,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q55: 技术面试中如何讲述「调试排障」经历才能加分？** · `初级`</summary>
+<summary>**Q58: 技术面试中如何讲述「调试排障」经历才能加分？** · `初级`</summary>
 
 **答题要点：**
 
@@ -854,7 +917,7 @@
 ## 8. 行为面试准备
 
 <details markdown="1">
-<summary>**Q56: 「请介绍一个你主导的技术方案，说说你是如何推动落地的。」** · `中级`</summary>
+<summary>**Q59: 「请介绍一个你主导的技术方案，说说你是如何推动落地的。」** · `中级`</summary>
 
 **答题思路：**
 
@@ -865,7 +928,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q57: 「说说你和同事在技术方案上产生分歧时是如何解决的。」** · `初级`</summary>
+<summary>**Q60: 「说说你和同事在技术方案上产生分歧时是如何解决的。」** · `初级`</summary>
 
 **答题思路：**
 
@@ -876,7 +939,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q58: 「描述一次你犯的技术错误以及你从中学到了什么。」** · `中级`</summary>
+<summary>**Q61: 「描述一次你犯的技术错误以及你从中学到了什么。」** · `中级`</summary>
 
 **答题思路：**
 
@@ -887,7 +950,7 @@
 </details>
 
 <details markdown="1">
-<summary>**Q59: 行为面试通用准备清单与高频问题分类。** · `初级`</summary>
+<summary>**Q62: 行为面试通用准备清单与高频问题分类。** · `初级`</summary>
 
 **答题要点：**
 
