@@ -399,15 +399,52 @@
           ]
         },
         {
-          "title": "自动驾驶学习文档",
-          "file": "ad/general/learning.html",
-          "badge": "15 章",
+          "title": "自动驾驶算力平台",
+          "file": "ad/general/soc-platform.html",
+          "badge": "Part 1",
           "status": "done",
-          "desc": "端侧 AI 视角的自动驾驶全栈：算力平台、BEV 感知、3D 检测分割、端到端模型、端侧部署、驾驶 Agent、功能安全，15 章 4 Part",
+          "desc": "自动驾驶 SoC 全景（Orin/SA8650P/TDA4/EyeQ6）、异构计算架构、算力预算、功能安全分区",
+          "tags": [
+            "SoC",
+            "Orin",
+            "异构计算"
+          ]
+        },
+        {
+          "title": "BEV 感知与端到端",
+          "file": "ad/general/perception.html",
+          "badge": "Part 2",
+          "status": "done",
+          "desc": "BEV 感知训练、3D 检测分割、Occupancy、4D 成像雷达、端到端模型、轨迹预测、世界模型、数据飞轮、Mapless",
           "tags": [
             "BEV",
+            "Occupancy",
             "端到端",
-            "功能安全"
+            "世界模型"
+          ]
+        },
+        {
+          "title": "端侧部署",
+          "file": "ad/general/deployment.html",
+          "badge": "Part 3",
+          "status": "done",
+          "desc": "BEV 模型端侧部署、量化挑战、时序特征缓存、多传感器融合部署、规划与控制部署",
+          "tags": [
+            "端侧部署",
+            "量化",
+            "传感器融合"
+          ]
+        },
+        {
+          "title": "驾驶 Agent 与安全",
+          "file": "ad/general/agent-safety.html",
+          "badge": "Part 4",
+          "status": "done",
+          "desc": "VLM 驾驶 Agent 架构、端侧推理、V2X 云端协同、功能安全（ISO 26262/ASIL/SOTIF）、仿真验证",
+          "tags": [
+            "驾驶 Agent",
+            "功能安全",
+            "V2X"
           ]
         }
       ],

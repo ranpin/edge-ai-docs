@@ -29,7 +29,10 @@ flowchart LR
 
 | 文档 | 讲什么 |
 | :--- | :--- |
-| [自动驾驶学习文档](general/learning.html) | 端侧 AI 视角的自动驾驶全栈：SoC 全景、异构计算、BEV 感知训练、3D 检测分割、端到端模型、越野场景、数据飞轮、端侧部署、驾驶 Agent、V2X、功能安全、仿真验证（15 章） |
+| [自动驾驶算力平台](general/soc-platform.html) | SoC 全景（Orin/SA8650P/TDA4/EyeQ6）、异构计算架构、算力预算、功能安全分区 |
+| [BEV 感知与端到端](general/perception.html) | BEV 感知、3D 检测分割、Occupancy、4D 成像雷达、端到端、轨迹预测、世界模型、数据飞轮、Mapless |
+| [端侧部署](general/deployment.html) | BEV 端侧部署、量化挑战、时序缓存、多传感器融合、规划与控制部署 |
+| [驾驶 Agent 与安全](general/agent-safety.html) | VLM 驾驶 Agent、端侧推理、V2X 云端协同、功能安全（ISO 26262/ASIL/SOTIF）、仿真验证 |
 | [自动驾驶面试指南](general/interview.html) | 34 道精选题，覆盖 BEV 感知、端到端、数据训练、部署优化、驾驶 Agent 与系统设计 |
 
 ### 2.2 第二层 · 边缘实战（Alpamayo-Edge）
