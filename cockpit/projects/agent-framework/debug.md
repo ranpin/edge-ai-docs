@@ -79,7 +79,7 @@ FastRPC 是 ARM CPU 与 Hexagon DSP 之间的远程过程调用机制。FastRPC 
 > 1. **检查 FastRPC 驱动状态**  
 >    运行 `dmesg | grep fastrpc` 查看 FastRPC 驱动加载日志。正常应看到 `fastrpc: device opened`。如果出现 `fastrpc: error`，说明驱动未正确加载或设备节点异常。
 > 2. **获取 DSP 实时日志**  
->    运行 `mini-dm` 捕获 DSP 子系统日志。关注 `HAP_` 前缀的日志行，特别是 `HAP_power`、`HAP_mem` 相关错误。如果 mini-dm 无输出，说明 DSP 子系统可能未启动。
+>    运行 `mini-dm` 捕获 DSP 子系统日志。关注 `HAP_` 前缀的日志行，特别是 `HAP_power`、`HAP_mem` 相关错误。如果 mini-dm 无输出，说明 DSP 子系统可能未启动。DSP 侧日志不走 logcat，mini-dm 是唯一出口，用法与排障经验见 [硬件架构 · DSP 侧日志：mini-dm（§4.5）](../../general/hardware.html)。
 > 3. **验证设备节点**  
 >    运行 `ls /dev/adsprpc-smd*` 检查 FastRPC 设备节点是否存在。正常应看到 `/dev/adsprpc-smd` 和 `/dev/adsprpc-smd-secure`。节点缺失说明 DSP 固件未加载或 remoteproc 异常。
 > 4. **检查 remoteproc 状态**  
@@ -87,12 +87,12 @@ FastRPC 是 ARM CPU 与 Hexagon DSP 之间的远程过程调用机制。FastRPC 
 > 5. **检查 SELinux 策略**  
 >    运行 `getenforce` 查看 SELinux 状态。如果为 `Enforcing`，FastRPC 调用可能被 SELinux 策略拒绝。开发阶段可临时设置为 `Permissive`，生产环境需正确配置 SELinux 策略文件。
 > 6. **验证 testsig 签名**  
->    检查 `testsig` 文件是否正确部署。未签名或签名不匹配的 DSP 库无法加载。开发阶段需确保 testsig 与设备序列号匹配，使用 `elfsigner` 工具签名。
+>    检查 `testsig` 文件是否正确部署。未签名或签名不匹配的 DSP 库无法加载。testsig 是基于**目标设备 UID** 生成的临时签名（用 `elfsigner` 工具生成），与设备绑定——换设备需重新生成；它只在开发期可用，量产固件必须走 OEM 正式签名链（testsig 不可用）。签名机制、典型报错与排查顺序见 [硬件架构 · DSP 签名与 testsig（§4.4）](../../general/hardware.html)。
 
 > [!WARNING]
 > **常见陷阱**
 >
-> FastRPC 调用返回 `AEE_ECONNREFUSED`（具体数值以 FastRPC 头文件 `AEEStdErr.h` 为准，勿在代码/文档中写死）时，通常不是网络问题而是 DSP 侧 skeleton 库加载失败。请检查：(1) skeleton .so 文件是否推送到 `/vendor/lib/rfsa/dsp/`；(2) 文件权限是否为 755；(3) testsig 是否匹配。
+> FastRPC 调用返回 `AEE_ECONNREFUSED`（具体数值以 FastRPC 头文件 `AEEStdErr.h` 为准，勿在代码/文档中写死）时，通常不是网络问题而是 DSP 侧 skeleton 库加载失败。请检查：(1) skeleton .so 文件是否推送到 `/vendor/lib/rfsa/dsp/`；(2) 文件权限是否为 755；(3) testsig 是否与当前设备 UID 匹配（见 §1.3 步 6）。
 
 ### 1.4 常见性能优化清单
 
@@ -102,13 +102,13 @@ FastRPC 是 ARM CPU 与 Hexagon DSP 之间的远程过程调用机制。FastRPC 
 | :--- | :--- | :--- | :--- | :--- |
 | **P0** | 消除 CPU fallback 算子 | `qnn-profile-viewer` 查看每个算子的 backend 字段 | 单算子 10-100x | Fallback 到 CPU 的算子会引入 CPU-DSP 数据搬运开销，是性能杀手。替换为 HTP 原生支持的算子或拆分为可支持的算子组合。 |
 | **P0** | 使用 Context Binary | 对比 `.so` 模式和 `.bin` 模式的加载时间 | 加载时间减少 50-80% | Context Binary 将图优化、内存规划等离线完成，避免运行时开销。生产环境必须使用 Context Binary。 |
-| **P1** | VTCM 利用率优化 | Hexagon Profiler 查看 VTCM hit/miss ratio | 10-30% | VTCM 是 DSP 的片上高速缓存（典型 8 MB，视 HTP 架构版本而定，以 `QnnHtpDevice` 实际查询为准）。确保热点算子的权重和中间结果能放入 VTCM，避免 spill 到 DDR。 |
+| **P1** | VTCM 利用率优化 | Hexagon Profiler 查看 VTCM hit/miss ratio | 10-30% | VTCM 是 DSP 的片上高速缓存（典型 8 MB，视 HTP 架构版本而定，以 `QnnHtpDevice` 实际查询为准）。确保热点算子的权重和中间结果能放入 VTCM，避免 spill 到 DDR。存储层级与 HTP 版本对照见 [硬件架构 · Hexagon DSP 微架构（§2）](../../general/hardware.html)。 |
 | **P1** | 量化精度选择 | 对比 INT8 vs INT16 精度和速度 | INT8 通常快于 INT16（幅度视具体 HTP 代际） | 优先使用 INT8；对精度敏感的层（如最后的分类头）可保持 INT16 混合精度。 |
 | **P1** | 输入预处理 offload | Snapdragon Profiler 对比 CPU vs GPU 预处理耗时 | 20-40% | 将 resize/normalize/color conversion 从 CPU offload 到 GPU 或 ISP，减少 CPU 负担和数据搬运。 |
 | **P2** | Batch 优化 | 测试不同 batch size 的吞吐量 | 10-30% | 在多路摄像头场景下，合并多路输入为 batch 推理可提高 NPU 利用率。但会增加单帧延迟。 |
 | **P2** | Pipeline 并行 | Snapdragon Profiler 时间线分析 | 20-50% | 将预处理、推理、后处理三个阶段 pipeline 化，利用 CPU/GPU/NPU 异构并行。需仔细设计 buffer 管理。 |
 | **P2** | 模型结构优化 | AIMET + qnn-net-run 对比 | 模型级别变化 | 通道剪枝、深度可分离卷积替换、激活函数替换（Swish → ReLU6）。需重新训练/微调。 |
-| **P3** | 电源管理配置 | `cat /sys/class/devfreq/soc:qcom,cpubw/cur_freq` | 5-15% | 确保 DSP 运行在最高频率档位。开发阶段可锁定高频避免动态降频影响性能基准测试结果。 |
+| **P3** | 电源管理配置（频率观测 + 主动控频） | 观测：先 `ls /sys/class/devfreq/` 确认 CDSP 节点名（随 BSP 变化），再 `cat /sys/class/devfreq/<cdsp节点名>/cur_freq`。注意 `soc:qcom,cpubw` 是 CPU-DDR 带宽节点，**不是** CDSP，看它判断不了 DSP 频率 | 5-15% | 主动控频走 DCVS 频率投票：推理（尤其 prefill）前用 `QnnHtpPerfInfrastructure` 或 skel 侧 `HAP_power_request` 投票升频，空闲时撤销投票；开发阶段可锁 governor 高频，勿用于量产。机制、与热降频的联动见 [硬件架构 · DCVS 与主动频率投票（§7.4）](../../general/hardware.html)。 |
 | **P3** | 内存对齐与布局 | 检查输入 tensor 的 stride 和 alignment | 5-10% | 确保输入 tensor 128 字节对齐；使用 NHWC 布局（HTP 原生格式）避免运行时 transpose。 |
 
 > [!TIP]
@@ -118,7 +118,7 @@ FastRPC 是 ARM CPU 与 Hexagon DSP 之间的远程过程调用机制。FastRPC 
 
 ## 2. LLM 精度调试
 
-端侧 LLM 量化部署后，精度问题表现为**输出质量下降**而非简单的数值偏差。与传统视觉模型的精度调试（对比 mAP/IoU）不同，LLM 精度问题往往是隐性的——模型仍然能"说话"，但 Function Calling 准确率下降、出现幻觉、或多轮对话失去连贯性。
+端侧 LLM 量化部署后，精度问题表现为**输出质量下降**而非简单的数值偏差。与传统视觉模型的精度调试（对比 mAP/IoU）不同，LLM 精度问题往往是隐性的——模型仍然能"说话"，但 Function Calling 准确率下降、出现幻觉、或多轮对话失去连贯性。另注意：如果精度错误是**间歇性**的（同一输入偶发错误、无 crash），先别在量化里找原因，直接看 §2.3 的 DMA-BUF cache 一致性根因。
 
 ### 2.1 量化精度损失定位
 
@@ -130,16 +130,26 @@ flowchart TD
     B -->|"完全不同"| C["检查输入预处理tokenizer / 图像 resize是否与训练一致"]
     B -->|"部分偏差"| D["Perplexity 对比FP16 vs INT4"]
     C --> C1["修复预处理后重测"]
-    D --> E{"Perplexity 增幅超过 5%?"}
+    D --> E{"Perplexity 增幅超过阈值?（示例 5%）"}
     E -->|"是"| F["逐层精度分析定位敏感层"]
     E -->|"否"| G["检查 sampling 参数temperature / top_p"]
     F --> H["敏感层提升精度INT4→INT8 混合量化"]
     G --> G1["统一 sampling 后重测"]
+    G1 --> CAL{"精度仍低于基线?"}
+    CAL -->|"是"| CAL1["检查校准集是否覆盖真实分布是否与评测集重叠"]
+    CAL1 --> CAL2["重建校准集重新量化"]
     H --> I["重新量化验证"]
+    CAL2 --> I
 
     style A fill:#e74c3c,color:#fff
     style H fill:#2ecc71,color:#fff
+    style CAL2 fill:#2ecc71,color:#fff
 ```
+
+> [!NOTE]
+> **校准集是端侧 PTQ 掉点最隐性的根因**
+>
+> 如果逐层敏感度分析定位不到明显敏感层、sampling 与预处理也都对齐了，精度仍低于基线，优先怀疑**校准集**：是否覆盖真实输入分布（座舱场景的光照/领域/指令长度分布），以及是否与评测集重叠（量化参数对评测分布过拟合，线上必掉点）。校准集选择判据（代表性 / 规模 / 多样性 / 与评测集隔离）见 [端侧模型量化与压缩 · 校准集选择（§1.4）](../../general/quantization.html)。
 
 | 问题现象 | 可能原因 | 排查方法 | 解决方案 |
 | :--- | :--- | :--- | :--- |
@@ -183,7 +193,18 @@ for layer_idx in range(num_layers):
 > [!TIP]
 > **混合精度量化策略**
 >
-> 基于敏感度分析结果，推荐的混合精度策略：**Embedding + LM Head 用 INT8，前 2 层和后 2 层 Attention 用 INT8，其余全部 INT4**。相比全 INT4，Perplexity 增幅从 ~1.5% 降至 ~0.5%，而模型大小仅增加约 10%。这是端侧部署中精度和体积的最佳平衡点。
+> 基于敏感度分析结果，推荐的混合精度策略：**Embedding + LM Head 用 INT8，前 2 层和后 2 层 Attention 用 INT8，其余全部 INT4**。相比全 INT4，Perplexity 增幅从 ~1.5% 降至 ~0.5%，而模型大小仅增加约 10%——以上增幅与体积数字均为**示例参数（非实测）**，仅示意精度-体积的权衡方向，请以自己模型的敏感度分析实测为准。这是端侧部署中精度和体积的常见平衡点。
+
+### 2.3 间歇性精度错误（非 crash）：先怀疑 DMA-BUF cache 一致性
+
+不是所有精度问题都出在量化。量化掉点是**稳定复现**的（同一输入总是错）；如果症状是**间歇性**的——同一输入偶发输出错误/乱码/图像识别漂移，无 crash、无 SSR、重启后无规律复现——优先排查**零拷贝路径的 cache 一致性**：CPU 与 DSP 经 DMA-BUF 共享同一块物理内存，但两侧各有 cache，不维护一致性就会读到旧数据。
+
+| 数据流向 | 规则 | 违反后果 |
+| :--- | :--- | :--- |
+| **CPU 写 → DSP 读** | CPU 写完必须 **flush（clean）** cache line，把脏数据写回内存 | DSP 读到旧数据（脏数据滞留在 CPU cache） |
+| **DSP 写 → CPU 读** | CPU 读前必须 **invalidate** 自己的 cache line | CPU 命中旧的缓存副本，读到 DSP 写入前的旧值 |
+
+正确做法：用 `DMA_BUF_IOCTL_SYNC`（`START`/`END` 配对）显式声明访问窗口，由内核做 sync；或把 buffer 映射为 uncached/write-combine（省 sync 但 CPU 侧访问变慢）。这是零拷贝路径最隐蔽的 bug——表现像"精度问题"，根因在内存侧。完整规则与原理见 [硬件架构 · 零拷贝的前提：Cache 一致性（§4.3）](../../general/hardware.html)。
 
 ## 3. 内存与 OOM 排障
 
@@ -231,6 +252,11 @@ n_layers=36, n_kv_heads=8 (GQA), head_dim=128, KV 用 INT8）:
     总内存 ≈ 3.0 GB + KV Cache
 ```
 
+> [!NOTE]
+> **端侧"batching"不一定是真 batch**
+>
+> 上面"多请求并发 (Continuous Batching)"只是**内存侧**的估算，不代表吞吐收益成立。多请求并发能否吃到 batch 红利取决于运行时能力：并发 2 时每请求 TPOT 基本不变 → 真 batch（吞吐 ≈ ×B）；TPOT ≈ 2× → 时分复用，每请求延迟随并发线性恶化。判据与两条分支的区分见 [端侧解码与服务化优化 · 端侧可行性（§4.5）](../../general/infer-serving.html)。
+
 | OOM 场景 | 触发条件 | 症状 | 解决方案 |
 | :--- | :--- | :--- | :--- |
 | **长对话 OOM** | 单轮对话超过 max\_seq\_len | DSP crash 或 SSR | 设置 max\_seq\_len 硬限制 + Sliding Window 截断旧上下文 |
@@ -241,23 +267,28 @@ n_layers=36, n_kv_heads=8 (GQA), head_dim=128, KV 用 INT8）:
 ### 3.3 内存监控与预警
 
 ```bash
-# 实时监控 DSP 内存使用
-# 方法 1: 查看 ION/DMA-BUF 分配
-cat /sys/kernel/debug/dma_buf/bufinfo
+# 实时监控推理进程内存（全站标准口径：VmRSS + dma-buf 合计）
 
-# 方法 2: 查看进程 VSS/RSS
+# 方法 1: CPU 侧常驻内存 (VmRSS)
 cat /proc/$(pidof system_agent)/status | grep -E "VmRSS|VmSize"
 
-# 方法 3: 查看 SMMU (System MMU) 映射
-cat /sys/kernel/debug/iommu/*/info  # 查看 DSP 的 IOMMU 映射大小
+# 方法 2: DSP/NPU 设备侧 dma-buf 缓冲（对持有模型的 pid 执行）
+dmabuf_dump $(pidof system_agent)
 
-# 方法 4: 持续监控脚本
+# 方法 3: 合计 = VmRSS + dma-buf，即"推理进程占了多少内存"的标准口径
+
+# 方法 4: 持续监控脚本（VmRSS 部分；dma-buf 部分按需定期 dmabuf_dump 采样）
 while true; do
     RSS=$(cat /proc/$(pidof system_agent)/status | grep VmRSS | awk '{print $2}')
     echo "$(date +%H:%M:%S) RSS: ${RSS} KB"
     sleep 5
 done
 ```
+
+> [!WARNING]
+> **两个口径，不可互比**
+>
+> ① CPU 侧 **PSS**（`/proc/smaps`）与 ② **VmRSS + dma-buf** 合计是两套不同口径：**PSS ≠ VmRSS + dma-buf**，二者不可直接比较。DSP/NPU 内存走设备侧 dma-buf，不计入 CPU 侧 PSS——排查"内存去哪了"时先用 `dmabuf_dump` 看设备侧，再看 CPU 侧。两口径的实测对比与踩坑记录见 [岚图项目 · 效果、性能与稳定性](../lantu/effect-perf-stability.html)。
 
 > [!WARNING]
 > **内存水位线设计**
@@ -272,18 +303,23 @@ done
 | :--- | :--- | :--- | :--- |
 | **DSP SSR (子系统重启)** | HTP 算子执行异常 / VTCM 访问越界 | `dmesg` 中出现 `subsys-restart` 或 `ssr_event` | mini-dm 获取 DSP crash dump → 分析 crash PC 地址 → 定位算子 |
 | **SIGABRT / SIGSEGV** | CPU 侧内存越界 / 空指针 | tombstone 文件中有调用栈和寄存器信息 | addr2line 解析 crash 地址到源码行 → 检查 DataMessage 生命周期 |
-| **FastRPC Timeout** | CPU→DSP 调用超时（默认 ~2s） | `fastrpc: invoke timed out` | DSP 侧是否死锁；模型推理是否超长；QNN Context 是否加载失败 |
+| **FastRPC Timeout** | CPU→DSP 调用超时（默认值为示例；超时时长可配置，以运行时配置为准） | `fastrpc: invoke timed out` | DSP 侧是否死锁；模型推理是否超长；QNN Context 是否加载失败 |
 | **QNN Context 加载失败** | Context Binary 与硬件不匹配 | `QnnContext_createFromBinary failed` | 检查 Context Binary 编译目标 (SOC) 是否匹配当前硬件 |
 | **OOM Kill** | 系统内存不足触发 Low Memory Killer | `lowmemorykiller: kill process` | 检查内存使用曲线，定位内存泄漏或 KV Cache 未释放 |
 | **并发/竞态 Crash** | ModelScheduler 调度竞态、Tool 异步回调线程安全问题（多音区并发请求、回调与主线程共享状态未加保护） | crash 栈指向共享容器/锁内部，或对已释放地址的 use-after-free；复现率低、与并发负载正相关 | TSAN（ThreadSanitizer）检测数据竞争；核查回调线程安全与对象生命周期（释放后地址复用）；并发压测提高复现率 |
+
+> [!NOTE]
+> **SSR 与 PD 的底层机制**
+>
+> SSR 发生后**所有旧的 FastRPC handle 和 QNN Context 全部失效**——应用层不处理 SSR 事件，DSP 重启后推理会永久失败。事件流程、handle 清理与恢复两阶段（固件重载完成 vs 应用层推理恢复，应分别计时）见 [硬件架构 · SSR（§5.3）](../../general/hardware.html)。Crash 的隔离范围由 PD 决定：各模型跑在独立 Guest PD、内存互相隔离，单模型崩溃不必然拖垮其他模型，见同篇 §5.2。
 
 ### 4.2 DSP Crash 分析流程
 
 > [!NOTE]
 > **DSP Crash 排障四步法**
 >
-> 1. **获取 Crash Dump**  
->    `mini-dm` 启动实时日志捕获。Crash 发生后，DSP 会输出 crash info 包括 crash PC、LR（返回地址）、寄存器状态。同时通过 `dmesg | grep -i "ssr\|subsys\|crash\|fastrpc"` 获取内核侧日志。
+> 1. **获取 Crash Dump**
+>    `mini-dm` 启动实时日志捕获（DSP 侧日志的唯一出口，见 [硬件架构 · mini-dm（§4.5）](../../general/hardware.html)）。Crash 发生后，DSP 会输出 crash info 包括 crash PC、LR（返回地址）、寄存器状态。同时通过 `dmesg | grep -i "ssr\|subsys\|crash\|fastrpc"` 获取内核侧日志。
 > 2. **定位 Crash 地址**  
 >    使用 `hexagon-addr2line` 将 crash PC 地址映射到具体的源文件和行号。需要带调试符号的 DSP 库（`_skel.so` 的调试版本）。
 > 3. **分析调用上下文**  
@@ -316,6 +352,11 @@ done
 | 排查 | 1. Snapdragon Profiler 时间线分析：两个请求的 Prefill 同时到达 HTP 2. 单独执行每个请求均正常 → 并发争抢问题 3. HTP 在处理第一个请求的 Prefill 时，第二个请求的 FastRPC 调用排队等待超过 2s timeout |
 | 根因 | ModelScheduler 未对 Prefill 阶段做分片，大 Prompt 的 Prefill 独占 HTP 时间过长 |
 | 修复 | 1. Prefill 分片：将长 Prompt 分为多段，每段之间允许插入高优先级请求 2. FastRPC timeout 从 2s 调整为 5s 3. 高优先级请求（车控）可抢占低优先级（闲聊）的 Prefill |
+
+> [!NOTE]
+> **"Prefill 分片"即 chunked prefill**
+>
+> 把长 prompt 切成块、块间交错高优先级请求与在途 decode 步，用少量 TTFT 增加换取 TPOT 抖动与抢占等待的大幅下降；块大小是 TTFT 与 TPOT 平滑度的权衡旋钮，原理见 [LLM 推理原理与性能模型 · 混批干扰与 chunked prefill（§5.5）](../../general/infer-principles.html)。另注意：多请求并发究竟走真 batch 还是时分复用，以"并发 2 时每请求 TPOT 是否 ≈ 2×"为判据，见 [端侧解码与服务化优化 · 端侧可行性（§4.5）](../../general/infer-serving.html)——本案的排队恶化正是单 cDSP 时分复用的表现。
 
 ## 5. 日志与监控体系
 
@@ -365,7 +406,7 @@ aadkcore 附带独立的监控服务 `aadk_monitor`（通过 systemd 管理）�
 
 aadkcore 通过 `registerProfilingCallback` 接口支持实时性能数据采集，便于监控和优化：
 
-| 性能指标 | 采集方式 | 典型值 (Qwen3-Omni-4B INT4) | 异常阈值 |
+| 性能指标 | 采集方式 | 典型值（示例参数，非实测） | 异常阈值（示例） |
 | :--- | :--- | :--- | :--- |
 | **TTFT** | Prefill 开始到第一个 token 输出 | 600-800 ms (S=350) | > 1500 ms |
 | **TPOT** | 相邻 token 间隔 | 70-100 ms (~10-14 tok/s) | > 200 ms |
@@ -373,7 +414,12 @@ aadkcore 通过 `registerProfilingCallback` 接口支持实时性能数据采集
 | **KV Cache 使用率** | 当前使用 / 最大分配 | 变化范围 0-100% | 持续 > 80% |
 | **NPU 利用率** | HTP 忙时间 / 总时间 | 推理时 > 90% | < 50% (可能有 fallback) |
 
+> [!NOTE]
+> **表中数字为示例参数**
+>
+> "典型值"与"异常阈值"两列均为**示例参数（非实测）**，仅示意量级与告警思路。TTFT 由算力决定（prefill compute-bound）、TPOT 由带宽决定（decode memory-bound），请按自己平台的 roofline/带宽模型推导预期值，再据此设定阈值，推导方法见 [LLM 推理原理与性能模型](../../general/infer-principles.html)；阈值本身应结合产品延迟预算设定。
+
 > [!TIP]
 > **调试工具选择指南**
 >
-> 快速参考：**精度问题** → qnn-net-run + AIMET 逐层分析；**性能问题** → qnn-profile-viewer + Snapdragon Profiler；**稳定性问题** → mini-dm + dmesg + aadk\_monitor 日志；**内存问题** → /proc/PID/status + DMA-BUF 统计；**FastRPC 问题** → 排障六步法（第 1 章）。先确定问题类别，再选对应工具，避免盲目排查。
+> 快速参考：**精度问题** → qnn-net-run + AIMET 逐层分析（间歇性精度错误先看 §2.3 cache 一致性）；**性能问题** → qnn-profile-viewer + Snapdragon Profiler；**稳定性问题** → mini-dm + dmesg + aadk\_monitor 日志；**内存问题** → VmRSS + `dmabuf_dump`（标准口径见 §3.3）；**FastRPC 问题** → 排障六步法（第 1 章）。先确定问题类别，再选对应工具，避免盲目排查。
