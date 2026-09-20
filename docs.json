@@ -303,24 +303,61 @@
           "title": "通用机器人面试指南",
           "file": "robot/general/interview.html",
           "kind": "面试",
-          "badge": "32 题",
+          "badge": "34 题",
           "status": "done",
-          "desc": "平台选型、算法训练、部署实时控制、Agent 大模型、系统设计，32 题",
+          "desc": "平台选型、算法训练、部署实时控制、Agent 大模型、系统设计，34 题",
           "tags": [
             "面试",
-            "32 题"
+            "34 题"
           ]
         },
         {
-          "title": "通用机器人学习文档",
-          "file": "robot/general/learning.html",
-          "badge": "15 章",
+          "title": "机器人端侧算力与框架",
+          "file": "robot/general/platforms.html",
+          "badge": "Part 1",
           "status": "done",
-          "desc": "端侧 AI 视角的通用机器人全栈：算力平台、推理框架、ROS2 集成、VLA 模型、Sim2Real、端侧部署、实时控制、Embodied Agent，15 章 4 Part",
+          "desc": "端侧算力平台全景（Jetson/RK3588/QRB5165）、推理框架对比（TensorRT/RKNN）、ROS2 + 端侧 AI 集成",
           "tags": [
             "Jetson",
-            "VLA",
+            "TensorRT",
             "ROS2"
+          ]
+        },
+        {
+          "title": "感知与 VLA 训练",
+          "file": "robot/general/algorithms.html",
+          "badge": "Part 2",
+          "status": "done",
+          "desc": "感知模型训练、VLA 模型（π0/OpenVLA/GR00T/RDT）、扩散策略与 ACT、遥操作数据管线、RL Sim2Real、世界模型、持续学习",
+          "tags": [
+            "VLA",
+            "Diffusion Policy",
+            "世界模型",
+            "Sim2Real"
+          ]
+        },
+        {
+          "title": "端侧部署与实时控制",
+          "file": "robot/general/deployment.html",
+          "badge": "Part 3",
+          "status": "done",
+          "desc": "端侧推理部署（TensorRT）、实时控制链路、传感器融合、运动规划与 MoveIt2、SLAM/状态估计/Nav2、人形全身控制",
+          "tags": [
+            "实时控制",
+            "MoveIt2",
+            "SLAM"
+          ]
+        },
+        {
+          "title": "端侧 Embodied Agent",
+          "file": "robot/general/embodied-agent.html",
+          "badge": "Part 4",
+          "status": "done",
+          "desc": "Embodied Agent 架构、端侧 LLM 推理引擎、Tool Use & Function Calling、多模态接地、Agent 记忆与规划",
+          "tags": [
+            "Embodied Agent",
+            "Tool Use",
+            "端侧 LLM"
           ]
         },
         {
