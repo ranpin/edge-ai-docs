@@ -60,8 +60,8 @@ graph TB
 
 | 模块 | 核心规格 | 主要职责 | 典型用例 |
 | :--- | :--- | :--- | :--- |
-| **CPU** | 4x A78AE @2.5GHz + 4x A55 @1.8GHz（车规 AE 核） | 通用计算、OS 调度 | Android 座舱 UI、应用运行 |
-| **Adreno GPU** | Adreno 730 级别 | 3D 渲染、图形合成 | 仪表盘渲染、AR-HUD、游戏 |
+| **CPU** | 4x A78AE + 4x A55（车规 AE 核，主频为估算） | 通用计算、OS 调度 | Android 座舱 UI、应用运行 |
+| **Adreno GPU** | 车规 Adreno（估算） | 3D 渲染、图形合成 | 仪表盘渲染、AR-HUD、游戏 |
 | **Hexagon DSP (CDSP)** | HMX + HVX + Scalar | AI 推理加速 | DMS 驾驶员监控、语音降噪 |
 | **Hexagon DSP (ADSP)** | HVX + Scalar | 音频处理 | ANC 主动降噪、语音前端 |
 | **Hexagon DSP (SDSP)** | Scalar（低功耗） | 传感器融合 | Always-On 碰撞检测 |
@@ -312,6 +312,16 @@ int alloc_dmabuf_buffer(size_t size) {
 }
 ```
 
+> [!WARNING]
+> **零拷贝的前提：Cache 一致性**
+>
+> DMA-BUF 让 AP 与 DSP 共享同一块物理内存，但两侧各有 cache，**不维护一致性就会读到旧数据**——这是零拷贝最隐蔽的 bug（表现为间歇性结果错误，而非崩溃）。规则：
+>
+> - **CPU 写 → DSP 读**：CPU 写完必须 **flush（clean）** cache line，把脏数据写回内存，DSP 才看得到。
+> - **DSP 写 → CPU 读**：DSP 写回内存后，CPU 读前必须 **invalidate** 自己的 cache line，否则会命中旧的缓存副本。
+> - 用 `DMA_BUF_IOCTL_SYNC`（`START`/`END` 配对）显式声明访问窗口，内核据此做 sync；或把 buffer 映射为 uncached/write-combine（省 sync 但 CPU 侧访问变慢）。
+> - 经 SMMU 映射给 DSP 的是**物理/IOVA 地址**，与 CPU 的虚拟地址指向同一物理页——这正是零拷贝省掉一次内存搬运的原因，但也意味着一致性必须由软件显式维护。
+
 > [!NOTE]
 > **FastRPC vs Android Binder**
 >
@@ -320,6 +330,24 @@ int alloc_dmabuf_buffer(size_t size) {
 > * Binder 通过内核拷贝传递数据（一次拷贝优化）；FastRPC 通过 DMA-BUF / ION 共享内存实现**零拷贝**
 > * Binder 的目标是同一 OS 内核中的进程；FastRPC 的目标是运行不同 RTOS（QuRT）的独立处理器
 > * FastRPC 有额外的中断和缓存一致性开销，单次调用延迟通常在几十到几百 µs 量级（示例参数，取决于消息大小与系统负载）
+
+### 4.4 DSP 签名与 testsig
+
+DSP 上运行的代码（skel 库、模型 context binary）在量产设备上**必须经过签名**才能被加载——这是「模型/skel 推不上 DSP」的头号原因，比路径、依赖问题都更常见。
+
+- **PD 归属**：skel 与模型跑在 §5.2 的 Guest（User）PD 中，加载由 Static PD 的 FastRPC 框架校验。
+- **开发期 — testsig**：高通允许用 **testsig**（基于目标设备 UID 生成的临时签名）让未正式签名的 skel 在**特定设备**上运行，便于调试；testsig 与设备绑定，换设备需重新生成。
+- **量产期 — 正式签名**：走 OEM 的签名链（与 secure boot 信任衔接），testsig 在量产固件上不可用。
+- **典型报错**：签名不匹配时 `remote_handle_open` 失败（常见 `AEE_ECONNREFUSED` 或加载直接拒绝），且 logcat 往往只有一句笼统错误。
+- **排查顺序**：确认 skel 是否已签名 → testsig 是否匹配当前设备 UID → fastrpc 域权限（shell 能加载、app 不能，多半是 SELinux/域问题而非签名，见岚图篇 SELinux 对比）。
+
+### 4.5 DSP 侧日志：mini-dm
+
+DSP（Hexagon）上的 `printf`/日志不走 Android logcat，**mini-dm 是 DSP 侧日志的唯一出口**。排障 DSP 加载失败、推理异常、skel 崩溃时必看：
+
+- 用法：`adb shell` 里跑高通提供的 `mini-dm`（可用 `-mask` 控制输出级别），把 DSP 侧日志流拉出来。
+- skel 里的 `LOG_I`/`printf` 输出、FastRPC 错误码、HTP 加载信息都在这里。
+- 经验：`remote_handle_open` 失败、模型加载卡住时，先开 mini-dm 看 DSP 侧到底报什么，再判断是签名、依赖还是内存问题——比在 AP 侧盲猜高效得多。
 
 ## 5. Hypervisor 与系统可靠性
 
@@ -523,6 +551,16 @@ echo performance > /sys/class/devfreq/<cdsp节点名>/governor
 > **热管理最佳实践**
 >
 > 端侧 LLM 的热管理策略：(1) **按需加载**：用户未交互时将 DSP 降至低频，检测到唤醒词后快速升频；(2) **时间预算分配**：限制连续高负载推理时间（如 Prefill 后插入短暂冷却间隔）；(3) **温度感知调度**：当温度接近阈值时主动降低 batch size 或切换到更小的模型（Qwen3-1.7B）；(4) **避免 GPU 和 DSP 同时满载**：3D 渲染和 LLM 推理交替执行。
+
+### 7.4 DCVS 与主动频率投票
+
+§7.2 讲的是 DVFS 的**被动**现象（系统按负载自动调频）。量产性能调优更需要**主动**控制 DSP 频率——高通的机制是 **DCVS（Dynamic Clock and Voltage Scaling）+ 频率投票**：
+
+- **QnnHtpPerfInfrastructure**：QNN 提供的性能基础设施接口，可对 HTP 做 RPC latency 投票 / power 配置。注意它是**电源/性能投票**接口，不是设任务优先级（任务优先级走 graph/context 配置，见框架篇）。
+- **HAP_power_request**（Hexagon power API）：skel 侧可请求电压/频率档位。
+- **典型用法**：进入推理（尤其 prefill）前投票升频以缩短延迟；空闲或后台时撤销投票，让 DCVS 降频省电。
+- **与热管理联动**：持续投票高频会更快逼近热降频阈值（§7.3），所以升频通常只在交互窗口内短时启用。
+- 调试时可用 `/sys/class/devfreq/<cdsp节点名>/` 观察投票前后的频率变化（节点名随 BSP 变化，见 §7.3）。
 
 ## 8. 竞品芯片对比
 
