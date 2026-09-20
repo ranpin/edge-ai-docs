@@ -24,8 +24,8 @@ Qualcomm Neural Network (QNN) 是高通推出的下一代统一 AI 推理框架�
 ```mermaid
 flowchart TB
     A["应用层DMS / OMS / NLP App"] --> B["QNN API统一推理接口"]
-    B --> C1["CPU BackendARM Cortex-A76"]
-    B --> C2["GPU BackendAdreno 740"]
+    B --> C1["CPU BackendARM Cortex-A78AE / A55"]
+    B --> C2["GPU Backend车规 Adreno"]
     B --> C3["HTP BackendHexagon Tensor Processor"]
     B --> C4["DSP BackendHexagon aDSP/cDSP"]
     C1 --> D1["ARM CPU"]
@@ -140,19 +140,21 @@ xychart-beta
 >
 > 在传统方案中，数据在 ISP、CPU、DSP、GPU 之间需要多次内存拷贝 (`memcpy`)，带来显著延迟和功耗开销。SA8397P 的 Zero-Copy 路径彻底消除了这一瓶颈：
 >
-> * **ISP 写入 ION Buffer**：ISP 处理完成后，直接将 NV12 图像写入 ION (共享内存) 缓冲区
-> * **CDSP 映射同一 Buffer**：Hexagon CDSP 通过 FastRPC 映射同一块物理内存，无需数据拷贝
-> * **HTP 直接读取**：HTP 从映射的 ION Buffer 中直接读取输入张量，执行神经网络推理
-> * **结果写入另一 ION Buffer**：推理结果写入新的 ION Buffer，供下游使用
+> * **ISP 写入共享 Buffer**：ISP 处理完成后，直接将 NV12 图像写入共享内存缓冲区（早期 ION，新内核已演进为 dma-buf heap，见下方说明）
+> * **CDSP 映射同一 Buffer**：Hexagon CDSP 通过 FastRPC 映射同一块内存，无需数据拷贝
+> * **HTP 直接读取**：HTP 从映射的 Buffer 中直接读取输入张量，执行神经网络推理
+> * **结果写入另一 Buffer**：推理结果写入新的共享 Buffer，供下游使用
 > * **GPU 读取结果**：Adreno GPU 映射结果 Buffer，直接渲染到显示层
 >
-> **性能收益**：整条数据通路中 **无任何 CPU memcpy 操作**，端到端延迟减少约 3~5ms，功耗降低约 15%。ION Buffer 的物理地址连续性还确保了 DMA 传输的高效性。
+> **性能收益**：整条数据通路中 **无任何 CPU memcpy 操作**，端到端延迟与功耗均有可观下降（量级示意：延迟减少约 3~5ms、功耗降低约 15%，仅为演示收益方向的示例参数，请代入实测）。Buffer 经 **SMMU/IOMMU 映射**后供各引擎 DMA 访问——dma-buf 允许**非物理连续**的散列页经 IOMMU 拼成设备可见的连续虚拟地址，因此「Zero-Copy」依赖的是 IOMMU 映射而非物理地址连续性。
+>
+> **ION → dma-buf 演进**：ION 是 Android 早期的共享内存分配器，主线内核已用 **dma-buf heap**（`/dev/dma_heap/*`）取代。二者对上层都表现为「一块可跨引擎共享、可被 FastRPC/SMMU 映射的 dma-buf」，但分配接口与节点名不同；移植到新 BSP 时注意分配器 API 与 heap 名的变化。
 
 ## 3. 多模型调度与优化
 
 ### 3.1 单帧多模型调度时序
 
-在智能座舱的一帧处理中，多个 AI 模型需要协同工作。以下甘特图展示了典型的单帧处理时序（总帧周期 33ms @30fps）：
+在智能座舱的一帧处理中，多个 AI 模型需要协同工作。以下甘特图展示了典型的单帧处理时序（总帧周期 33ms @30fps）。注意 SA8397P 仅 **1 个 cDSP**，HTP 计算资源在多个 graph 间**时分复用**——下图「HTP 时段」内的各模型是在同一 HTP 上排队/分时执行，而非分配到不同物理核心并行：
 
 ```mermaid
 gantt
@@ -163,29 +165,30 @@ gantt
     section ISP
     ISP 图像处理           :done, isp, 0, 3
 
-    section HTP-Core0
+    section HTP (单 cDSP 时分复用)
     人脸检测 (RetinaFace)  :active, fd, 3, 8
     关键点回归 (FaceMesh)  :lm, 8, 11
     状态分类 (疲劳/分心)   :cls, 11, 13
-
-    section HTP-Core1
-    手势识别 (MoveNet)     :active, gest, 3, 8
+    手势识别 (MoveNet)     :gest, 13, 18
 
     section CPU
-    后处理 + 融合决策      :crit, post, 13, 16
+    后处理 + 融合决策      :crit, post, 18, 21
 
     section GPU
-    AR 渲染 + HUD 显示     :gpu, 16, 20
+    AR 渲染 + HUD 显示     :gpu, 21, 25
 ```
 
 ### 3.2 调度策略对比
 
 | 调度策略 | 描述 | 帧延迟 | HTP 利用率 | 适用场景 |
 | :--- | :--- | :--- | :--- | :--- |
-| **串行执行** | 所有模型依次在同一 HTP 核心上运行 | 最高 (~35ms) | 低 (~40%) | 模型少、时延要求低 |
+| **串行执行** | 所有模型依次在同一 HTP 上运行 | 最高 (~35ms) | 低 (~40%) | 模型少、时延要求低 |
 | **流水线 (Pipeline)** | 前一帧后处理与当前帧推理重叠 | 中等 (~25ms) | 中 (~65%) | 延迟可接受 1 帧 |
-| **并行调度** | 无依赖模型分配到不同 HTP 核心并行执行 | 最低 (~20ms) | 高 (~85%) | 多模型、低延迟要求 |
+| **多 graph 时分复用** | 无依赖模型作为多个 graph 在同一 cDSP 上时分复用（本平台仅 1 个 cDSP，无「分配到不同 HTP 核心并行」可言） | 较低 (~20ms) | 较高 (~85%) | 多模型、低延迟要求 |
 | **Context Binary 共享** | 多个模型编译为一个 Context Binary，共享中间 Buffer | 最低 (~18ms) | 最高 (~90%) | 固定模型组合、量产部署 |
+
+> [!NOTE]
+> 表中帧延迟与 HTP 利用率均为**示例参数**，仅用于演示各调度策略的相对优劣，不代表本平台实测。SA8397P 仅 1 个 cDSP，所谓「并行」实为多 graph 在同一 HTP 上的时分复用与流水重叠，而非多物理核心真并行（数据口径见 [硬件平台](../../general/hardware.html) 顶部 NOTE）。
 
 ### 3.3 Context Binary 与车规要求
 
@@ -197,7 +200,9 @@ gantt
 > | 加载方式 | 首次推理延迟（量级示意） | 原因 |
 > | --- | --- | --- |
 > | `Model .so` 动态加载 | ~5~8 秒 | 运行时才做图优化、内存分配与算子调度（图固化 / graph finalization，**非 JIT 编译**） |
-> | `Context Binary .bin` | ~200~500ms | 离线已完成编译优化，直接加载二进制到 HTP VTCM |
+> | `Context Binary .bin` | ~200~500ms | 离线已完成编译优化，加载到系统内存（DDR），执行时按 tiling 分块调入 VTCM |
+>
+> 上表为**小模型（CNN 级）量级示意**：`~200~500ms` 对应数百 MB 以内的检测/分类模型。对全站锚点的 4B LLM（W4A16 权重 ~2.5GB），Context Binary 加载由 **flash 读取主导**，冷启动为**秒级**——§6.3 的「模型加载 < 5s」才是 LLM 口径。另注意 VTCM 典型仅 ~8MB，远小于权重体量，权重不可能整体「加载进 VTCM」，只能按 tiling 分块调入（数据口径见 [硬件平台](../../general/hardware.html) 顶部 NOTE）。
 >
 > **Context Binary 的额外优势**：
 >
@@ -218,7 +223,7 @@ gantt
 
 ## 4. 集成部署方式
 
-aadkcore 框架的量产部署以 **Service 模式**（systemd 托管的 `system_agent`）为主，并支持**多平台交叉编译**。框架核心库（`libaadkcore.so` + `libagent_group.so`）平台无关；具体项目的可执行文件 / APK 集成部署属项目专属，见各项目文档（如岚图 [设备部署与上车流程](../lantu/device-deployment.html)）。
+aadkcore 框架的量产部署以 **Service 模式**（systemd 托管的 `system_agent`）为主，并支持**多平台交叉编译**。框架核心库（`libaadkcore.so` + `libagent_group.so`）**源码平台无关，但产物按平台交叉编译**——ABI 与依赖绑定到目标工具链，不可跨平台混用（插件与宿主的 ABI 约束见 [Agent 插件库](agent-group.html) §1.1）；具体项目的可执行文件 / APK 集成部署属项目专属，见各项目文档（如岚图 [设备部署与上车流程](../lantu/device-deployment.html)）。
 
 ### 4.1 部署方式总览
 
@@ -297,8 +302,11 @@ flowchart LR
 │   ├── libaisa.so             # AISA 模型库
 │   └── ...                    # OpenCV, curl, yaml-cpp 等依赖
 ├── data/
-│   ├── config/                # 运行时配置
-│   │   ├── runtime_config.json
+│   ├── config/                # 运行时配置（按平台分子目录，见 §4.3）
+│   │   ├── 8397/              # 每平台一套：runtime_config.json + multi_lora_runtime_config.json + 模型配置
+│   │   │   ├── runtime_config.json
+│   │   │   ├── multi_lora_runtime_config.json
+│   │   │   └── qwen3-omni-4b.json
 │   │   └── datatransport.service.config.json   # Fusion/DataTransport 服务配置（示例文件名，实际随项目/集成方而异）
 │   ├── template/              # YAML Prompt 模板
 │   └── assets/                # 静态资源（RAG 知识库等）
@@ -354,27 +362,30 @@ WantedBy=multi-user.target
 | `--http 1` | 0 (关闭) | 启用 HTTP Server 模式替代 Fusion，用于调试场景 |
 | `--dump 1` | **1 (开启)** | 推理数据录制，将请求/响应保存到文件；**默认开启**，需显式传 `--dump 0` 关闭 |
 | `--upload 1` | 0 (关闭) | 启用推理数据上传到远端服务器 |
-| `--dual 1` | 0 (关闭) | 启用 SA8397P 双实例模式（双 NPU 核心） |
+| `--dual 1` | 0 (关闭) | 启用 SA8397P **第二个模型实例**（主动视觉专用，加载 `multi_lora_runtime_config_vision.json`）。两实例仍**时分复用同一 cDSP**、常驻内存（DDR）翻倍，**并非双 NPU 核心**；机制与取舍见 §4.3 与 agent-group §3.3/§8.2 |
+
+> [!WARNING]
+> **systemd / run.sh 上机高频坑（Service 部署必读）**
+>
+> 1. **硬编码网口的无限 busy-wait**：示例 `run.sh` 常写死 `INTERFACE="eno1"` 并循环等待其拿到 IP。若实际接口名不是 `eno1`（或该口无 IP），循环永不退出、`system_agent` **永不启动**；而 `Type=simple` 下 systemd 只看进程是否 fork 成功，仍显示 `active (running)`，造成「服务正常但 Agent 没起来」的假象，且与 §3.3「冷启动 < 2s 就绪」直接矛盾。**量产解耦**：不要绑定具体网口名——用 `systemd-networkd-wait-online` / `NetworkManager-wait-online` 等待「任一可用网络就绪」，或干脆去掉网络等待（Agent 启动本身不依赖网络，Fusion/HTTP 监听本地即可），把网络重连交给上层服务。
+> 2. **未设 `ADSP_LIBRARY_PATH`**：QNN 通过 `ADSP_LIBRARY_PATH` 定位 cDSP 侧 skel 库（`*skel*.so`）。未设置时 FastRPC 找不到 skel 或加载到错误版本，正是 §3.3 WARNING「runtime 与 skel 版本必须一致」的落地点。`run.sh` / service 单元须显式 `export ADSP_LIBRARY_PATH=<设备 skel 目录>`，并与部署的 QNN runtime 版本匹配。
+> 3. **未用 `exec` 启动**：`run.sh` 若以普通子进程方式拉起 `system_agent`，SIGTERM 只送到 bash、不转发给真正的 Agent 进程，导致 systemd 停止/重启时 FastRPC/DSP 会话无法干净释放，残留会话可能触发 cDSP SSR（子系统重启）。`run.sh` 末行须用 `exec /opt/agentcore/bin/system_agent ...`，让 Agent 直接接管 PID、接收信号。
+> 4. **`DDS_LOG=off` 默认关 Fusion 日志**：示例脚本常设 `DDS_LOG=off`，调试 Fusion/DataTransport 通信问题时会「无日志可看」。排查 IPC 问题前先把 `DDS_LOG` 调到 info/debug。
+> 5. **依赖 `/opt/agentcore/torch/lib`**：部分构建产物运行时依赖 `torch/lib` 下的库，而 §4.2 目录树未列出该路径。部署时确认 `torch/lib` 一并推送，或在 `LD_LIBRARY_PATH` 中包含它，否则 `system_agent` 启动即报缺库。
 
 ### 4.3 模型配置与多 LoRA
 
-aadkcore 通过 `runtime_config.json` 实现多平台自动切换，通过 `multi_lora_runtime_config.json` 支持同一基础模型加载多个 LoRA 适配器。
+aadkcore 的运行时配置**按平台目录组织**：`runtime/data/config/` 下每个平台一个子目录（`8295/`、`8397/`、`9075/`、`orin/`），构建/部署时选定目标平台目录，目录内自带一套 `runtime_config.json`（调度参数）+ `multi_lora_runtime_config.json`（模型本体与多 LoRA）+ 模型配置（如 `qwen3-omni-4b.json`）。平台切换靠**选目录**，而非配置文件内的某个字段。
 
-**runtime\_config.json**（平台自动切换）：
+**runtime\_config.json**（调度参数，以 8397 为例）：
 
 ```
 {
-    "current_runtime": "8397",
-    "8397": {
-        "model_name": "qnn/qwen3-omni-4b",
-        "model_config": "config/qwen3-omni-4b_8397.json",
-        "active_model_config": "config/qwen3-omni-4b_8397_active.json"
-    },
-    "orin": {
-        "model_name": "lape/qwen3-omni-4b",
-        "model_config": "config/qwen3-omni-4b_orin.json"
-    },
+    "generate_concurrent": false,
+    "enable_timeslice": false,
+    "timeslice_ms": 500,
     "worker_count": 4,
+    "batch_count": 4,
     "capacity": 10,
     "timeout_s": 100
 }
@@ -382,52 +393,86 @@ aadkcore 通过 `runtime_config.json` 实现多平台自动切换，通过 `mult
 
 | 配置项 | 说明 |
 | :--- | :--- |
-| `current_runtime` | 当前运行平台标识（8397 / orin / 8295\_android），决定使用哪组模型配置 |
-| `model_name` | 模型标识，格式为 `后端/模型名`，如 `qnn/qwen3-omni-4b`（QNN 后端加载 Qwen3-Omni-4B 内部定制型号） |
-| `model_config` | **主对话模型**配置文件路径，包含 Context Binary 路径、ViT 模型路径等 |
-| `active_model_config` | **主动视觉模型**配置（可选，独立于主对话模型，供主动视觉 Agent 使用） |
+| `generate_concurrent` | 是否允许并发生成（多请求同时进入 decode） |
+| `enable_timeslice` / `timeslice_ms` | 时间片轮转开关与片长，多请求时分复用同一模型实例 |
 | `worker_count` | ModelScheduler 工作线程数 |
+| `batch_count` | 批处理大小 |
 | `capacity` | 任务队列容量 |
 | `timeout_s` | 单次推理超时时间（秒） |
 
 > [!NOTE]
-> **示例模型口径与三种角色**：aadkcore 框架本身**模型无关**——`model_name` 只是 `后端/模型名` 标识，可配置任意后端支持的模型。为与全站锚点一致，本节示例统一采用内部定制型号 **Qwen3-Omni-4B**（数据口径见 [硬件平台](../../general/hardware.html) 顶部 NOTE）。配置中涉及三种模型角色，量产时常共用同一基座以节省 NPU 常驻内存，也可各自独立：
+> **runtime\_config.json 只承载调度参数，模型本体加载走 multi\_lora\_runtime\_config.json**
+>
+> 主线 `runtime_config.json` **没有 `current_runtime` 字段**，也不内嵌各平台的模型路径——它只描述 ModelScheduler 的并发/队列/超时等调度行为。模型本体（基座 + 各场景 LoRA）的加载完全由同目录的 `multi_lora_runtime_config.json` 决定（见下）。早期格式曾在 `runtime_config.json` 里用 `current_runtime` + 平台子对象（`"8397": {...}` / `"orin": {...}`）做平台内切换，主线已废弃该写法、改为按平台目录拆分；若在旧分支或旧部署包中见到 `current_runtime`，按**兼容旧格式**理解即可，新配置不应再写。
+
+> [!NOTE]
+> **示例模型口径与三种角色**：aadkcore 框架本身**模型无关**——`model_name` 只是 `后端/模型名` 标识（`qnn/` 走 QNN 后端，用于 8295/8397/9075；`lape/` 走 Orin 后端），可配置任意后端支持的模型。为与全站锚点一致，本节示例统一采用内部定制型号 **Qwen3-Omni-4B**（数据口径见 [硬件平台](../../general/hardware.html) 顶部 NOTE）。配置中涉及三种模型角色，量产时常共用同一基座以节省常驻内存（DDR），也可各自独立：
 >
 > - **主对话模型**（`model_config`）：承载默认对话 / 问答；
 > - **主动视觉模型**（`active_model_config`）：主动视觉 Agent 使用，可独立于主对话模型；
 > - **多 LoRA 基座**（下方 `multi_lora_runtime_config.json` 的 `base_model`）：多 LoRA 热切换时共享的基座。
 >
-> 本节（`runtime_config.json` / `multi_lora_runtime_config.json`）是模型配置的**主参考**；[Agent 插件库](agent-group.html) §1.4 的运行时配置表引用本节口径，场景 Agent 与 `scene_id` 的映射详见 agent-group，本节不重复。
+> 本节（`runtime_config.json` / `multi_lora_runtime_config.json`）是模型配置的**主参考**；[Agent 插件库](agent-group.html) §1.4 的运行时配置表引用本节口径。场景 Agent 与 `scene_id` 的完整映射见本节下方「scene\_id ↔ Agent ↔ LoRA 映射」表（agent-group §3.3 引用本表，不再重复）。
 
-**multi\_lora\_runtime\_config.json**（多 LoRA 配置）：
+**multi\_lora\_runtime\_config.json**（模型本体 + 多 LoRA，以主线 8397 为例）：
 
 ```
 {
-    "current_runtime": "8397",
-    "8397": {
-        "multi_lora": {
-            "base_model": {
-                "model_name": "qnn/qwen3-omni-4b",
-                "config_path": "config/qwen3-omni-4b_8397.json"
-            },
-            "lora": [
-                {"scene_id": 1000, "name": "base_model", "lora_path": ""},
-                {"scene_id": 1001, "name": "scene_a",    "lora_path": "lora_a"},
-                {"scene_id": 1002, "name": "scene_b",    "lora_path": "lora_b"},
-                {"scene_id": 1003, "name": "scene_c",    "lora_path": "lora_a"}
-            ]
-        }
-    }
+    "multi_lora": {
+        "base_model": {
+            "model_name": "qnn/qwen3-omni-4b",
+            "config_path": "config/qwen3-omni-4b.json"
+        },
+        "lora": [
+            {"scene_id": 300,  "name": "active_vision", "lora_path": "zdsj"},
+            {"scene_id": 400,  "name": "gui_agent",     "lora_path": "ai_screen"},
+            {"scene_id": 900,  "name": "memory",        "lora_path": "jiyi"},
+            {"scene_id": 1001, "name": "system_agent",  "lora_path": "zdyy", "ebnf_path": "zdyy"},
+            {"scene_id": 1002, "name": "car_control",   "lora_path": "carcontrol"},
+            {"scene_id": 1003, "name": "videochat",     "lora_path": "videochat"}
+        ]
+    },
+    "model_name": "qnn/qwen3-omni-4b",
+    "model_config": "config/qwen3-omni-4b.json",
+    "active_model_config": "config/qwen3-omni-4b.json"
 }
 ```
+
+| 字段 | 说明 |
+| :--- | :--- |
+| `base_model` | 多 LoRA 共享的基座（`model_name` + `config_path`），即下方 TIP 所称「基础模型」 |
+| `lora[]` | 各场景 LoRA 列表，每项含 `scene_id`（路由键）、`name`（场景名）、`lora_path`（增量权重目录），可选 `ebnf_path`（约束解码语法） |
+| `model_config` | **主对话模型**配置（CarControl / Chitchat 等使用） |
+| `active_model_config` | **主动视觉模型**配置（ActiveVision 使用）；与 `model_config` 指向同一文件即共用基座，指向不同文件即独立基座 |
+
+**scene\_id ↔ Agent ↔ LoRA 映射**（主线 8397 代表性子集；`scene_id` 与 `scenario_id` 为同一 ID 空间，见下方 NOTE。完整列表以 `multi_lora_runtime_config.json` 的 `lora[]` 为准，本表只列与本篇 Agent 直接相关的常用项）：
+
+| scene\_id | LoRA `name` | 对应 Agent / Dispatcher | 说明 |
+| :--- | :--- | :--- | :--- |
+| 300 | active\_vision | ActiveVisionDispatcher | 主动视觉 |
+| 400 | gui\_agent | GuiAgentDispatcher | GUI Agent（`ENABLE_DEVICEAI_BASE`） |
+| 900 | memory | （记忆服务） | 长期记忆召回 |
+| 1001 | system\_agent | SystemAgent | 系统 Agent / 默认对话 |
+| 1002 | car\_control | CarControlDispatcher | 车辆控制 |
+| 1003 | videochat | VideoChat | 视频聊天（主线形态） |
+
+> [!NOTE]
+> **scene\_id == scenario\_id（同一 ID 空间），且同一 ID 在不同产品形态含义不同**
+>
+> `multi_lora_runtime_config.json` 的 `scene_id` 与 `constant_ids.h` 的 `scenario_id` 是**同一套 ID**：消息路由（`msg_deliver_impl.cpp` 中 `next_scene_id = scenario_message.scenario_id`）与 LoRA 路由共用该键，因此「按 scenario\_id 路由到 Dispatcher」与「按 scene\_id 切换 LoRA」是同一 ID 空间上的两次查表。但**同一 ID 在不同产品形态可指向不同 LoRA/Agent**：上表为主线 8397 形态（1003=videochat）；某 OEM 形态下 1003 可能是 base\_model（默认对话）。引用本表时务必注明形态，跨形态结果不可直接对比。
+
+> [!NOTE]
+> **`--dual` 与 `multi_lora_runtime_config_vision.json`（第二个模型实例）**
+>
+> 默认（`--dual 0`）主对话与主动视觉**共用同一 ModelInstance**（`model_config` 与 `active_model_config` 指向同一基座）。传 `--dual 1` 时，ModelRunner 额外用 `multi_lora_runtime_config_vision.json` 建**第二个 ModelInstance**（主动视觉专用基座 + 其 LoRA），使主动视觉与主对话各自持有独立模型实例。注意：这是**双模型实例**而非双 NPU 核心——SA8397P 仅 1 个 cDSP，两实例仍时分复用同一 HTP，且常驻内存（DDR）翻倍。是否开启取决于「主动视觉高频推理是否显著抢占主对话 TTFT」与「内存预算」的权衡（见 agent-group §3.3、§8.2）。
 
 ```mermaid
 flowchart LR
     BASE["基础模型Qwen3-Omni-4B(Context Binary)"] --> SW{"LoRA切换器按 scene_id 路由"}
-    SW -->|"scene_id=1000"| L0["base_model无 LoRA（默认对话）"]
-    SW -->|"scene_id=1001"| L1["scene_a加载 lora_a"]
-    SW -->|"scene_id=1002"| L2["scene_b加载 lora_b"]
-    SW -->|"scene_id=1003"| L3["scene_c复用 lora_a"]
+    SW -->|"scene_id=300"| L0["active_vision主动视觉 LoRA"]
+    SW -->|"scene_id=1001"| L1["system_agent系统 Agent LoRA"]
+    SW -->|"scene_id=1002"| L2["car_control车控 LoRA"]
+    SW -->|"scene_id=1003"| L3["videochat视频聊天 LoRA"]
 
     style BASE fill:#4361ee,color:#fff
     style SW fill:#f39c12,color:#fff
@@ -436,7 +481,7 @@ flowchart LR
 > [!TIP]
 > **多 LoRA 热切换机制**
 >
-> 多 LoRA 架构通过 `scene_id` 自动路由到对应的 LoRA 适配器。基础模型权重常驻 NPU 内存，LoRA 增量权重按需加载。切换 LoRA 仅需替换增量权重（量级示意：通常 < 100MB），无需重新加载基础模型（量级示意：~2.5GB），切换延迟在毫秒级。这使得同一个 4B 参数基础模型能同时服务多个业务场景（不同 `scene_id` 各自路由到自己的 LoRA，多个场景也可复用同一 LoRA），无需为每个场景单独部署一份完整模型。上例中的 `scene_a/b/c` 与 `lora_a/b/c` 为中性占位，实际项目中替换为具体场景名与 LoRA 代号。
+> 多 LoRA 架构通过 `scene_id` 自动路由到对应的 LoRA 适配器。基础模型权重常驻**系统内存（DDR）**（执行时按 tiling 分块调入 HTP VTCM，见 §3.3），LoRA 增量权重按需加载。切换 LoRA 仅需替换增量权重（量级示意：通常 < 100MB，与 §5.1 OTA 表的「200KB–50MB」同为量级口径），无需重新加载基础模型（量级示意：~2.5GB），切换延迟在毫秒级。这使得同一个 4B 参数基础模型能同时服务多个业务场景（不同 `scene_id` 各自路由到自己的 LoRA，多个场景也可复用同一 LoRA），无需为每个场景单独部署一份完整模型。上例 `scene_id` 与 `name`/`lora_path` 取自主线 8397 配置，不同产品形态的取值与含义可能不同（见上方 NOTE）。
 
 ## 5. OTA 模型更新
 
@@ -451,6 +496,9 @@ flowchart LR
 | **RAG 知识更新** | 知识库向量索引 + 文档 | 10-100 MB | 低 | 按需 | 检索准确率测试 |
 | **模型整体更新** | 完整 Context Binary | 2-3 GB | 高 | 月/季度级 | 全量回归测试 |
 | **框架更新** | libaadkcore.so + libagent\_group.so | 50-100 MB | 高 | 版本发布 | 全量回归 + 兼容性测试 |
+
+> [!NOTE]
+> 表中「包大小」均为**量级示意**（用于区分更新类型的相对体量与风险），非实测值；LoRA 增量包与 §4.3 TIP 的「通常 < 100MB」为同一量级口径。
 
 ### 5.2 安全更新流程
 
@@ -502,7 +550,9 @@ flowchart TB
 # 1. 环境准备
 echo "=== 硬件信息 ==="
 cat /sys/class/thermal/thermal_zone*/temp      # 初始温度
-cat /sys/class/devfreq/soc:qcom,cdsp/cur_freq  # DSP 当前频率
+# DSP 当前频率（节点名随 BSP/内核版本变化，下例为高通常见命名，找不到时
+# 用 ls /sys/class/devfreq/ 确认实际节点，或见 hardware §7.3 的 devfreq 说明）
+cat /sys/class/devfreq/soc:qcom,cdsp/cur_freq  # 示例节点名，非固定
 
 # 2. 启动全系统负载 (模拟量产环境)
 # 启动摄像头 ISP 通路
@@ -529,7 +579,13 @@ done
 
 # 5. 采集系统状态
 cat /sys/class/thermal/thermal_zone*/temp      # 测试后温度
-cat /proc/$(pidof system_agent)/status | grep VmRSS  # 内存
+# 内存：QNN/HTP 的权重与 KV cache 分配在 dma-buf（system heap 经 FastRPC 映射到
+# cDSP），不计入进程 VmRSS；只看 VmRSS 会低估 3 倍以上。
+# 总占用 ≈ VmRSS + per-process dma-buf，且需稳态采样（KV cache 填充约 12s 后才稳定）。
+PID=$(pidof system_agent)
+grep VmRSS /proc/$PID/status                   # 进程常驻集（不含 dma-buf）
+dmabuf_dump $PID                               # 看 userspace_rss 列（勿用整机 dmabuf total）
+# 无 dmabuf_dump 时，遍历 /proc/$PID/fdinfo 累加各 dma-buf fd 的 size
 ```
 
 ### 6.3 关键性能指标
@@ -541,7 +597,7 @@ cat /proc/$(pidof system_agent)/status | grep VmRSS  # 内存
 | **E2E 延迟** | ASR 完成到 TTS 开始播放 | < 2s (P90) | 端到端录音分析 |
 | **模型加载** | 冷启动到推理就绪 | < 5s (Context Binary) | 进程启动日志时间戳 |
 | **吞吐量** | 单位时间处理的 token 总数 | > 10 tok/s | Profiling 回调统计 |
-| **内存峰值** | 推理过程中 RSS 最大值 | < 4 GB | /proc/PID/status 监控 |
+| **内存峰值** | 推理过程中**总占用**（VmRSS + per-process dma-buf）最大值 | < 4 GB（示例） | `dmabuf_dump <pid>` 看 userspace\_rss，或 VmRSS + 遍历 /proc/PID/fdinfo；**仅看 VmRSS 会低估 3 倍以上**（QNN/HTP 权重与 KV cache 在 dma-buf，不计入 VmRSS），见 §6.2 |
 
 ## 7. ONNX → QNN 转换陷阱
 
@@ -560,7 +616,7 @@ cat /proc/$(pidof system_agent)/status | grep VmRSS  # 内存
 
 | 陷阱 | 现象 | 原因 | 解决方案 |
 | :--- | :--- | :--- | :--- |
-| **量化后精度暴跌** | INT8/INT4 推理输出全错 | 量化校准数据不具代表性，或未使用正确的预处理 | 使用真实业务数据（500-1000 样本）做校准；确保预处理与训练一致 |
+| **量化后精度暴跌** | INT8/INT4 推理输出全错 | CNN 与 LLM 的量化路径被混用，或校准数据不具代表性、预处理与训练不一致 | **区分两条量化路径**：CNN/检测类走 **W8A8**（qnn-onnx-converter + 校准集，见 [量化](../../general/quantization.html) §1.3/§2.3）；LLM 走 **W4A16**（AIMET/QAIRT，激活保 16bit，见 quantization §2.5/§3），二者不可互换。校准样本按 quantization §1.4 口径：CNN 数百~数千条代表性输入，LLM 几百条代表性 prompt；确保预处理与训练一致 |
 | **输入格式不匹配** | 推理输出乱码或全零 | 训练用 RGB 格式，端侧摄像头输出 YUV/NV12/NV21 | 在预处理 pipeline 中增加色彩空间转换；或在模型前端添加转换层 |
 | **Layout 转换遗漏** | 推理速度远低于预期 | 模型为 NCHW 格式，HTP 原生支持 NHWC，运行时隐式 transpose | 转换时指定 --input\_layout NHWC；或在 ONNX 阶段插入 transpose 节点 |
 | **Context Binary 不兼容** | 加载失败 `QnnContext_createFromBinary failed` | Context Binary 是硬件绑定的——在 SA8295P 上编译的不能在 SA8397P 上运行 | 针对目标硬件重新生成 Context Binary；使用正确的 SOC 参数 |

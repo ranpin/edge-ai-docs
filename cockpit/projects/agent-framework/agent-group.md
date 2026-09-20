@@ -40,6 +40,13 @@ graph LR
 >
 > AgentRuntime 启动时动态加载 `libagent_group.so` 并调用工厂函数 `get_supported_agents` / `create_dispatcher`。若 .so 缺失、导出符号缺失，或某 scenario\_id 的 `create_dispatcher` 返回空，AgentRuntime 记录错误并**跳过该插件，不影响其余插件加载**——按项目编译开关裁剪本就是常态，缺哪个 Agent 就少哪个 scenario。运行期某 Dispatcher 处理异常时，该条消息被丢弃并记日志，不会拖垮整个 AgentRuntime；对应 scenario 退化为不可用，其余 scenario 正常服务。
 
+> [!WARNING]
+> **插件与宿主必须同工具链 / 同 STL ABI（`extern "C"` 不解决 ABI）**
+>
+> 工厂函数虽以 `extern "C"` 导出（解决符号名修饰），但接口本身**跨 .so 边界传递 STL 与多态 C++ 类型**：`PluginInfo` 含 `std::string name`；`GetSupportedAgentsFunc = void(*)(std::vector<PluginInfo>&)`、`CreateDispatcherFunc = void(*)(int, const char*, std::unique_ptr<AgentPlugin>&)` 直接传 `std::vector` / `std::unique_ptr` 引用；`AgentPlugin` 是带虚函数的多态类。这些类型的内存布局由 **libstdc++ ABI 与编译选项**决定，`extern "C"` 只固定符号名、**不保证 ABI 兼容**。因此 `libagent_group.so` 与 `libaadkcore.so`（宿主）**必须用同一工具链、同一 libstdc++ ABI（`_GLIBCXX_USE_CXX11_ABI` 取值一致）、同一组编译选项**构建，否则会出现 `std::string` 布局错位、虚表偏移不一致、跨 .so 释放崩溃等隐蔽问题。这也是 [部署](deploy.html) §4.1 强调「核心库源码平台无关、但产物按平台交叉编译（ABI/依赖绑定）」的原因。
+>
+> **生命周期**：头文件声明了 `DestroyDispatcherFunc = void(*)(std::unique_ptr<AgentPlugin>)`、插件侧也导出了 `destroy_dispatcher`，但**宿主侧未见调用**——Dispatcher 的 `unique_ptr` 实际由持有方（AgentRuntime/MsgDispacher）析构释放。由此推论：插件 .so 一旦加载并创建了带**后台线程**的 Dispatcher，就**不可 `dlclose`**（线程仍在执行 .so 内代码，卸载会导致崩溃）；需要「卸载插件」的场景应改为进程级重启，而非运行期 dlclose。
+
 ### 1.2 Scenario ID 分配表
 
 所有 scenario\_id 统一定义在 `aadkcore/include/runtime/constant_ids.h` 中，保证跨模块一致性：
@@ -66,7 +73,7 @@ graph LR
 >
 > scenario\_id 400 和 500 存在条件编译复用：在 `ENABLE_PORSCHE` 模式下分别用于 RainDection 和 SportMode；在 `ENABLE_DEVICEAI_BASE` 模式下通过 `#define GUI_AGENT_SCENARIO_ID 400` 和 `#define CAR_SENTINEL_AGENT_SCENARIO_ID 500` 重新映射给 GuiAgent 和 CarSentinel。
 >
-> **拼写说明（sic）**：`RAIN_DECTION`（而非 DETECTION）、`FEATURE_SOPRT_MODE`（而非 SPORT）是代码中的**原始标识符拼写**，本文照抄代码、不作"纠正"，以便与源码一一对应。
+> **拼写说明（sic）**：`RAIN_DECTION`（而非 DETECTION）、`FEATURE_SOPRT_MODE`（而非 SPORT）、`MsgDispacher`（而非 MsgDispatcher，真实类名）是代码中的**原始标识符拼写**，本文照抄代码、不作"纠正"，以便与源码一一对应。
 
 ### 1.3 条件编译体系
 
@@ -76,7 +83,7 @@ agent\_factory.cpp 通过多级条件编译宏控制 Agent 的编译包含，实
 | :--- | :--- | :--- |
 | `ENABLE_DEVICEAI_BASE` | 基础 Agent 集合 | CarControl, ActiveVision, GuiAgent, VideoChat, CarSentinel |
 | `ENABLE_PORSCHE` | 某 OEM 定制 | RainDection, SportMode, WelcomeMode |
-| `ENABLE_LANTU_SDK` | 某 OEM 定制 | DressDetect, InCarItemDetect, OutCarQA |
+| `ENABLE_LANTU_SDK` | 岚图 OEM 定制（见 [岚图项目](../lantu/genai-architecture.html)） | DressDetect, InCarItemDetect, OutCarQA |
 | `FEATURE_CAR_CONTROL` | 车辆控制独立开关 | CarControlDispatcher |
 | `FEATURE_ACTIVE_VISION` | 主动视觉独立开关 | ActiveVisionDispatcher |
 | `FEATURE_CHIT_CHAT` | 闲聊独立开关 | ChitchatDispatcher |
@@ -88,14 +95,19 @@ agent\_factory.cpp 通过多级条件编译宏控制 Agent 的编译包含，实
 | `FEATURE_WELCOME_MODE` | 迎宾模式独立开关 | WelcomeModeDispatcher |
 | `FEATURE_VIDEO_CHAT` | 视频聊天独立开关 | VideoChatDispatcher |
 
+> [!NOTE]
+> **宏包含 = 编译期候选，≠ 实际启用**
+>
+> 上表「包含的 Agent」指该宏打开后**进入编译候选集**的 Agent，但某 Agent 是否真正编入并启用，还受其源码 `include` 是否被注释、以及对应 `FEATURE_*` 独立开关的约束。典型例子：`ENABLE_DEVICEAI_BASE` 的候选集列出了 VideoChat，但 §6 WARNING 指出 VideoChat 的 `include` 已被注释——因此它在该模式下**并不实际启用**。判断某 Agent 是否真在跑，应同时核对「宏候选 + include 状态 + FEATURE 开关」三者，不能只看宏包含表。
+
 ### 1.4 runtime\_config.json 配置
 
-运行时通过 `runtime_config.json` 选择当前平台（orin / 8397）与模型配置，`current_runtime` 字段决定激活的平台。每个平台配置两套模型参数：`model_config`（**主对话模型**，CarControl / Chitchat 使用）与 `active_model_config`（**主动视觉模型**，ActiveVision 使用，独立于主模型）。
+运行时配置**按平台目录组织**（`runtime/data/config/` 下 `8295/`、`8397/`、`9075/`、`orin/` 各一套），平台选择靠**选目录**而非配置文件内字段。模型角色由 `multi_lora_runtime_config.json` 的两套模型参数承载：`model_config`（**主对话模型**，CarControl / Chitchat 使用）与 `active_model_config`（**主动视觉模型**，ActiveVision 使用，可独立于主模型）；同目录的 `runtime_config.json` 只承载调度参数（worker\_count / capacity / timeout\_s 等）。
 
 > [!NOTE]
 > **以 deploy.md 为准**
 >
-> 完整字段说明、各平台取值、以及多 LoRA 配置（`multi_lora_runtime_config.json`）见 [部署与运行时配置](deploy.html) §4.3（deploy 为主），本篇不再重复。模型口径（主对话模型 / 主动视觉模型 / 多 LoRA 基座）亦以该节为准。
+> 完整字段说明、各平台取值、多 LoRA 配置（`multi_lora_runtime_config.json`）与 scene\_id ↔ Agent ↔ LoRA 映射见 [部署与运行时配置](deploy.html) §4.3（deploy 为主），本篇不再重复。模型口径（主对话模型 / 主动视觉模型 / 多 LoRA 基座）亦以该节为准。
 
 ## 2. 车辆控制 Agent -- CarControlDispatcher
 
@@ -142,6 +154,18 @@ CarControlDispatcher 定义了 `TypeClass` 枚举，LLM 输出解析后根据结
 | `SUMMARY` | 3 | 总结摘要 | 生成文本摘要 |
 | `CHAT` | 4 | 普通闲聊 | 路由到 ChitchatDispatcher 处理 |
 
+> [!WARNING]
+> **车控执行路径缺确定性校验层（安全相关，最重要）**
+>
+> 代码证实 `carcontrol_dispatcher.cpp` 对 LLM 输出**只有格式级处理**，没有语义/安全级的确定性校验：
+>
+> - `is_cant_control()` 用 `total_result.find("\"name\":\"cant_control\"")` 做**子串匹配**判断是否「不可控」，`find('{')` 定位 JSON 起点——模型输出里多一个空格（`"name": "cant_control"`）即漏判，兜底路径形同虚设；
+> - 解析出 `cmd[{name,args}]` 后**没有技能名白名单**（LLM 编造一个不存在的技能名也会被透传）、**没有参数范围校验**（温度/风速/音量越界不拦）、**没有车辆状态前置条件硬校验**（如后备箱需 P 档、行驶中禁某些操作）。
+>
+> 后果：§2.3 的安全规则（后备箱需 P 档、儿童/老人温度风速限制、行驶中禁某些操作）**全部写在 prompt 里、靠 LLM 自觉遵守**；§2.4 TIP 的 EBNF 约束只保证**输出格式合规**，而**格式合规 ≠ 语义/安全合规**。LLM 是概率系统，不能把安全前置条件托付给 prompt。
+>
+> **正确做法**：LLM 输出在 `call_car_control_mcp()` 下发前，**必须经一层确定性校验**——(1) 技能名白名单（只放行 `car_skills` 已定义的技能）；(2) 参数范围/枚举校验（按技能 schema 卡 temperature、level、volume 等边界）；(3) 车辆状态前置条件硬校验（读 `CarSignalManager` 的档位/车速/儿童锁等信号，不满足即拒绝并回话术）。**安全前置条件必须由车控执行侧硬校验，不能只写 prompt**；prompt 规则可作为「软引导」减少无谓请求，但最后一道闸必须是确定性的。同时把 `is_cant_control` 的子串匹配改为对解析后 JSON 的结构化判断（取 `cmd[].name` 字段比对），避免空格/转义导致漏判。
+
 ### 2.3 车控技能精华表
 
 技能定义在 `car_control.yaml` 的 `car_skills` 部分，共 30+ 项技能。以下为核心技能摘要：
@@ -174,7 +198,7 @@ CarControlDispatcher 定义了 `TypeClass` 枚举，LLM 输出解析后根据结
 > [!NOTE]
 > **技能规则为示例业务规则**
 >
-> 表中「规则要点」（如座椅通风对特定乘客的档位限制、儿童老人的温度/风速约束）来自某项目 prompt 的**示例业务规则**，用于展示技能规则的写法与注入方式，**并非框架通用默认**。各项目的实际规则随其 prompt 定制，可能与此处不同。
+> 表中「规则要点」（如座椅通风对特定乘客的档位限制、儿童老人的温度/风速约束）来自某项目 prompt 的**示例业务规则**，用于展示技能规则的写法与注入方式，**并非框架通用默认**。各项目的实际规则随其 prompt 定制，可能与此处不同。注意这些规则目前**仅以 prompt 文本形式存在、靠 LLM 遵守**，执行侧并无对应的确定性校验——安全相关规则必须另加硬校验层，见 §2.2 WARNING。
 
 ### 2.4 Prompt 模板设计
 
@@ -193,6 +217,8 @@ CarControlDispatcher 的 Prompt 由 `car_control.yaml` 中的多段模板拼接�
 > **JSON Schema 输出约束**
 >
 > system\_prompt 严格要求输出格式为 `{"speak":"回复内容","cmd":[{"name":"技能名","args":{...}}]}`。这种约束使得 LLM 输出可以直接进行 JSON 解析，无需额外的后处理提取逻辑。配合端侧推理引擎的 EBNF 语法约束解码，可进一步保证输出格式的合规性。
+>
+> **但格式合规 ≠ 语义/安全合规**：EBNF 只能约束「输出是合法 JSON、字段名/类型正确」，无法约束「技能名在白名单内、参数在安全范围、车辆状态满足前置条件」。一个格式完全合规的 `{"name":"trunk_control","args":{"state":"开"}}` 在行驶中依然是危险指令。安全闸口必须是解析后的确定性校验层，见 §2.2 WARNING。
 
 ### 2.5 乘客感知规则
 
@@ -206,7 +232,23 @@ CarControlDispatcher 通过 `PassengerInfo` 结构体（含 pos/occupancy/gender
 | 座椅加热联动 | 有人座位同步加热档位 | seat\_heating 技能规则 |
 | 座椅通风 + 成年女性 | 女性座位通风强制 1 档 | seat\_ventilation 技能规则 |
 
-此外，`voice_zone_map_` 将音区编码映射到位置名称，与 aadkcore `AudioZone` 权威枚举（`chat_history.hpp`）一致：**1=FrontLeft（主驾）、2=FrontRight（副驾）、4=MiddleLeft（左后）、8=MiddleRight（右后）、16=BackLeft、32=BackRight**，`AllZone=0xFF` 表示全部音区。`direction_map_` 将指向信息（right/left/up）映射到目标位置，实现基于语音源和手势指向的精准控制。
+此外，`voice_zone_map_` 将音区编码映射到位置名称。aadkcore `AudioZone` 权威枚举（`chat_history.hpp`）的完整取值为：**InvalidZone=0（无效音区）、1=FrontLeftZone（主驾/前左）、2=FrontRightZone（副驾/前右）、4=MiddleLeftZone（中左）、8=MiddleRightZone（中右）、16=BackLeftZone（后左）、32=BackRightZone（后右）、FrontZone=FrontLeftZone（别名，等同主驾，非独立音区）、AllZone=0xFF**。注意 `AllZone=0xFF` 是**哨兵值**（表示「全部音区」），并非 6 个音区按位或的结果（按位或应为 0x3F）——判断「是否全选」应比对 0xFF 而非做位运算。
+
+> [!WARNING]
+> **音区标签两套不一致 + Back/Middle 语义倒挂（需统一）**
+>
+> 同一组音区编码在 aadkcore 与 agent\_group 里有**两套不一致的中文标签**，且存在语义倒挂：
+>
+> | 编码 | `AudioZone` 枚举名 | `audioZoneToString()` 返回 | `voice_zone_map_`（carcontrol） |
+> | :--- | :--- | :--- | :--- |
+> | 4 | MiddleLeftZone | 左后 | 左后 |
+> | 8 | MiddleRightZone | 右后 | 右后 |
+> | 16 | BackLeftZone | **"BackLeftZone"（未翻译）** | **中左** |
+> | 32 | BackRightZone | **"BackRightZone"（未翻译）** | **中右** |
+>
+> 问题有二：(1) **不一致**——枚举名是 BackLeft/BackRight，`audioZoneToString` 对 16/32 直接返回未翻译的英文 `"BackLeftZone"`/`"BackRightZone"`，而 `voice_zone_map_` 却标成「中左/中右」，三处对不上；(2) **语义倒挂**——4/8 枚举名为 Middle（中）却译作「左后/右后」，16/32 枚举名为 Back（后）却标作「中左/中右」，「中」与「后」恰好互换。注入 prompt 的音区标签若用错套，会让 LLM 对「谁在说话/控制哪个座位」产生方位误解。量产前应统一一套权威映射（建议以 `AudioZone` 枚举名为准，补齐 `audioZoneToString` 的 16/32 翻译，并让 `voice_zone_map_` 与之对齐）。
+
+`direction_map_` 将指向信息（right/left/up）映射到目标位置，实现基于语音源和手势指向的精准控制。
 
 ## 3. 主动视觉 Agent -- ActiveVisionDispatcher
 
@@ -228,7 +270,7 @@ CarControlDispatcher 通过 `PassengerInfo` 结构体（含 pos/occupancy/gender
 >
 > 前三个场景（迎宾 / 送宾 / 行中监测）由 `mode` 值（0/1/2）触发；后三个（乘客特征提取 / 危险动作识别 / 遗留物检测）由实时事件或 task\_id 驱动、**不按 `mode` 字段触发**，故 mode 值标为「--」。
 
-此外，`handle_intelligent_cockpit_request()` 实现自动座舱场景，包括吃东西、睡觉、阅读、玩电子产品等行为检测，并联动阅读灯和空调等车控设备。对应的 task\_id 列表为：`xz_front_behavior`, `xz_rear_behavior`, `xz_front_temp`, `xz_rear_dangerous_behavior`。
+此外，`handle_intelligent_cockpit_request()` 实现自动座舱场景，包括吃东西、睡觉、阅读、玩电子产品等行为检测，并联动阅读灯和空调等车控设备。对应的 task\_id 形如 `<proj>_front_behavior`、`<proj>_rear_behavior`、`<proj>_front_temp`、`<proj>_rear_dangerous_behavior`（`<proj>_` 为某 OEM 项目前缀，此处用中性占位；实际取值见对应项目配置）。
 
 ### 3.2 VLM 多模态推理流程
 
@@ -250,12 +292,21 @@ graph LR
 
 ### 3.3 多 LoRA 架构
 
-ActiveVisionDispatcher 通过 `use_multi_lora_` 标志支持同一基础 VLM 模型搭配不同场景 LoRA 适配器。这里的多 LoRA 基座即**主动视觉模型**（由 runtime\_config 的 `active_model_config` 指定，独立于 CarControl / Chitchat 使用的**主对话模型**）；以全站锚点的 Qwen3-Omni-4B 内部定制型号为例，通过 `addLora` / `switchLora` 接口在同一基座上切换不同场景的微调权重，避免为每个场景单独加载完整模型。各 scene\_id 对应的 LoRA 路由与配置见 [部署与运行时配置](deploy.html) §4.3。
+ActiveVisionDispatcher 通过 `use_multi_lora_` 标志支持同一基础 VLM 模型搭配不同场景 LoRA 适配器。这里的多 LoRA 基座即**主动视觉模型**（由 `multi_lora_runtime_config.json` 的 `active_model_config` 指定，可独立于 CarControl / Chitchat 使用的**主对话模型**，也可共用同一基座）；以全站锚点的 Qwen3-Omni-4B 内部定制型号为例，通过 `addLora` / `switchLora` 接口在同一基座上切换不同场景的微调权重，避免为每个场景单独加载完整模型。各 scene\_id 对应的 LoRA 路由、完整 scene\_id ↔ Agent ↔ LoRA 映射、以及 `--dual`（主动视觉是否独立成第二个模型实例）的取舍，见 [部署与运行时配置](deploy.html) §4.3 的映射表与 NOTE（deploy 为主参考，本篇不重复）。
 
 > [!NOTE]
 > **连续帧推理与丢帧策略**
 >
 > `front_behavior_images_` 和 `rear_behavior_images_` 各维护一个容量为 4 的 `FixedQueue`，缓存连续帧图像。VLM 推理时将多帧输入一起送入模型，利用时序信息提升行为识别的准确性（如区分短暂动作和持续行为）。`FixedQueue` 作为定长滑动窗口，**满帧时丢弃最旧帧、只保留最近 4 帧**——主动感知只关心最新时序上下文，丢旧帧既控制内存占用，又保证送入模型的帧始终是最新的。
+
+> [!WARNING]
+> **多帧输入的算力代价与有效帧率约束（勿只看「利用时序信息」）**
+>
+> 4 帧一起送 VLM 不是免费的，需连同成本一起评估：
+>
+> - **token / 算力线性增长**：每帧编码为数百个 vision token，4 帧使 prefill 的 token 数与计算量、以及 KV cache 占用近似**线性翻 4 倍**，直接抬高单次推理耗时与 TTFT。帧数不是越多越好，要在「时序信息收益」与「prefill 代价」间权衡。
+> - **有效帧率由推理耗时决定，而非采集帧率**：主动视觉是高频周期推理。若**单次推理耗时 > 帧间隔**，`FixedQueue` 会持续丢帧，实际「有效帧率」被推理耗时钳制——采集再快也没用。估算有效帧率应按 `1 / 单次推理耗时`，而非摄像头帧率。
+> - **与主对话抢占同一 cDSP**：默认（`--dual 0`）主动视觉与主对话**共用同一基座、同一 ModelInstance**，SA8397P 仅 1 个 cDSP，两者推理在 HTP 上**排队串行**。主动视觉的高频周期推理会挤占主对话的 HTP 时间片、抬高对话 TTFT。缓解手段：(1) 给交互式对话更高调度优先级（见 §8.2 两级 worker）；(2) 降低主动视觉推理频率 / 减少帧数；(3) 开 `--dual 1` 让主动视觉独立成第二个模型实例（代价是常驻内存翻倍，且仍时分复用同一 cDSP，见 deploy §4.3）。是否独立基座是「内存预算 vs 对话延迟」的取舍，见 deploy §4.3 的 `--dual` NOTE。
 
 ### 3.4 安全通知频率控制与自适应车控联动
 
@@ -322,12 +373,12 @@ ChitchatDispatcher 自身也定义了与 CarControlDispatcher 相同的 `TypeCla
 
 ### 5.2 id\_table.yaml 映射
 
-`id_table.yaml` 定义了数字 ID 到页面 URL 的映射表（共 200+ 条），用于将 VLM 识别的 UI 控件 ID 映射到实际的应用页面地址。映射格式为 `ID: page://domain/element_id`，覆盖 SystemUI、SmartCar、AirCondition 等多个应用域。
+`id_table.yaml` 定义了数字 ID 到页面 URL 的映射表（共 200+ 条），用于将 VLM 识别的 UI 控件 ID 映射到实际的应用页面地址。映射格式为 `ID: page://<domain>/<element_id>`（`<domain>` 为车机系统的应用域，随平台而异），覆盖 SystemUI、SmartCar、AirCondition 等多个应用域。
 
-同时 `gui_agent.yaml` 中的 `rag` 段定义了每个页面 URL 对应的知识描述，例如：
+同时 `gui_agent.yaml` 中的 `rag` 段定义了每个页面 URL 对应的知识描述，例如（域名为中性占位示例）：
 
 ```
-page://systemui.alios.cn/systemui_TT34:
+page://systemui.example.com/systemui_epb_warning:
   电子驻车制动系统故障指示灯
   黄色常亮表示EPB系统故障
   ...
@@ -367,9 +418,9 @@ agent\_group 是**多项目共用**的场景 Agent 插件库：除框架通用 A
 | **雨天检测** | `RainDectionDispatcher` | 400 | `ENABLE_PORSCHE` + `FEATURE_RAIN_DECTION` | 某 OEM 定制，雨天场景检测与自动雨刮控制。基于视觉模型检测雨量强度。 |
 | **运动模式** | `SportModeDispatcher` | 500 | `ENABLE_PORSCHE` + `FEATURE_SOPRT_MODE` | 某 OEM 定制，运动驾驶场景感知，提供运动模式下的驾驶数据分析和车辆状态反馈。 |
 | **迎宾模式** | `WelcomeModeDispatcher` | 700 | `ENABLE_PORSCHE` + `FEATURE_WELCOME_MODE` | 某 OEM 定制的上车迎宾交互，独立于 ActiveVision 的迎宾场景。 |
-| **着装检测** | `DressDetectDispatcher` | 1200 | `ENABLE_LANTU_SDK` | 某 OEM 定制，基于车内摄像头识别乘客着装特征，用于个性化服务。 |
-| **车内物品检测** | `InCarItemDetectDispatcher` | 1100 | `ENABLE_LANTU_SDK` | 某 OEM 定制，识别车内物品并提供相关服务建议。 |
-| **车外问答** | `OutCarQADispatcher` | 1300 | `ENABLE_LANTU_SDK` | 某 OEM 定制，基于车外摄像头进行场景视觉问答。 |
+| **着装检测** | `DressDetectDispatcher` | 1200 | `ENABLE_LANTU_SDK` | 岚图 OEM 定制，基于车内摄像头识别乘客着装特征，用于个性化服务。 |
+| **车内物品检测** | `InCarItemDetectDispatcher` | 1100 | `ENABLE_LANTU_SDK` | 岚图 OEM 定制，识别车内物品并提供相关服务建议。 |
+| **车外问答** | `OutCarQADispatcher` | 1300 | `ENABLE_LANTU_SDK` | 岚图 OEM 定制，基于车外摄像头进行场景视觉问答。 |
 | **OAI 推理** | `OaiInferenceDispatcher` | 600 | `FEATURE_OAI_INFERENCE` | OpenAI API 兼容推理接口，支持标准 chat/completions 格式的消息解析（system/user/history），支持 Base64 图片输入和流式输出。 |
 
 > [!WARNING]
@@ -414,7 +465,7 @@ car_skills:                     # 技能定义段
 | `{{VIPUSER}}` | VIP 用户身份信息 | `get_vip_user_prompt()` | "张先生" |
 | `{{PERSONGROUP}}` | 车内乘客群体描述 | `get_passenger_infos()` | "主驾: 成年男性, 副驾: 儿童" |
 | `[CAR_STATE]` | 车辆当前状态 | `CarSignalManager` | "空调24度, 车窗关闭, 风速3档" |
-| `{{date_info}}` | 当前日期 | 系统时间 | "2025-05-27" |
+| `{{date_info}}` | 当前日期 | 系统时间 | "2026-09-20"（示例） |
 | `{{time_info}}` | 当前时间 | 系统时间 | "14:30" |
 | `{{weather_info}}` | 当前天气 | 外部接口 | "晴, 28度" |
 | `{{location_info}}` | 当前地点 | GPS | "上海市浦东新区" |
@@ -427,7 +478,7 @@ car_skills:                     # 技能定义段
 
 | 维度 | 车辆控制 (car\_control.yaml) | 闲聊 (chitchat.yaml) | 主动视觉 (active\_vision.yaml) | GUI Agent (gui\_agent.yaml) |
 | :--- | :--- | :--- | :--- | :--- |
-| **角色定位** | 智能语音助手，执行车控 | 车载陪伴AI，朋友式交流 | 车载迎宾/安全助手 | 屏幕控件提槽专家 |
+| **角色定位** | 智能语音助手，执行车控 | 车载陪伴AI，朋友式交流 | 车载迎宾/安全助手 | 屏幕控件定位/槽位提取专家 |
 | **输出格式** | JSON: {speak, cmd} | 自由文本 (≤100字) | JSON: {speak, car\_control} | 结构化控件操作 |
 | **视觉输入** | 无 | 车内摄像头（镜像） | 前/后排连续帧 | 截图 + ViewTree |
 | **车辆状态** | [CAR\_STATE] 完整注入 | 不注入 | 温度/天气等部分注入 | 不注入 |
@@ -491,9 +542,15 @@ graph TB
 消息出站流程：Dispatcher 处理完毕后，通过 `SendResultNotification()` 将结果回传给 `DataTransportServer`，再通过 Fusion IPC 返回外部系统。对于需要流式输出的场景（如 GUI Agent 和 ActiveVision），使用 `StreamProcessor` + `stream_callback_handler` 实现分段推送。
 
 > [!NOTE]
-> **Dispatcher 并发与线程模型**
+> **Dispatcher 并发与线程模型（状态独立 ≠ 推理并行）**
 >
-> 多个外部消息（含多音区同时说话）经 Fusion IPC 并发到达 `DataTransportServer`。`MsgDispacher.deliver_msg()` 按 scenario\_id 路由后，**同一 Dispatcher 内的消息串行处理**（按到达顺序入队、逐一消费），以避免对 `chat_history_`、`model_runner_` 等共享状态的竞态；**不同 Dispatcher 之间相互独立、可并行**。因此多音区同时投递到同一 Agent 时不会互相踩踏，而是排队串行。推理请求最终统一提交给 ModelScheduler，由其工作线程池（runtime\_config 的 `worker_count`）按优先级调度、任务队列容量为 `capacity`（见 [部署与运行时配置](deploy.html) §4.3）。
+> 多个外部消息（含多音区同时说话）经 Fusion IPC 并发到达 `DataTransportServer`。`MsgDispacher.deliver_msg()` 按 scenario\_id 路由后，**同一 Dispatcher 内的消息串行处理**（按到达顺序入队、逐一消费），以避免对 `chat_history_` 等共享状态的竞态；**不同 Dispatcher 之间状态相互独立**。
+>
+> 但「状态独立」**不等于「推理可并行」**：`model_runner_` 是跨 Dispatcher 共享的 `shared_ptr`，默认（`--dual 0`）所有 Dispatcher 共用**同一 ModelInstance**，而 SA8397P 仅 1 个 cDSP——因此不同 Dispatcher 的推理请求最终在**单 cDSP 上排队串行**，并非真并行。多音区同时投递到同一 Agent 时排队串行；投递到不同 Agent 时，Dispatcher 逻辑虽独立，推理仍在 HTP 上排队。
+>
+> **两级优先级调度**：`MsgDeliverImpl` 持有两个 ThreadWorker——`critical_thread_worker_`（队列上限 3）与 `main_thread_worker_`。`deliver_msg` 先调 `is_high_priority_task()` 判定：命中则置 `Priority::CRITICAL` 并推入 critical 队列，否则推入 main 队列。当前实现把带 `mode` 的 active\_vision 消息（危险动作检测）判为高优先级。推理任务再统一提交 ModelScheduler，由其工作线程池（`runtime_config.json` 的 `worker_count`）执行、队列容量 `capacity`（见 [部署与运行时配置](deploy.html) §4.3）。
+>
+> **优先级策略须有意识选择**：交互式对话（用户在等回复、对 TTFT 敏感）与后台主动视觉（周期推理、危险动作检测对时延也敏感）在单 cDSP 上互相抢占。若让高频主动视觉长期占据 critical 队列，会抬高对话 TTFT；反之若对话优先，危险动作检测时延上升。量产应按业务安全等级明确「谁进 critical」，而非默认全给主动视觉；需要彻底隔离两者算力时考虑 `--dual 1` 独立模型实例（代价见 deploy §4.3）。
 
 ### 8.3 消息录制与回放
 
