@@ -1,6 +1,6 @@
 # Edge AI Docs
 
-端侧 AI 学习文档与面试指南 —— 覆盖 **智能座舱 / 通用机器人 / 自动驾驶** 三大领域，贯穿算法训练、部署优化、Agent 框架三条主线。
+端侧 AI 学习文档与面试指南 —— 覆盖 **智能座舱 / 具身/人形机器人 / 自动驾驶** 三大领域，贯穿算法训练、部署优化、Agent 框架三条主线。
 
 🔗 线上：<https://ranpin.github.io/edge-ai-docs/>
 
@@ -28,7 +28,7 @@
 │   └── projects/
 │       ├── agent-framework/   #   项目：大模型 Agent 框架（总览/部署/核心/场景/调试/APK）
 │       └── lantu/             #   项目：岚图 8397 座舱 VLM 端侧量产
-├── robot/                     # 通用机器人：general + projects/edge-deploy
+├── robot/                     # 具身/人形机器人：general（通识，无仓内 projects）
 └── ad/                        # 自动驾驶：general + projects/bev
 ```
 

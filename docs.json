@@ -1,6 +1,6 @@
 {
   "title": "Edge AI Docs",
-  "subtitle": "端侧 AI 学习文档与面试指南 —— 覆盖智能座舱、通用机器人、自动驾驶三大领域，贯穿算法训练、部署优化、Agent 框架三条主线",
+  "subtitle": "端侧 AI 学习文档与面试指南 —— 覆盖智能座舱、具身/人形机器人、自动驾驶三大领域，贯穿算法训练、部署优化、Agent 框架三条主线",
   "categories": [
     {
       "name": "智能座舱",
@@ -289,18 +289,18 @@
       ]
     },
     {
-      "name": "通用机器人",
+      "name": "具身/人形机器人",
       "id": "robot",
       "note": "具身智能 · 学习与面试",
       "overview": {
-        "title": "通用机器人端侧 AI：从领域知识到具身实践",
+        "title": "具身/人形机器人端侧 AI：从领域知识到具身实践",
         "desc": "通识（学习文档 + 面试指南）+ Datawhale 开源教程实战的故事线导读",
         "file": "robot/overview.html",
         "badge": "导读"
       },
       "general": [
         {
-          "title": "通用机器人面试指南",
+          "title": "具身/人形机器人面试指南",
           "file": "robot/general/interview.html",
           "kind": "面试",
           "badge": "34 题",
@@ -312,13 +312,13 @@
           ]
         },
         {
-          "title": "机器人端侧算力与框架",
+          "title": "人形端侧算力与框架",
           "file": "robot/general/platforms.html",
           "badge": "Part 1",
           "status": "done",
-          "desc": "端侧算力平台全景（Jetson/RK3588/QRB5165）、推理框架对比（TensorRT/RKNN）、ROS2 + 端侧 AI 集成",
+          "desc": "人形端侧算力平台（Jetson Orin 系）、推理框架（TensorRT）、ROS2 + 端侧 AI 集成",
           "tags": [
-            "Jetson",
+            "Jetson Orin",
             "TensorRT",
             "ROS2"
           ]
@@ -341,11 +341,11 @@
           "file": "robot/general/deployment.html",
           "badge": "Part 3",
           "status": "done",
-          "desc": "端侧推理部署（TensorRT）、实时控制链路、传感器融合、运动规划与 MoveIt2、SLAM/状态估计/Nav2、人形全身控制",
+          "desc": "端侧推理部署（TensorRT）、实时控制链路、传感器融合、运动规划与 MoveIt2、SLAM/状态估计、人形全身控制栈（WBC/MPC）",
           "tags": [
             "实时控制",
-            "MoveIt2",
-            "SLAM"
+            "全身控制",
+            "MoveIt2"
           ]
         },
         {
