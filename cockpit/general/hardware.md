@@ -24,7 +24,7 @@
 
 ## 1. SA8397P SoC 全景
 
-SA8397P 是高通 Snapdragon Digital Chassis（骁龙数字底盘）系列的高端旗舰 SoC，定位在 SA8295P 之上，目标是实现**座舱（Cockpit）与 ADAS 融合**。它将传统分立的座舱娱乐芯片和 ADAS 处理芯片整合到一颗 SoC 上，降低 BOM 成本、减少线束复杂度，同时通过 Hypervisor 实现功能安全隔离。
+SA8397P 是高通 Snapdragon Digital Chassis（骁龙数字底盘）系列的高端旗舰 SoC，定位在 SA8295P 之上，是 2024-2026 量产窗口的融合旗舰（平台演进脉络见 §1.3），目标是实现**座舱（Cockpit）与 ADAS 融合**。它将传统分立的座舱娱乐芯片和 ADAS 处理芯片整合到一颗 SoC 上，降低 BOM 成本、减少线束复杂度，同时通过 Hypervisor 实现功能安全隔离。
 
 > [!NOTE]
 > **关于"第几代"的口径**
@@ -62,7 +62,7 @@ graph TB
 | :--- | :--- | :--- | :--- |
 | **CPU** | 4x A78AE + 4x A55（车规 AE 核，主频为估算） | 通用计算、OS 调度 | Android 座舱 UI、应用运行 |
 | **Adreno GPU** | 车规 Adreno（估算） | 3D 渲染、图形合成 | 仪表盘渲染、AR-HUD、游戏 |
-| **Hexagon DSP (CDSP)** | HMX + HVX + Scalar | AI 推理加速 | DMS 驾驶员监控、语音降噪 |
+| **Hexagon DSP (CDSP)** | HMX + HVX + Scalar | AI 推理加速 | DMS 驾驶员监控、手势识别、端侧 LLM（§8.2） |
 | **Hexagon DSP (ADSP)** | HVX + Scalar | 音频处理 | ANC 主动降噪、语音前端 |
 | **Hexagon DSP (SDSP)** | Scalar（低功耗） | 传感器融合 | Always-On 碰撞检测 |
 | **Spectra ISP** | 三路 ISP，支持 8 路摄像头 | 图像信号处理 | 环视拼接、HDR 合成 |
@@ -79,7 +79,25 @@ graph TB
 > [!NOTE]
 > **为什么选择融合 SoC？**
 >
-> 传统方案使用独立的座舱芯片 + ADAS 芯片（如 SA8155P + SA8540P），需要两套供电、两套散热、以太网互联，BOM 成本高。SA8397P 通过 Hypervisor 在一颗芯片上隔离多个域（Android 座舱 + QNX ADAS），**硬件成本降低约 30%**，同时数据在片内共享，座舱与 ADAS 之间的通信延迟从毫秒级降至微秒级。面试中常见的对比题：一芯多域 vs 多芯方案的 trade-off。
+> 传统方案使用独立的座舱芯片 + ADAS 芯片（如 SA8155P + SA8540P），需要两套供电、两套散热、以太网互联，BOM 成本高。SA8397P 通过 Hypervisor 在一颗芯片上隔离多个域（Android 座舱 + QNX ADAS），**硬件成本降低约 30%（厂商宣传口径，示例）**，同时数据在片内共享，座舱与 ADAS 之间的通信延迟从毫秒级降至微秒级。面试中常见的对比题：一芯多域 vs 多芯方案的 trade-off。
+
+### 1.3 平台演进与 2025-2026 定位
+
+理解 SA8397P 的位置要看 Snapdragon Digital Chassis 座舱/AD 平台的演进线（本表为相对定位，不使用代次编号；规格为估算口径，以厂商官方为准）：
+
+| 平台 | 工艺 | AI 算力（INT8） | 定位与时间窗 |
+| :--- | :--- | :--- | :--- |
+| SA8155P | 7nm | 个位数 TOPS（估算） | 上一代旗舰座舱，2024-2025 仍在量产车型上大量服役；算力不足以承载端侧 LLM |
+| SA8295P | 5nm | ~30 TOPS | 主流旗舰座舱（2022-2025 量产高峰），可跑轻量模型 |
+| **SA8397P（本篇锚点）** | 4nm | ~70 TOPS（估算） | 座舱 + ADAS 融合旗舰，2024-2026 量产窗口，可承载端侧 4B 级多模态 LLM（§8.2） |
+| Snapdragon Cockpit Elite / Ride Elite | 需核实 | 大幅提升（厂商宣传口径，需核实） | 2024-10 发布、2025-2026 起量产上车 |
+
+> [!NOTE]
+> **2025-2026 的关键进展**
+>
+> - **SA8397P 是"当前"的融合旗舰**（2024-2026 窗口）：端侧 4B 级多模态 LLM（本站锚点模型）正是这一代平台可承载的上限量级，可行性推导见 §8.2 与 [LLM 推理原理](infer-principles.html)。
+> - **Cockpit Elite / Ride Elite 是"下一代"方向**：2024-10 发布，均改用高通自研 **Oryon CPU**，厂商宣称 AI 算力与内存带宽大幅提升、把端侧 LLM/Agent 支持作为核心卖点；量产上车集中在 2025-2026（AD 侧的 Ride Elite 见 [自动驾驶算力平台](../../ad/general/soc-platform.html)）。具体 TOPS/带宽/工艺规格未完全公开，**需核实**。
+> - **HTP 代际趋势**：移动旗舰 HTP 已从 v79（8 Gen 3）演进到 8 Elite 世代（2024-2026，见 §2.5），车规 HTP 通常滞后移动旗舰约一代（估算）。新一代的扩展方向——更大 VTCM、更强 FP16/低比特通路、更高内存带宽——全部对着端侧大模型的 decode 瓶颈（§6）打。
 
 ## 2. Hexagon DSP 微架构
 
@@ -95,7 +113,7 @@ graph LR
         HVX["HVX 向量扩展128-byte SIMD图像/向量运算"]
         HMX["HMX 矩阵加速器INT8/INT16 矩阵乘AI 推理核心"]
         VTCM["VTCM 紧耦合内存典型 8MB SRAM（视 HTP 版本）超低延迟缓存"]
-        HWT["硬件多线程6 个硬件线程隐藏访存延迟"]
+        HWT["硬件多线程每核 4 个硬件线程隐藏访存延迟"]
     end
     SCALAR --> HVX
     HVX --> HMX
@@ -118,9 +136,9 @@ graph LR
 
 - **Scalar Unit**：VLIW 4-way 发射，处理分支、循环控制、地址计算等标量操作
 - **HVX**：128-byte 宽 SIMD 向量引擎，适合逐元素运算（ReLU、Add、Sigmoid）和图像处理
-- **HMX**：矩阵乘加速器，一拍完成大规模 INT8/INT16 矩阵乘，是 Conv2D/MatMul 的主力
+- **HMX**：矩阵乘加速器，INT8×INT8→**INT32 累加**，一拍完成大规模矩阵乘，是 Conv2D/MatMul 的主力；LLM 的 W4A16 则走 **FP16 通路（FP32 累加）**，机制见 [量化 · W4A16](quantization.html)
 - **VTCM**：紧耦合 SRAM，带宽极高、延迟极低，是性能瓶颈的关键。容量由 HTP 架构版本决定（本平台典型 8MB，见 §2.4/§2.5）
-- **硬件多线程**：6 个硬件线程上下文，一个线程等内存时其他线程继续执行，隐藏访存延迟
+- **硬件多线程**：每核 4 个硬件线程上下文，一个线程等内存时其他线程继续执行，隐藏访存延迟
 
 ### 2.3 各计算单元吞吐量对比
 
@@ -167,21 +185,25 @@ Hexagon DSP 的存储层级统一如下表（§6.2 讨论 LLM 推理时沿用同
 
 ### 2.5 HTP 架构版本对照表
 
-VTCM 容量、HMX 能力等关键参数由 **HTP 架构版本**决定，而不是由芯片市场名决定——这是不同资料中 VTCM 数字互相矛盾的根源。下表为常见移动/座舱平台的对照（**容量为典型配置估算，对应关系为量级参考**）：
+VTCM 容量、HMX 能力等关键参数由 **HTP 架构版本**决定，而不是由芯片市场名决定——这是不同资料中 VTCM 数字互相矛盾的根源。下表为常见移动/座舱平台的对照（**容量为典型配置估算、不同资料口径有出入，对应关系为量级参考**）：
 
 | HTP 版本 | 代表平台（估算） | VTCM（典型，估算） | HMX 能力要点 |
 | :--- | :--- | :--- | :--- |
-| v65 / v66 | 骁龙 855 / 865 时期 | ~1 MB | INT8 为主 |
-| v68 | 骁龙 888 (SM8350) | ~4 MB | INT8 / INT16 |
-| v69 | 8 Gen 1 (SM8450) | ~4 MB | INT8 / INT16 |
-| v73 | 8+ Gen 1 (SM8475) | ~4 MB | INT8 / INT16 |
-| v75 | 8 Gen 2 (SM8550) | ~8 MB | INT8 / INT16，FP16 通路增强 |
+| v65 / v66 | 骁龙 845 / 865 时期 | ~0.25-1 MB（需核实） | INT8 为主 |
+| v68 | 骁龙 888 (SM8350) | ~1-4 MB（需核实） | INT8 / INT16 |
+| v69 | 8 Gen 1 (SM8450) | ~1-4 MB（需核实） | INT8 / INT16 |
+| v73 | 8+ Gen 1 (SM8475) | ~2-4 MB（需核实） | INT8 / INT16 |
+| v75 | 8 Gen 2 (SM8550) | ~4-8 MB（需核实） | INT8 / INT16，FP16 通路增强 |
 | v79 | 8 Gen 3 (SM8650) | ~8 MB | 更大 MAC 阵列，FP16 增强 |
+| 后续版本（编号需核实） | 骁龙 8 Elite (SM8750) 世代，2024-2026 | 继续增大（需核实） | FP16/低比特通路增强，面向端侧 LLM/Agent 负载 |
 
 > [!NOTE]
 > **本平台如何确认**
 >
-> SA8397P 的 HTP 版本与实际 VTCM 以运行时 `QnnHtpDevice` 查询为准（本站按典型 **8 MB** 作为示例参数）。车规平台的 HTP 版本与移动平台的对应关系未完全公开，上表仅用于建立量级概念。
+> SA8397P 的 HTP 版本与实际 VTCM 以运行时 `QnnHtpDevice` 查询为准（本站按典型 **8 MB** 作为示例参数）。车规平台的 HTP 版本与移动平台的对应关系未完全公开，上表仅用于建立量级概念。两条补充口径：
+>
+> - **车规 HTP 通常滞后移动旗舰约一代**（估算）：如 SA8295P 大致对应 v68 世代（SM8350 时期）；SA8397P 的具体版本以运行时查询为准。
+> - **2025-2026 趋势**：8 Elite 世代与下一代座舱平台（Cockpit Elite，见 §1.3）的 HTP 继续加大 VTCM、增强 FP16/低比特通路，方向都对着端侧大模型的 decode 瓶颈（§6）；车规侧具体参数**需核实**。
 
 ## 3. DSP 子系统对比
 
@@ -208,7 +230,7 @@ graph LR
 | :--- | :--- | :--- | :--- |
 | **核心功能** | AI 推理、通用计算 | 音频前端处理、ANC | 传感器融合、低功耗监控 |
 | **关键硬件** | HMX + HVX + Scalar + VTCM | HVX + Scalar（无 HMX） | Scalar only（极简） |
-| **功耗模式** | 高性能，按需开关 | 中等，常驻运行 | 超低功耗（<5mW） |
+| **功耗模式** | 高性能，按需开关 | 中等，常驻运行 | 超低功耗（<5mW，估算） |
 | **延迟要求** | 10~100ms（推理帧级） | <1ms（音频实时） | 100ms~1s（传感器采样） |
 | **AP 休眠时** | 通常随 AP 关闭 | 可独立运行（低功耗音频） | 完全独立运行（Always-On） |
 | **固件格式** | .mbn / .so（签名动态库） | .mbn / .so | .mbn / .so |
@@ -259,7 +281,7 @@ sequenceDiagram
 | **Skel** | DSP 端骨架库，接收请求并调用实现 | gRPC Server Skeleton |
 | **IDL** | 接口定义语言，编译器自动生成 Stub/Skel 代码 | Protobuf / .proto 文件 |
 | **共享内存（DMA-BUF / ION）** | AP 与 DSP 共享的物理连续内存区域；Android 13+ 使用 DMA-BUF heap | mmap 共享内存 |
-| **Domain** | 目标 DSP 标识（0=ADSP, 3=CDSP, 2=SDSP） | gRPC 的 target endpoint |
+| **Domain** | 目标 DSP 标识（0=ADSP, 1=MDSP, 2=SDSP, 3=CDSP） | gRPC 的 target endpoint |
 
 ### 4.3 共享内存分配示例（DMA-BUF heap）
 
@@ -323,6 +345,16 @@ int alloc_dmabuf_buffer(size_t size) {
 > - 经 SMMU 映射给 DSP 的是**物理/IOVA 地址**，与 CPU 的虚拟地址指向同一物理页——这正是零拷贝省掉一次内存搬运的原因，但也意味着一致性必须由软件显式维护。
 
 > [!NOTE]
+> **FastRPC 开销在 LLM 推理链路中的占比**
+>
+> FastRPC 单次往返在几十 µs 量级（示例参数，即 §4.1 的中断 + 序列化路径），而 LLM decode 的单 token 时间在几十 ms 量级（带宽受限，推导见 §6.1 与 [LLM 推理原理](infer-principles.html)）——若一个 token 对应一次 graph execute，控制面开销在千分位量级，**不是 decode 的主要瓶颈**。占比会明显上升的是两类场景：
+>
+> - **高频小 graph 调用**：音频前端、传感器融合这类单次执行亚毫秒级的 graph，FastRPC 的固定开销（ioctl、中断、序列化、cache sync）占比陡增，应做 batching 或把整条流水线常驻 DSP 侧执行；
+> - **prefill 被拆成多次调用**：每次调用都付一遍固定开销，应尽量合并为一次 graph execute。
+>
+> 数据面走 DMA-BUF 零拷贝（本节），控制面走 ioctl/中断，两者是分开的——优化时别在 stub 层再额外拷贝一遍输入输出，那会把零拷贝的收益全部抵消。
+
+> [!NOTE]
 > **FastRPC vs Android Binder**
 >
 > **Binder** 是 Android 的进程间通信（IPC）机制，用于同一 CPU 上不同进程之间的调用。**FastRPC** 是跨处理器通信（IPC），用于 AP CPU 与 DSP 之间的调用。两者的关键区别：
@@ -339,7 +371,7 @@ DSP 上运行的代码（skel 库、模型 context binary）在量产设备上**
 - **开发期 — testsig**：高通允许用 **testsig**（基于目标设备 UID 生成的临时签名）让未正式签名的 skel 在**特定设备**上运行，便于调试；testsig 与设备绑定，换设备需重新生成。
 - **量产期 — 正式签名**：走 OEM 的签名链（与 secure boot 信任衔接），testsig 在量产固件上不可用。
 - **典型报错**：签名不匹配时 `remote_handle_open` 失败（常见 `AEE_ECONNREFUSED` 或加载直接拒绝），且 logcat 往往只有一句笼统错误。
-- **排查顺序**：确认 skel 是否已签名 → testsig 是否匹配当前设备 UID → fastrpc 域权限（shell 能加载、app 不能，多半是 SELinux/域问题而非签名，见岚图篇 SELinux 对比）。
+- **排查顺序**：确认 skel 是否已签名 → testsig 是否匹配当前设备 UID → fastrpc 域权限（shell 能加载、app 不能，多半是 SELinux/域问题而非签名，实例见 [岚图 · 设备部署](../projects/lantu/device-deployment.html) §2.4 的 SELinux 域对比）。
 
 ### 4.5 DSP 侧日志：mini-dm
 
@@ -385,7 +417,7 @@ graph TB
 
 - **硬件级隔离**：每个 VM 有独立的内存空间（SMMU 保护），一个 VM 崩溃不会影响其他 VM
 - **资源静态分配**：CPU 核心、GPU 时间片、显示通道在启动时固定分配，避免运行时争抢
-- **CDSP 归属**：本站假设 **CDSP 由 HLOS（Android）VM 直接持有**，DMS/OMS/LLM 推理等负载直接跑在其上；其他 VM 如需 DSP 算力，经跨域服务（Hypervisor 共享内存通道上的代理调用）访问。不同 OEM 的划分可能不同（例如把 CDSP 划给功能安全域），讨论时应先声明前提
+- **CDSP 归属**：本站假设 **CDSP 由 HLOS（Android）VM 直接持有**，DMS/OMS/LLM 推理等负载直接跑在其上；其他 VM 如需 DSP 算力，经跨域服务（Hypervisor 共享内存通道上的代理调用）访问。**多个 VM 共享同一颗 cDSP 时，本质是时分复用 HTP 的算力与 VTCM**（§2），需要在 VM 间做带宽配额与 QoS 约定，否则一个 VM 的大模型负载会挤掉另一个 VM 的实时推理。不同 OEM 的划分可能不同（例如把 CDSP 划给功能安全域），讨论时应先声明前提
 - **ASIL-B 认证**：QNX 域满足 ISO 26262 ASIL-B 功能安全等级，可运行仪表盘等安全关键功能
 - **跨域通信**：VM 之间通过 Hypervisor 提供的共享内存通道通信，延迟通常在微秒级（示例参数，取决于 Hypervisor 实现与消息大小）
 
@@ -501,7 +533,7 @@ Decode 上限的定量推导：`tok/s ≈ DSP 可用带宽 × 带宽效率 ÷ �
 
 VTCM（Vector Tightly Coupled Memory）是 Hexagon DSP 的片上 SRAM，本平台典型容量 **8 MB**（视 HTP 架构版本而定，对照表见 §2.5，以 `QnnHtpDevice` 实际查询为准），带宽远高于 DDR（片上访问延迟仅 1-2 个周期）。VTCM 是端侧 LLM 推理优化的关键资源；完整存储层级对照见 §2.4（全站统一口径，此处不再重复列表）。
 
-VTCM 的 8 MB 容量虽然有限，但对 LLM 推理至关重要：FlashAttention 的分块计算、权重预取（double buffering）、以及 HMX 矩阵乘法的 tiling 都依赖 VTCM 作为高速中间缓冲。当 VTCM 不足导致数据溢出到 DDR 时（称为 **VTCM spill**），性能可能下降数倍——具体幅度取决于 spill 频率与 DDR 仲裁情况，请在自己的平台上实测，不要照搬任何"标准倍数"。
+VTCM 的 8 MB 容量虽然有限，但对 LLM 推理至关重要：FlashAttention 的分块计算、权重预取（double buffering）、以及 HMX 矩阵乘法的 tiling 都依赖 VTCM 作为高速中间缓冲。当 VTCM 不足导致数据溢出到 DDR 时（称为 **VTCM spill**），性能可能下降数倍——具体幅度取决于 spill 频率与 DDR 仲裁情况，请在自己的平台上实测，不要照搬任何"标准倍数"。VTCM 容量如何决定 FlashAttention 分块尺寸与 W4A16 权重 tile 大小，见 [LLM 推理原理](infer-principles.html) 与 [量化 · W4A16](quantization.html)。
 
 ## 7. 功耗与热管理
 
@@ -511,7 +543,7 @@ VTCM 的 8 MB 容量虽然有限，但对 LLM 推理至关重要：FlashAttentio
 
 | 约束维度 | 座舱要求 | 对比（手机 / 服务器） |
 | :--- | :--- | :--- |
-| **TDP** | ~20-25W（整个 SoC，估算） | 手机 ~5-8W / 服务器 GPU ~300-400W |
+| **TDP** | ~20-25W（整个 SoC，估算） | 手机 ~5-8W / 服务器 GPU ~400-1000W（H100/B200 级，2025-2026 口径） |
 | **散热方式** | 被动散热为主（无风扇），部分车型有散热片 + 导热硅脂 | 手机被动 / 服务器液冷或主动风扇 |
 | **工作温度** | -40°C ~ +85°C（车规级） | 手机 0~35°C / 服务器 10~35°C |
 | **持续运行** | 需在高温下持续稳定运行（夏季暴晒后启动） | 手机可降频 / 服务器恒温机房 |
@@ -551,6 +583,8 @@ echo performance > /sys/class/devfreq/<cdsp节点名>/governor
 > **热管理最佳实践**
 >
 > 端侧 LLM 的热管理策略：(1) **按需加载**：用户未交互时将 DSP 降至低频，检测到唤醒词后快速升频；(2) **时间预算分配**：限制连续高负载推理时间（如 Prefill 后插入短暂冷却间隔）；(3) **温度感知调度**：当温度接近阈值时主动降低 batch size 或切换到更小的模型（Qwen3-1.7B）；(4) **避免 GPU 和 DSP 同时满载**：3D 渲染和 LLM 推理交替执行。
+>
+> 评估口径：峰值 TOPS 只在短时 boost 下可达，车载持续热预算决定的是**降频后的持续算力**——这才是量产真实能力。decode 是带宽受限、对降频相对不敏感，但 prefill/TTFT 会随降频明显变慢；对比平台时应看热包络内的持续算力而非峰值（与 [自动驾驶算力平台](../../ad/general/soc-platform.html) 同一口径）。
 
 ### 7.4 DCVS 与主动频率投票
 
@@ -579,6 +613,9 @@ echo performance > /sys/class/devfreq/<cdsp节点名>/governor
 > [!NOTE]
 > **NVIDIA TOPS 口径**：表中 Drive Orin 254 TOPS 是**车规 DRIVE Orin（INT8 稀疏）**，勿与同 die 的 Jetson AGX Orin（275 TOPS）混用；Thor ~1000 TOPS 是 **FP8 稀疏、单 SoC** 口径（NVIDIA 早期宣传有「2000 TOPS」说法，含 FP4/不同配置，以官方规格书为准），且 FP8 与 Orin/HTP 的 INT8 TOPS **不可直接比大小**。详见 [自动驾驶算力平台](../../ad/general/soc-platform.html) §1。
 
+> [!NOTE]
+> **高通座舱平台的 2025-2026 演进**：SA8397P 的继任方向是 **Snapdragon Cockpit Elite**（2024-10 发布、采用 Oryon CPU、2025-2026 起量产上车），厂商宣称 AI 算力与内存带宽大幅提升、以端侧 LLM/Agent 支持为核心卖点；具体 TOPS/带宽/工艺未完全公开（**需核实**）。演进时间线见 §1.3，AD 侧对应的 Ride Elite 见 [自动驾驶算力平台](../../ad/general/soc-platform.html)。
+
 ### 8.2 端侧 LLM 可行性对比
 
 从端侧 LLM 部署的角度，各芯片的关键差异在于 **NPU 算力**、**内存带宽** 和 **功耗预算**：
@@ -596,4 +633,4 @@ Decode 上限的估算方法：`tok/s ≈ 可用带宽 × 带宽效率 ÷ 每 to
 > [!TIP]
 > **SA8397P 的竞争优势**
 >
-> 在座舱端侧 LLM 场景中，SA8397P 的优势在于：(1) **Hexagon DSP 的 LLM 软件栈最成熟**（QNN SDK + Genie Runtime 已量产验证）；(2) **功耗/算力比最优**（~70 TOPS / ~20W，Orin 需要 275 TOPS / ~50W，均为估算口径）；(3) **4nm 工艺**带来更好的能效比和热表现。劣势是**内存带宽偏低**（68 GB/s vs Orin 的 205 GB/s），限制了 Decode 吞吐量上限。后续新平台预计会在内存带宽上有显著提升（以厂商官方路线图为准）。
+> 在座舱端侧 LLM 场景中，SA8397P 的优势在于：(1) **Hexagon DSP 的 LLM 软件栈最成熟**（QNN SDK + Genie Runtime 已量产验证）；(2) **功耗/算力比最优**（~70 TOPS / ~20W，车规 Orin 为 254 TOPS（INT8 稀疏）/ ~50W，均为估算口径）；(3) **4nm 工艺**带来更好的能效比和热表现。劣势是**内存带宽偏低**（68 GB/s vs Orin 的 205 GB/s），限制了 Decode 吞吐量上限。后续新平台（Snapdragon Cockpit Elite，2024-10 发布、2025-2026 量产）厂商宣称将在 AI 算力与内存带宽上显著提升（需核实，见 §1.3）。
