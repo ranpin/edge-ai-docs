@@ -126,21 +126,7 @@ flowchart LR
 - **特征级融合**：Camera BEV 特征和 LiDAR BEV 特征在 BEV 空间做 concatenation 或 attention-based 融合 (如 BEVFusion)
 - **训练策略**：先预训练 Camera-only 分支 (用 LiDAR 深度监督)，再联合微调融合模型，效果优于从零开始联合训练
 
-### 2.4 nuScenes 检测精度对比
-
-**nuScenes 3D 检测精度对比 (mAP)**
-
-```mermaid
-xychart-beta
-    title "nuScenes 3D 检测精度对比 (mAP)"
-    x-axis ["PointPillars", "CenterPoint", "BEVFormer (V2-99)", "StreamPETR (V2-99)", "BEVFusion (C+L)"]
-    y-axis "mAP (%)" 0 --> 80
-    bar [40.1, 58.0, 48.1, 45, 68.5]
-```
-
-> 注：图中混合了 LiDAR-only、Camera-only 与 Camera+LiDAR 方法，backbone 与 **val/test split** 口径也不尽相同，仅作**数量级参考**；严格比较请同时对齐模态、backbone 与 split（见 §1.2 的 NOTE）。**尤其注意：Camera-only 的 mAP 低于 LiDAR-only 不代表"视觉方案更差"**——两者成本、全天候能力与失效模式完全不同，量产选型看的是"每单位 BOM 成本的安全收益"，不是单看 mAP。
-
-### 2.5 方法综合对比
+### 2.4 方法综合对比
 
 | 方法 | 输入模态 | nuScenes mAP | 延迟 (Orin, 示例) | 硬件要求 | 量产适用性 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -155,6 +141,7 @@ xychart-beta
 >
 > - **PointPillars 不用 3D 稀疏卷积**：它把点云编码成伪图像后跑 **2D 卷积**，这正是它快的原因；用 3D Sparse Conv 的是 CenterPoint/SECOND 这类体素方法。
 > - **mAP 同样要绑定 backbone 与 val/test split**：本表为横向比较做了统一取舍（与 §1.2 同口径），不是各方法的唯一正确值——尤其 LiDAR 方法的 mAP 随 backbone/训练时长变化不小，引用前请回原论文核对。
+> - **跨模态 mAP 不可直接比**：本表混合了 LiDAR-only / Camera-only / Camera+LiDAR，Camera-only 的 mAP 低于 LiDAR-only **不代表"视觉方案更差"**——两者成本、全天候能力与失效模式完全不同，量产选型看的是「每单位 BOM 成本的安全收益」，不是单看 mAP。
 > - **CenterPoint 取单模型值**：本表 CenterPoint ~58.0 是**单模型 voxel（test）**的 mAP；常被引用的 60.3 是 **5 模型 ensemble + TTA** 的结果（pillar 变体则是 mAP ~50.7 / NDS ~60.3），横向对比单模型方法时不要用 ensemble 值。
 > - **延迟为示例估算**：实际延迟强依赖 backbone、输入分辨率、是否真正用 TensorRT/QNN 部署，需以目标平台实测为准。
 
