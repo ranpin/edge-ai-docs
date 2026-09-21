@@ -27,28 +27,33 @@
 > - **模型 build 差异**：两个包不是同一模型版本
 >
 > 因此本表是**参考性横向对比**，不是纯后端基准。要做纯后端对比，需两形态用同一模型版本生成的包。另：跨形态的**输出效果**同样不可直接比（详见 [AIService 后端集成与重构](aiservice-integration.html) 难点 5.3）。
+>
+> **genai 绝对时延也不可跨篇直接比**：本篇 §2 为 **2026-09-16** 实测（按 0915 调整**应为 NPU 4 核**、统计字段 `infer_total`），而 [效果·性能·稳定性篇 §2.2](effect-perf-stability.html) 的舱外 Total 为 **2026-09-02** 实测（**NPU 3 核**、统计字段 `Total`）。两次测量除模型包外还混杂：**NPU 核数（3 vs 4）**、**测量 harness 与统计字段**（`Total` 与 `infer_total` 是否同义**待澄清**）、日期与场景集。同场景对比：车辆 2675 vs 1978（+35%）、植物 2364 vs 1994（+18%）、交通 2509 vs 2001（+25%）、动物 1559 vs 1770（−12%）、通用 2063 vs 1964（+5%），**方向不一致**，且 09-16 按 0915 调整应已是 4 核、反而整体更慢——说明上述混杂因子不可忽略，**genai 绝对值不能跨篇对账**，只能在各自口径内使用。
 
 ## 1. 选型决策表
 
 | 维度 | GenAI 形态 | AIService 形态 | 倾向 / 来源 |
 | :--- | :--- | :--- | :--- |
 | **包体** | 378 MB | **222 MB**（−156 MB，剥离 `libqnn/` 146 MB + 整套 genai 依赖） | AIService 优 · [集成篇 §4.2](aiservice-integration.html) |
-| **内存**（VmRSS + dma-buf 稳态） | **~7.5 GB** | ~10.3 GB（高 ~2.8 GB / ~27%） | GenAI 优 · [效果·性能·稳定性篇 · 内存](effect-perf-stability.html) |
+| **内存**（VmRSS + dma-buf 稳态） | **~7.4 GB**（7531 MB） | ~10.3 GB（10501 MB，高 ~2.9 GB / **+39%**，以 genai 为基线） | GenAI 优 · [效果·性能·稳定性篇 · 内存](effect-perf-stability.html) |
 | **端到端时延**（`infer_total` 均值） | **1976 ms** | 2475 ms（+499 ms / +25.3%） | 本次 GenAI 低，但**不可归因到后端**（见口径前提）· 本篇 §2 |
 | **部署复杂度** | 包重、依赖多，但进程内自持、无外部服务依赖 | 包轻、业务侧仅 HTTP，但依赖厂商 `VoyahAIService` 在场，服务端行为不可控（扫描根硬编码 `/AI/VLM/models`、只启动时扫描、槽位泄漏） | 各有代价 · [集成篇 §5.2/§5.8](aiservice-integration.html) |
 | **可维护性 / 联调** | 进程内 C++ API，genai 是高通黑盒、排查难；约束解码未实现（EBNF 缺失仅 warn 静默降级） | HTTP + JSON 跨语言、可 `curl` 直接联调、OpenAI 协议通用、约束解码经 `extras.ebnf_path` 生效；但服务端无计量（`usage` 恒 0 / `max_tokens` 忽略 / 无 `/metrics`） | AIService 联调优 · [集成篇 §3.6/§4.3](aiservice-integration.html) |
 | **职责归位** | SDK 直接持有 QNN/genai 运行时，模型加载 / NPU 调度在我方 | 模型加载 / NPU 调度 / 多客户端并发交岚图系统服务，SDK 不再直接持有 QNN 运行时 | AIService（换后端的核心动因）· [集成篇 §1.1](aiservice-integration.html) |
-| **可回摆性** | 与 AIService 并存、可切换；改 `ENABLE_QNN_MODEL` flag 重新构建即回摆，`third_party/genai_sdk/`、`src/models/qnn/` 与全部模板原地保留、无删码 | 同左 | 两者都强 · [集成篇 §4.2](aiservice-integration.html) |
+| **可回摆性** | **构建期回摆**：`third_party/genai_sdk/`、`src/models/qnn/` 与全部模板原地保留、无删码；但瘦身包（QNN=OFF，222 MB）未编入 QNN 后端，回摆需把 `ENABLE_QNN_MODEL` 改回 ON **重新编译**。**运行期回摆**：默认 8397 构建双开关均 ON、两后端都编入，改 `model_name` 前缀（`qnn/` ↔ `aiservice/`）即切换，**零重编、零业务代码改动** | 同左 | 两者都强（构建期回摆成本一次重编，运行期回摆零成本）· [集成篇 §2.2/§4.1/§4.2](aiservice-integration.html) |
 | **输出效果** | 不可直接比（两形态是不同模型包） | 同左 | 见口径前提 · [集成篇难点 5.3](aiservice-integration.html) |
 
 > [!NOTE]
-> **内存口径说明**：aiservice 侧测的是持模型的 `VoyahAIService` 服务进程、genai 侧测的是 `android_test` 进程，两者分别是各自形态下「持有模型的进程」，口径可比。差异主要在 CPU 侧 VmRSS（+2.6 GB），两侧 DSP dma-buf 基本持平；**根因待归因**（疑为多 LoRA 预加载 / AgentCore 框架开销 / 上下文缓存，见 [效果·性能·稳定性篇 · 内存](effect-perf-stability.html)）。
+> **内存口径说明**：aiservice 侧测的是持模型的 `VoyahAIService` 服务进程、genai 侧测的是 `android_test` 进程，两者分别是各自形态下「持有模型的进程」，口径可比。差异主要在 CPU 侧 VmRSS（+2583 MB ≈ +2.5 GB），两侧 DSP dma-buf 基本持平（+387 MB）；合计差 **~2.9 GB（+39%，以 genai 为基线**，2970/7531；MB→GB 统一按 /1024，原「~27%」是差值占 aiservice 自身合计的比例、口径有误，详见 [效果·性能·稳定性篇 · 内存](effect-perf-stability.html)）；**根因待归因**（疑为多 LoRA 预加载 / AgentCore 框架开销 / 上下文缓存）。
+
+> [!NOTE]
+> **可回摆性依据**：双开关 `ENABLE_QNN_MODEL` / `ENABLE_AISERVICE_MODEL`（正交、各管四层）与运行期 `model_name` 前缀路由，以 [集成篇 §2.2 / §4.1](aiservice-integration.html) 为据；该双开关在远端 `lantu_aiservice_dev` 分支，本篇未逐行复核远端代码，**以该分支为准**。
 
 **本项目怎么选**：最终以 **AIService 为主用后端、GenAI 保留可回摆**。取舍逻辑：
 
 - **取 AIService**：职责归位（NPU 调度交系统服务）+ 包体瘦身 156 MB + HTTP/OpenAI 协议联调顺手 + 约束解码可用
-- **代价**：内存更高（~2.8 GB，待归因）、本次口径下端到端时延更高（但不可归因到后端）、且依赖厂商服务端行为（扫描根 / 槽位 / 计量缺口都只能客户端侧适配）
-- **兜底**：可回摆性靠 `ENABLE_QNN_MODEL` 一个 flag，切回 GenAI 不改码
+- **代价**：内存更高（~2.9 GB / +39%，待归因）、本次口径下端到端时延更高（但不可归因到后端）、且依赖厂商服务端行为（扫描根 / 槽位 / 计量缺口都只能客户端侧适配）
+- **兜底**：可回摆分两级——双后端均编入时**运行期回摆**只改 `model_name` 前缀（零重编）；瘦身包则需**构建期回摆**，把 `ENABLE_QNN_MODEL` 改回 ON 重新编译。两者都不改码
 
 ## 2. 端到端耗时对比
 

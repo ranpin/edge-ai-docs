@@ -29,13 +29,13 @@
 > [!WARNING]
 > **`0.0.0.0:8080` 是 demo 阶段的选择，车规安全视角是硬伤**
 >
-> 绑定 `0.0.0.0` 意味着**所有网络接口**——车机同网段的任意设备都能访问这个消耗 NPU、可被任意 payload（最大 15MB）打、且承载舱内图像的推理端点，而端点**没有任何鉴权**。demo 期为联调方便（任意主机 curl 直连 / `adb forward`）可以接受；**量产必须收敛**：
+> 绑定 `0.0.0.0` 意味着**所有网络接口**——车机同网段的任意设备都能访问这个消耗 NPU、可被任意 payload（有 Content-Length 时上限 15MB，见 5.1）打、且承载舱内图像的推理端点，而端点**没有任何鉴权**。更糟的是 **SSE 响应带 `Access-Control-Allow-Origin: *`**（sync / health 路径没有）——叠加 `0.0.0.0` 无鉴权，**任何可达车机网络的网页都能跨源驱动并读取这个推理端点**（浏览器里一段 JS 就能发请求、读流式输出）。demo 期为联调方便（任意主机 curl 直连 / `adb forward`）可以接受；**量产必须收敛**：
 >
-> ① 绑定改回环 `127.0.0.1`（座舱调用方本就同机，回环绑定不影响 `adb forward` 联调）；② 确需跨主机访问时加鉴权（token / mTLS）；③ 用 SELinux 域策略限制可达该端口的进程。
+> ① 绑定改回环 `127.0.0.1`（座舱调用方本就同机，回环绑定不影响 `adb forward` 联调）；② 确需跨主机访问时加鉴权（token / mTLS）；③ 用 SELinux 域策略限制可达该端口的进程；④ 去掉 SSE 的 `Access-Control-Allow-Origin: *` 通配（或收敛到白名单源）。
 >
 > 对比：aiservice 形态的 `VoyahAIService` 绑定 `127.0.0.1:8090`，两形态的网络安全姿态**不一致**，迁移时应以回环绑定为基线。详见 [运维、安全与功能安全](ops-security.html) 的 5.3 节。
 
-它承载的模型是 **Qwen3-Omni-4B**（内部定制型号 `qwen3-omni-4b`，INT4 量化 + 场景 LoRA）。模型文件不打包进 APK，而是放在车机固定路径下，且**分两个根目录**：运行时配置/模板根 `/AI/vllm_sdk/models`（`init()` 的入参）与模型权重/Context Binary 根 `/AI/VLM/models/qwen3-omni-4b`（由配置中 `model_root` 定位）。谁读谁、权威目录树见 3.3 节与 [设备部署与上车流程](device-deployment.html) 的 2.2 节。
+它承载的模型是 **Qwen3-Omni-4B**（内部定制型号 `qwen3-omni-4b`，INT4 量化 + 场景 LoRA）。模型文件不打包进 APK，而是放在车机固定路径下，且**分两个根目录**：运行时配置/模板根 `/AI/vllm_sdk/models`（`init()` 的入参）与模型权重/Context Binary 根 `/AI/VLM/models/qwen3-omni-4b`。genai 形态经 `multi_lora_runtime_config.json` → `model_config` → `qwen3-omni-4b_8397.json` 的 `model_path`（**绝对路径**）定位权重，**不是** `model_root` 相对跟随（那是 aiservice 形态机制）；`veg_params` 还引用第三个根 `/AI/VLM/models/raw_src/`。谁读谁、权威目录树见 3.3 节与 [设备部署与上车流程](device-deployment.html) 的 2.2 节。
 
 ### 1.2 端到端调用链
 
@@ -46,7 +46,7 @@ flowchart TB
     Client["座舱调用方HMI / 语音 / 视觉模块"] -->|"HTTP POST/v1/chat/completions 或 /inject"| EP
     subgraph APK["lantu_demo APK (Android 应用层 / Java)"]
         EP["TestHttpEndpointNanoHTTPD :8080"]
-        SVC["TestInjectService前台服务 + 请求队列"]
+        SVC["TestInjectService前台服务（常驻/自愈）"]
         BMI["BanmaModelInferenceJNI 封装 (AutoCloseable)"]
         EP --> SVC --> BMI
     end
@@ -55,7 +55,7 @@ flowchart TB
     end
     subgraph NATIVE["Native SDK + QNN (预编译 .so / arm64-v8a)"]
         SDK["banma::ModelInferencelibandroid_sdk / libagent_group"]
-        LLM["LLM 引擎libllms / libGenie / libflash_attn"]
+        LLM["LLM 引擎libllms / libGenie"]
         QNN["QNN HTP 后端libQnnHtp + V81 Skel/Stub"]
         NPU[("Hexagon NPU经 FastRPC / libcdsprpc")]
         SDK --> LLM --> QNN --> NPU
@@ -89,8 +89,8 @@ flowchart TB
 | :--- | :--- | :--- |
 | `MyApplication` | Application | 进程级初始化：按序加载 native 库、设置 `ADSP_LIBRARY_PATH`（早于任何 Activity/Service） |
 | `MainActivity` | Activity (Launcher) | 界面入口；只负责拉起前台服务（`startForegroundService`）。native init 统一收敛到 `TestHttpEndpoint.initOnce()` 单点（2026-08-17 修复此前 MainActivity / Service 各 init 一次、两个 handle 争抢 NPU 的问题，见 4.2）；UI 推理路径默认注释，仅作演示 |
-| `TestInjectService` | Service (foreground) | 常驻前台服务；持有推理实例与 HTTP 端点；请求队列串行处理；`START_STICKY` 自愈 |
-| `TestHttpEndpoint` | NanoHTTPD | HTTP 服务核心（约 2200 行）：协议解析/转换、类型判定、图片提取、同步/SSE 响应、超时自愈 |
+| `TestInjectService` | Service (foreground) | 常驻前台服务；持有推理实例与 HTTP 端点；`START_STICKY` 自愈。（类内 `ConcurrentLinkedQueue`/`triggerLock`/`processQueue` 是**历史遗留死代码**，从不入队、`triggerProcessingSafely` 无调用者；真正的串行在 HTTP 层，见 4.3） |
+| `TestHttpEndpoint` | NanoHTTPD | HTTP 服务核心（约 2200 行）：协议解析/转换、类型判定、图片提取、同步/SSE 响应、超时自愈；**全局 `requestProcessingLock` 串行锁**（sync 与 SSE 两路径共用，见 4.3） |
 | `BanmaModelInference` | JNI 封装 | `AutoCloseable`；暴露 `init / inference / inferenceWithImage / close`，内部持有 native handle |
 | `NativeEnv` | 工具类 | `ADSP_LIBRARY_PATH` 的**唯一构造点**，避免多处路径字面量不一致（仅 GenAI 形态用，见 3.2） |
 | `TaskScheduler` | 单例 | 8 线程异步池 + 单线程调度池（daemon 线程） |
@@ -105,9 +105,14 @@ flowchart TB
 | 文件 | 作用 |
 | :--- | :--- |
 | `modelinfer.cpp` | **4 个** JNI 函数实现：`nativeCreate / nativeDestroy / nativeInit / nativeInference`；负责 Java↔C++ 类型转换、构造 `banma::DataMessage`、注册跨线程回调 |
-| `CMakeLists.txt` | 定义 `modelinfer` 共享库；include `vllm_sdk` 头文件；链接 `aadkcore`、`log`、`android_sdk` |
+| `CMakeLists.txt` | 定义 `modelinfer` 共享库；include 本地 `include/` 头文件；链接 `aadkcore`、`log`、`android_sdk`（从 jniLibs 目录 link） |
 | `include/data_message.h` | `banma::DataMessage / ImageInfo / AudioInfo / MsgType / RequestType / ImageFormat` 等数据结构与场景 ID 宏定义 |
 | `include/model_inference.h` | `banma::ModelInference` 类接口：`init / inference_msg / stopInferenceTask / releaseModelResources` |
+
+> [!NOTE]
+> **头文件是手工同步的副本，无构建期耦合——存在版本静默漂移风险**
+>
+> `app/src/main/cpp/include/` 下的 `data_message.h` / `model_inference.h` 需**手工从 SDK 交付包同步**（早期指向 `vllm_sdk` 的路径已删，现只 include 本地副本）。APK 的 CMake 与 SDK 的 `.so` 之间**没有构建期依赖检查**——若头文件与包内 `.so` 版本不一致（结构体字段/接口签名漂移），编译照过、运行期才崩。更新 SDK `.so` 时必须同步刷新这两个头文件。另注意两套 CMake 并存：**APK 侧 AGP 锁 CMake 3.22.1**（编 `libmodelinfer.so`），**SDK 可执行文件构建要 CMake 3.28**（见 [设备部署与上车流程](device-deployment.html) 1.1），两者要求不同、别混用。
 
 > [!NOTE]
 > **NPU 资源 / profile 接口已停用删除**
@@ -124,11 +129,26 @@ flowchart TB
 
 | 分类 | 关键库 | 说明 |
 | :--- | :--- | :--- |
-| **业务 SDK** | `libandroid_sdk.so`、`libagent_group.so`、`libvoyah_ai_client.so`、`libaadkcore.so`、`libaisa.so`、`libqualla.so` | banma/voyah 推理与 Agent 框架（即 [aadkcore](../agent-framework/agent-core.html) + [agent\_group](../agent-framework/agent-group.html)） |
-| **LLM 引擎** | `libllms.so`、`libGenie.so`、`libflash_attn.so` | 大模型推理内核与 FlashAttention 加速 |
+| **业务 SDK** | `libandroid_sdk.so`、`libagent_group.so`、`libaadkcore.so`、`libaisa.so`、`libqualla.so` | banma/voyah 推理与 Agent 框架（即 [aadkcore](../agent-framework/agent-core.html) + [agent\_group](../agent-framework/agent-group.html)） |
+| **LLM 引擎** | `libllms.so`、`libGenie.so` | 大模型推理内核与 Genie 推理引擎 |
 | **QNN / NPU 后端** | `libQnnHtp.so`、`libQnnHtpV81Skel.so`、`libQnnHtpV81Stub.so`、`libQnnHtpV81CalculatorStub.so`、`libQnnCpu.so`、`libQnnGenAiTransformer(Model).so`、`libqnn_backend.so` | 高通 QNN 框架 + HTP（Hexagon Tensor Processor）后端；`V81Skel` 运行在 DSP 侧 |
-| **系统 / FastRPC** | `libcdsprpc.so`（系统库，经 `<uses-native-library>` 声明） | FastRPC 通道，Host（APK）↔ cDSP 跨处理器调用 |
-| **通用依赖** | `libopencv_*.so`、`libcurl.so`、`libssl.so`/`libcrypto.so`、`libjsoncpp.so`、`libomp.so`、`libc++_shared.so`、`libperfetto.so` | 图像处理、网络、TLS、JSON、OpenMP 并行、C++ 运行时、性能追踪 |
+| **系统 / FastRPC** | `libcdsprpc.so`（系统库，经 `<uses-native-library>` 声明，不占 jniLibs 名额） | FastRPC 通道，Host（APK）↔ cDSP 跨处理器调用 |
+| **通用依赖** | `libopencv_*.so`、`libcurl.so`、`libssl.so`/`libcrypto.so`、`libjsoncpp.so`、`libomp.so`、`libc++_shared.so` | 图像处理、网络、TLS、JSON、OpenMP 并行、C++ 运行时 |
+
+> [!NOTE]
+> **jniLibs 恰 37 个 `.so`；有 3 个「看起来该有」的库其实不打包**
+>
+> `jniLibs/arm64-v8a` 实际恰好 **37 个** `.so`（`libcdsprpc.so` 是系统库、经 `<uses-native-library>` 声明，不计入）。其中 3 个常被误以为在包里的库**实际不在**：
+>
+> - `libvoyah_ai_client.so`——已随 NPU/profile 接口停用一并删除（见 2.2 NOTE），与「接口已删」自洽；
+> - `libflash_attn.so` / `libperfetto.so`——它们是 aarch64-**glibc**（宿主 Linux）构建产物，**装不进 Android bionic**，SDK 侧构建用 `EXCLUDE_FILES` 排除。
+>
+> 一句话：`flash_attn` / `cpu_profiler` / `perfetto` 这类库是**宿主 glibc 构建、永不打包**进 APK。
+
+> [!NOTE]
+> **预编译 `.so` 需确认 16KB 页对齐**
+>
+> jniLibs 里全是预编译 `.so`。Android 15+ 要求 native 库按 **16KB 内存页对齐**，否则加载失败——接入/更新这些预编译库时要确认其按 16KB 对齐（`objdump -p | grep LOAD` 看 Align，或 `zipalign -c -P 16`）。背景与检查方法见 [Android 开发 & JNI 基础](../../general/android-jni.html)。
 
 > [!WARNING]
 > **libQnnHtpV81Skel.so 不能被 strip**
@@ -190,12 +210,13 @@ SDK 约定模型放在固定绝对路径，APK 不做拷贝（模型体积大，
 // TestInjectService.java:81
 String modelPath = "/AI/vllm_sdk/models";   // 运行时配置根：config/*.json + template/*.yaml
 infer.init(modelPath, nativeLibraryDir);    // 权重/Context Binary 在 /AI/VLM/models/qwen3-omni-4b，
-                                            // 由 multi_lora_runtime_config.json 的 model_root 定位
+                                            // genai 形态经 multi_lora_runtime_config.json → model_config
+                                            // → qwen3-omni-4b_8397.json 的 model_path（绝对路径）定位
 ```
 
 > [!NOTE]
 > - 早期的 `infer.requestNpuPermission("vllm")` 已随 NPU 接口停用一并删除（见 2.2）
-> - GenAI 形态下 SDK 读配置后按 `model_root` 到 `/AI/VLM/models/qwen3-omni-4b` 装载 Context Binary（进程内 QNN/HTP）
+> - GenAI 形态下 SDK 读配置后，经 `multi_lora_runtime_config.json` 的 `model_config` → `qwen3-omni-4b_8397.json` 的 `model_path`（**绝对路径**）到 `/AI/VLM/models/qwen3-omni-4b` 装载 Context Binary（进程内 QNN/HTP）；`veg_params` 另引用第三个根 `/AI/VLM/models/raw_src/`。**genai 形态没有 `model_root` 字段**，`model_root` 相对跟随是 aiservice 形态机制（见 [设备部署与上车流程](device-deployment.html) 2.2）
 > - AIService 形态下 `init()` 只读配置、不载模型，约 **25ms** 返回；模型由 `VoyahAIService` 启动时扫描 `/AI/VLM/models` 装载（见 [AIService 后端集成与重构](aiservice-integration.html)）
 
 ## 4. 前台服务与自愈（TestInjectService）
@@ -205,15 +226,29 @@ infer.init(modelPath, nativeLibraryDir);    // 权重/Context Binary 在 /AI/VLM
 ### 4.1 前台服务声明
 
 ```
-<!-- AndroidManifest.xml -->
+<!-- AndroidManifest.xml（节选，实际声明更多） -->
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />  <!-- 为 Android 14+ 提前声明 -->
+<uses-permission android:name="android.permission.INTERNET" />                     <!-- 起本地 HTTP 服务 -->
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />        <!-- 全量外部存储访问，见下警示 -->
 
-<service android:name=".TestInjectService"
-         android:exported="true"
-         android:foregroundServiceType="dataSync" />
-<uses-native-library android:name="libcdsprpc.so" android:required="false" />
+<application android:allowBackup="true" ...>   <!-- 允许 adb backup 导出应用数据，见下警示 -->
+    <service android:name=".TestInjectService"
+             android:exported="true"            <!-- 任意本机 app 可 start/stop，见下警示 -->
+             android:foregroundServiceType="dataSync" />
+    <uses-native-library android:name="libcdsprpc.so" android:required="false" />
+</application>
 ```
+
+> [!WARNING]
+> **manifest 的几处 demo 姿态，量产要收敛**
+>
+> - **`service android:exported="true"`**：`TestInjectService` 对外导出，意味着**任意本机应用**都能 `startService` / `stopService` 它——可被恶意 app 停掉推理服务，或被借道拉起。量产应改 `exported="false"`（仅同进程/同签名内调用），确需跨 app 调用则用**签名级权限**（`android:protectionLevel="signature"`）保护。
+> - **`MANAGE_EXTERNAL_STORAGE`**：全量外部存储访问（「所有文件访问」），权限极大且是应用商店重点审查项。本 APK 主链路读 `/AI`（非外部存储），该权限多为调试落盘（如 `DEBUG_SAVE_INPUT_IMAGE`）而留，量产应去掉。
+> - **`allowBackup="true"`**：允许 `adb backup` 导出应用数据，量产应改 `false` 防数据外泄。
+>
+> 这些与 1.1 的网络暴露面（`0.0.0.0` 无鉴权 + SSE CORS 通配）同属「demo 方便、量产必须收紧」的一类问题。
 
 > [!NOTE]
 > **两个 manifest 细节**
@@ -242,15 +277,26 @@ flowchart LR
 
 **START\_STICKY**：`onStartCommand()` 返回 `START_STICKY`，服务被系统杀死后会被重新创建（重新走 `onCreate`），这是「自愈重启」能成立的系统级前提（见 第 8 节）。
 
-### 4.3 请求队列（串行化）
+### 4.3 请求串行化（HTTP 层单锁，不是服务内队列）
 
-服务内维护 `ConcurrentLinkedQueue<RequestTask>` + `isProcessing` 标志 + `triggerLock`，保证队列处理串行触发；实际执行交给 `TaskScheduler` 线程池。每个任务用 `CompletableFuture<String>` 回传结果。（注：HTTP 层自身还有一把 `requestProcessingLock` 串行锁，二者共同确保同一时刻只有一个推理在跑——NPU 是独占资源。）
+NPU 是独占资源，同一时刻只能有一个推理在跑。这个串行**由 HTTP 层 `TestHttpEndpoint.requestProcessingLock` 保证**——sync 路径（`handleInjectRequestSync`）与 SSE 路径（`handleInjectRequestStream`）**共用同一把锁**，`synchronized (requestProcessingLock)` 把两条路径的推理段串起来。
+
+> [!WARNING]
+> **`TestInjectService` 里的「请求队列」是历史遗留死代码，别以为有两级排队**
+>
+> `TestInjectService` 内确实有 `ConcurrentLinkedQueue<RequestTask>` + `isProcessing` + `triggerLock` + `processQueue()` + `TaskScheduler` 这一整套，但它是**死代码**：
+>
+> - `triggerProcessingSafely()`（唯一会触发 `processQueue` 的入口）**没有任何调用者**；
+> - `requestQueue` **从不入队**（全代码无 `offer`/`add`/`put`，只有 `isEmpty`/`poll`）；
+> - 队列任务里用的 `TestInjectService.infer` **从未被赋值**（init 收敛到 `TestHttpEndpoint.initOnce()` 后，服务这个字段一直是 null），真走到会 NPE。
+>
+> 所以**只有一级串行**（HTTP 层 `requestProcessingLock`），不存在「服务内队列 + HTTP 锁」两级排队。读代码时别被这套遗留结构误导。
 
 > [!NOTE]
-> **队列深度 / 背压 / 拒绝策略：现状与量产差距**
+> **背压 / 拒绝策略：现状与量产差距**
 >
-> - **现状**：`ConcurrentLinkedQueue` 是**无界队列**——没有深度上限、没有排队超时、没有针对「队列过长」的显式拒绝。实际的背压来自三处：① 全局串行锁保证同一时刻只有一个推理；② 同步路径 35s 超时（见 第 8 节）；③ SSE 路径 `BlockingQueue.put()` 队满阻塞（见 5.4）。唯一的显式拒绝是**模型未就绪**（`infer == null`）时推理端点直接返回 503 `Model is still initializing`，不入队。
-> - **量产差距**：持续高压下队列积压只表现为后续请求等待时间变长，客户端只能靠自身超时兜底。需要补：队列深度上限 + 超限快速拒绝（429/503 + `Retry-After`）、排队等待时间上限（超时即弃并回错误帧）、以及请求级优先级调度（SDK 协议已有 `priority` 字段，见 6.3 的 DataMessage 表，HTTP 层尚未映射）。
+> - **现状**：串行锁本身**无界**——没有排队深度上限、没有排队超时、没有针对「等待过长」的显式拒绝。实际的背压来自三处：① 全局串行锁保证同一时刻只有一个推理；② 同步路径 35s 超时（见 第 8 节）；③ SSE 路径 `BlockingQueue.put()` 队满阻塞（见 5.4）。唯一的显式拒绝是**模型未就绪**（`infer == null`）时推理端点直接返回 503 `Model is still initializing`，不入队。
+> - **量产差距**：持续高压下排队积压只表现为后续请求等待时间变长，客户端只能靠自身超时兜底。需要补：排队深度上限 + 超限快速拒绝（429/503 + `Retry-After`）、排队等待时间上限（超时即弃并回错误帧）、以及请求级优先级调度（SDK 协议已有 `priority` 字段，见 6.3 的 DataMessage 表，HTTP 层尚未映射）。
 
 ## 5. HTTP 服务层（TestHttpEndpoint）
 
@@ -268,7 +314,7 @@ flowchart TB
     M -->|否| E404["404 + 错误 JSON"]
     M -->|是| RDY{"infer 就绪?"}
     RDY -->|否| E503["503 Model is still initializing"]
-    RDY -->|是| R["读取 body按 Content-Length 循环读满上限 15MB 防 OOM"]
+    RDY -->|是| R["读取 body有 Content-Length 则循环读满（上限 15MB）缺则 parseBody 回退（无上限）"]
     R --> P{"已有标准 messages 数组?"}
     P -->|是| KEEP["原样透传（不重新序列化，保 UTF-8）"]
     P -->|否| CONV["convertToMessagesFormat()history / query_parts / query → messages"]
@@ -293,9 +339,11 @@ flowchart TB
 （探活小贴士：等就绪要 `grep '"model_ready":true'`，不能只 grep `model_ready`——它在 `false` 时也命中，会误判就绪。）
 
 > [!WARNING]
-> **两个防御性设计**
+> **两个防御性设计，和一个 15MB 上限的盲区**
 >
 > ① **body 必须读满**：按 `Content-Length` 循环 `read()` 直到读满，否则抛 `Incomplete body read`——避免半截 JSON 流入 native 层导致崩溃。② **进 C++ 前先校验 JSON**：用 fastjson 试解析，非法则直接返回 400，**绝不让坏数据进入 SDK**（native 崩溃无法被 Java try/catch 捕获）。
+>
+> ③ **15MB 上限只在「有 Content-Length」时生效**：超限判断 `contentLength > 15MB` 位于 Content-Length 分支内；若请求**不带 Content-Length**，会回退到 `session.parseBody()`，那条路径**没有大小上限**（防 OOM 形同虚设）。且超限/读失败统一返回 **400**（`BAD_REQUEST`）而非语义正确的 **413**（Payload Too Large）。叠加 1.1 的 `0.0.0.0` 无鉴权，这是一个可被大 payload 打穿 OOM 的暴露面，量产要补「无 Content-Length 也限长」与正确的 413。
 
 ### 5.2 协议解析与转换
 
@@ -382,7 +430,7 @@ app 侧实际只调 `init` + `inference_msg`；`stopInferenceTask` / `releaseMod
 
 banma::ModelInference model;
 
-// 1. 初始化（入参是配置根；权重由配置中的 model_root 定位）
+// 1. 初始化（入参是配置根；genai 形态权重经 model_config→model_path 绝对路径定位，非 model_root）
 model.init("/AI/vllm_sdk/models");
 
 // 2. 构造推理请求
@@ -437,7 +485,7 @@ if (imageData != nullptr && imageFormat >= 0) {
 > [!NOTE]
 > **`resized_*` 按场景 / VIT 档位而定，不是全局固定值**
 >
-> SDK 侧是多 VIT 两档：舱内场景（100/200）走 `veg_448_448`（448×448 单档），舱外视觉问答（300）走 `veg_1024_768`（1024×768）。`modelinfer.cpp` 里硬编码的 448×448（代码注释即「默认 resize 尺寸」）只对应**舱内单档**路径；舱外大图档位由 SDK 按输入路由（见 [GenAI 方案架构总览](genai-architecture.html) 的多 VIT 动态切换）。读这段示例时不要以为「所有图都 resize 到 448」。
+> SDK 侧是多 VIT 两档，**按业务分档而非「舱内/舱外」**：舱内**衣着**（dress_detect）走 `veg_448_448`（448×448 小档），舱内**遗留物**（incar_item_detect）与**舱外问答 stage1** 走 `veg_1024_768`（1024×768 大档）。`modelinfer.cpp` 里硬编码的 448×448（代码注释即「默认 resize 尺寸」）只是**小档/默认值**；实际档位由 dispatcher 在 `image_info.resized_width/height` 上按业务写死、SDK 的 `get_vit_shape` 精确等值路由（见 [GenAI 方案架构总览 §3.2](genai-architecture.html)）。读这段示例时不要以为「所有图都 resize 到 448」。
 
 ### 6.5 跨线程回调（关键）
 
@@ -451,23 +499,30 @@ jmethodID onReplyMid = env->GetMethodID(cls, "onReply", "(Ljava/lang/String;Z)V"
 
 banma::ScenarioReplyHandler cb = [jvm, gHandler, onReplyMid](const std::string& result, bool finished){
     JNIEnv* envCb = nullptr;
-    // 3. 回调发生在非 Java 线程 → 先 AttachCurrentThread
-    if (jvm->GetEnv((void**)&envCb, JNI_VERSION_1_6) == JNI_EDETACHED)
-        jvm->AttachCurrentThread(&envCb, nullptr);
+    bool needDetach = false;
+    // 3. 取当前线程 JNIEnv；只有「本线程确实是我们 Attach 的」才需要 Detach
+    jint stat = jvm->GetEnv((void**)&envCb, JNI_VERSION_1_6);
+    if (stat == JNI_EDETACHED) {
+        if (jvm->AttachCurrentThread(&envCb, nullptr) != JNI_OK) return;
+        needDetach = true;               // ★ 守卫：只 detach 自己 attach 的线程
+    } else if (stat != JNI_OK) {
+        return;
+    }
     // 4. 回调 Java
     jstring jres = envCb->NewStringUTF(result.c_str());
     envCb->CallVoidMethod(gHandler, onReplyMid, jres, finished);
-    // 5. 末帧释放全局引用 + DetachCurrentThread
+    envCb->DeleteLocalRef(jres);
+    // 5. 仅末帧释放全局引用；仅自己 attach 的线程才 Detach
     if (finished) envCb->DeleteGlobalRef(gHandler);
-    jvm->DetachCurrentThread();
+    if (needDetach) jvm->DetachCurrentThread();
 };
 p->inference_msg(msg, stream, cb);
 ```
 
 > [!WARNING]
-> **三个 JNI 易错点**
+> **四个 JNI 易错点（含两个真实代码里踩过的）**
 >
-> ① **全局引用**：局部引用跨线程即失效，必须 `NewGlobalRef`，且记得在末帧 `DeleteGlobalRef` 防泄漏。② **AttachCurrentThread**：native 线程没有 `JNIEnv`，不 Attach 直接调用会崩。③ **GetStringUTFChars 配对 Release**：`JStringToStdString` 内取完即释放，避免内存泄漏。
+> ① **全局引用**：局部引用跨线程即失效，必须 `NewGlobalRef`，且记得在末帧 `DeleteGlobalRef` 防泄漏。② **AttachCurrentThread 要配 `needDetach` 守卫**：若回调恰好发生在**已 attach 的 Java 线程**上（`GetEnv` 返回 `JNI_OK`），对它无条件 `DetachCurrentThread()` 是经典错误（会解掉别人的 attach）。真实代码用 `needDetach` 标志，只 detach 本线程自己 attach 的情况。③ **`DeleteGlobalRef` 只在 `finished` 时做 → 超时请求会泄漏全局引用**：若一次推理被第 8 节的 35s 超时掐掉、SDK 始终没回 `finished=true`，`gHandler` 这个全局引用就永远不会被释放（每超时一次泄一个）。④ **GetStringUTFChars 配对 Release**：`JStringToStdString` 内取完即释放，避免内存泄漏。
 
 ## 7. 场景与三阶段流式协议
 
@@ -531,10 +586,21 @@ flowchart TB
 
 | 开关 | 当前值（诊断态） | 生产态 | 语义 |
 | :--- | :--- | :--- | :--- |
-| `SYNC_TIMEOUT_MS` | 35 000 | — | 同步超时阈值；合法长生成实测 ≤15s，取 35s 留余量，既不误杀又能识别 native 卡死 |
+| `SYNC_TIMEOUT_MS` | 35 000 | — | 同步超时阈值；**不是「留余量」，是被上下界夹出来的窗口**（见下 WARNING）：必须抢在 C++ 第二段 StopTask（T+60s）与 guest VM 复位（约 T+56s）之前 |
 | `MAX_CONSECUTIVE_TIMEOUTS` | 2 | 2 | 连续超时阈值；取 2 避免单次偶发慢请求误触发重启 |
 | `SELF_HEAL_ENABLED` | false | **true** | 生产自愈：达阈值即 `killProcess`，靠 `START_STICKY` 干净重启 |
 | `CRASH_FOR_TOMBSTONE` | **true** | false | 诊断取证：超时即 SIGABRT 让 debuggerd 抓全线程 native 栈，**取证后不自动拉起**（优先级最高） |
+
+> [!WARNING]
+> **35s 是被上下界夹出来的窗口，不是随手「留余量」**
+>
+> 取 35s（而非原先的 60s）的理由是必须抢在两件事**之前**触发我方取证/自愈：
+>
+> - **上界 ①——C++ `ModelScheduler` 第二段超时（T+60s）会调 `StopTask`**：`runtime_config.json` 里 `timeout_s=30`（见 [设备部署与上车流程](device-deployment.html) 2.2 的目录树），调度器分两段计时，第二段到 T+60s 时执行 `StopTask`；而 `suspend`/`StopGenerate` 路径有 **UAF 风险**，会把 tombstone 崩在**误导性的位置**上，污染取证。
+> - **上界 ②——guest VM 约 T+56s 复位**：20260804 那次卡死，Android guest VM 在 T+56s 被复位，原先的 60s 超时差 4 秒没跑到，C++ 第二段同样没跑到（日志中 `Cancelling task` 计数为 0），导致该次取证**完全落空**。
+> - **下界——T+30s 的 C++ 第一段 `BoostPriority` 刻意保留**：任务此时已 RUNNING，改队列优先级无副作用，且能在每份 tombstone 旁留下一条「调度器确实感知到超时」的交叉佐证。
+>
+> 所以 35s 落在「> 30s 第一段之后、< 56s VM 复位 / < 60s 第二段 StopTask 之前」的窗口里。**不误杀**的证据：20260804 浸泡实测 **5488 次**完整请求，平均 **1757ms**、最大 **2517ms**、超 3s 者 **0 次**——合法请求远够不到 35s，35s 只会命中真正的 native 卡死。
 
 > [!WARNING]
 > **当前两分支均为诊断态，发版前须切回生产组合**
@@ -555,7 +621,7 @@ flowchart TB
 | `compileSdk / minSdk / targetSdk` | 33（Android 13）。注意 4.1 的前台服务类型/权限声明是**为 Android 14+（targetSdk 34+）提前声明**——本 APK targetSdk 33，跑在 Android 14 设备上并不触发该校验 |
 | `ndk.abiFilters` | `"arm64-v8a"`（仅 64 位 ARM，匹配车机 SoC） |
 | `externalNativeBuild.cmake` | 指向 `src/main/cpp/CMakeLists.txt`，编译 `libmodelinfer.so` |
-| `jniLibs.srcDirs` | `src/main/jniLibs`（预编译 .so 入库目录） |
+| `jniLibs.srcDirs` | `src/main/jniLibs`（预编译 .so 入库目录；这些预编译库需确认 **16KB 页对齐**，见 2.3 注与 [Android 开发 & JNI 基础](../../general/android-jni.html)） |
 | `packagingOptions.jniLibs` | `useLegacyPackaging true` + `doNotStrip "**/libQnnHtpV81Skel.so"` |
 | `applicationVariants` | 产物自动命名为 `lantu-sdk-app-<buildType>-<yyyyMMddHHmm>.apk`（与部署脚本约定一致） |
 
@@ -572,13 +638,18 @@ flowchart LR
     C --> D["adb uninstall 旧版"]
     D --> E["检查 /data 空间≥200MB，不足即停（绝不自动清理）"]
     E --> F["adb install -r -t流式安装"]
-    F --> G["dumpsys 校验versionName/Code"]
+    F --> G["dumpsys 校验（弱判据）真实身份看文件名时间戳 + .so md5"]
     style E fill:#f39c12,color:#fff
     style F fill:#4361ee,color:#fff
     style G fill:#2ecc71,color:#fff
 ```
 
 脚本几处稳健性设计值得借鉴：归档名解析出 `buildType` 与 12 位时间戳并与 `BUILD_TYPE` 交叉校验，防止装错包；归档「先写 `.part` 再 `mv`」避免中断留下半个备份；空间检查**只报不清**（保护车机数据）；安装失败用 `&& / ||` 正确捕获退出码（某些车机 adb 即使失败也返回 0，需同时 grep `Failure`）。
+
+> [!WARNING]
+> **`dumpsys` 校验是弱判据——版本号硬编码、区分不了构建**
+>
+> `build.gradle` 里 `versionCode 1` / `versionName "1.0"` 是**硬编码、从不递增**的，所以 `dumpsys package` 打出来的版本号对每个构建都一模一样，**根本区分不了**装的是哪一版。APK 的**真实身份**是：① 文件名里的 **12 位时间戳**（`lantu-sdk-app-<buildType>-<yyyyMMddHHmm>.apk`，由 `applicationVariants` 自动命名）；② 包内 **3 个 SDK `.so` 的 md5**（`libaadkcore` / `libagent_group` / `libandroid_sdk`，与 [设备部署与上车流程](device-deployment.html) 1.4 的「APK 侧」判据一致）。核对「装的是哪版」要认时间戳 + md5，别信 dumpsys 的 versionName/Code。
 
 ### 9.3 交付指标（实测）
 
@@ -600,9 +671,9 @@ flowchart LR
 > **④ 常驻 + 自愈**：前台服务 `dataSync` + `START_STICKY`；native 卡死靠 `killProcess` 干净重启。
 > **⑤ 服务化**：NanoHTTPD :8080，兼容 OpenAI 协议，跨语言可调用。
 > **⑥ 进 C++ 前校验**：body 读满 + fastjson 校验，坏数据绝不入 native。
-> **⑦ JNI 回调**：全局引用 + AttachCurrentThread + 末帧释放，三件套缺一不可。
-> **⑧ NPU 独占**：全局串行锁保证同一时刻仅一个推理在跑。
-> **⑨ 量产安全收敛**：`0.0.0.0:8080` 无鉴权是 demo 姿态，量产改回环绑定 / 加鉴权 / SELinux 域限制可达进程（见 1.1 警示）。
+> **⑦ JNI 回调**：全局引用 + AttachCurrentThread（配 `needDetach` 守卫）+ 末帧释放，缺一不可；超时未回末帧会泄全局引用（见 6.5）。
+> **⑧ NPU 独占**：全局串行锁（HTTP 层 `requestProcessingLock`）保证同一时刻仅一个推理在跑；服务内队列是死代码（见 4.3）。
+> **⑨ 量产安全收敛**：`0.0.0.0:8080` 无鉴权 + SSE CORS 通配 + manifest `exported=true` 都是 demo 姿态，量产改回环绑定 / 加鉴权 / SELinux 域限制 / 收敛 CORS 与导出（见 1.1、4.1）。
 
 > [!NOTE]
 > **与本篇相关的其他文档**
