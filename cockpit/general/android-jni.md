@@ -787,7 +787,7 @@ flowchart TB
 > [!WARNING]
 > **16KB page size 对齐：预编译厂商 .so 是重灾区**
 >
-> Android 15 开始支持 **16KB 内存页**的设备，Google Play 也已给出硬性期限（**2025-11-01**）：targeting Android 15+ 的新应用与更新必须 16KB 兼容。在 16KB 页设备上，按旧 4KB 对齐的 .so 会**直接加载失败**——对本篇这种大量使用预编译厂商库的工程，这是发布阻断级问题。要分三层检查与修复：
+> Android 15 开始支持 **16KB 内存页**的设备，Google Play 的硬性期限（**2025-11-01**）现已生效：targeting Android 15+ 的新应用与更新必须 16KB 兼容。在 16KB 页设备上，按旧 4KB 对齐的 .so 会**直接加载失败**——对本篇这种大量使用预编译厂商库的工程，这是发布阻断级问题。要分三层检查与修复：
 >
 > **① ELF 层（自己编译的库）**：链接期加 `-Wl,-z,max-page-size=16384`，让 LOAD 段按 16KB 对齐。**NDK r28+ 已默认开启；r27 及以前必须显式加**（CMake 写法：`target_link_options(modelinfer PRIVATE "-Wl,-z,max-page-size=16384")`）。
 >
