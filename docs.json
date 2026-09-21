@@ -66,11 +66,13 @@
           "file": "cockpit/general/quantization.html",
           "badge": "Part 4",
           "status": "done",
-          "desc": "PTQ/QAT、AIMET（CLE/BiasCorrection/AdaRound）、W4A16 机制、量化方案对比",
+          "desc": "PTQ/QAT、AIMET（CLE/BiasCorrection/AdaRound）、W4A16 机制、2025-2026 方法版图（GPTQ/AWQ/QuaRot/FP8/KV 量化）、量化方案选型",
           "tags": [
             "量化",
             "AIMET",
-            "W4A16"
+            "W4A16",
+            "QuaRot",
+            "KV量化"
           ]
         },
         {
