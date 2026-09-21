@@ -7,7 +7,7 @@
 >
 > 这是一篇**从零开始的教程**，讲 Android 工程结构与 JNI 的基础知识。贯穿全篇的示例工程 `CockpitInferDemo` 是一个「在高通 SA8397P 座舱上跑端侧大模型的宿主 APK」的**中性教学示例**——从典型端侧推理 APK 中提炼泛化而来，**不绑定任何具体量产项目**。本篇属通识层，只讲通用方法与范式；具体项目的宿主 APK 实战，应由项目层文档反向链接本篇。想懂底层芯片/DSP/FastRPC，请读 [硬件与系统底层](hardware.html)。
 >
-> 数字口径：文中个别性能/超时数值一律为**示例参数**，仅用于演示方法；平台与锚点模型的统一口径见硬件篇开头的「全站数据基准」NOTE。
+> 数字口径：文中个别性能/超时数值一律为**示例参数**，仅用于演示方法；平台与锚点模型的统一口径见硬件篇开头的「全站数据口径与锚点模型」NOTE。
 
 ## 1. 学习路线总览
 
@@ -112,6 +112,8 @@ android {
 > **targetSdk**：你「声称适配到」的版本，系统据此决定是否启用新的兼容性限制。
 >
 > 三者通常**不相等**：minSdk 跟随你要支持的最老系统（车机量产平台多冻结在某个 Android 版本，如 13）；compileSdk / targetSdk 则应尽量新——否则新 API 根本编不过。一个典型反例：`FOREGROUND_SERVICE_SPECIAL_USE` 权限是 **API 34** 才引入的，若 compileSdk 停在 33，§2.3 的清单就写不出来。
+>
+> **时效口径（2026-09）**：公开 SDK 已到 **Android 16（API 36）**；Google Play 的年度 target API 政策要求新应用与更新在 2026 年 8 月底后 target API 36（确切日期以官方公告为准）。但车机是另一个世界：量产平台的 compileSdk 跟随整机 BSP 冻结（本篇示例用 35 正是这个原因），targetSdk 往往更低。「手机上必须追新、车机上跟随 BSP」的双轨现实，本身就是座舱 Android 开发的通识。
 
 > [!WARNING]
 > **keepDebugSymbols（旧写法 doNotStrip）：Skel 库不能被 strip**
@@ -720,6 +722,11 @@ std::function<void(const std::string&, bool)> cb =
 >
 > 这是回调场景的高频故障，且极具迷惑性：同样的代码在准备阶段（Java 线程）跑得好好的，挪进回调 lambda 就炸。**标准解法**：在 Java 线程上（`JNI_OnLoad` 是天然时机，见 §4.3）预先 `FindClass` 并 `NewGlobalRef` 缓存 `jclass`，回调侧只用缓存的全局 `jclass`。`jmethodID`/`jfieldID` 不是引用、与类同生命周期，可以安全长期缓存。
 
+> [!TIP]
+> **大模型场景的回调粒度：逐 token 还是攒批？**
+>
+> LLM 解码本身很慢（TPOT 口径见[端侧解码与服务化优化](infer-serving.html)），逐 token 一次 JNI 回调的开销（§5.2 的编码转换 + 局部引用创建/销毁）完全可以忽略——**先按本节的守卫模式写对，再谈优化**。真要压开销：把 detokenize 与文本拼装留在 native 侧，攒批后回调已成形的字符串片段（与 §6.4 的 SSE/chunked 流式输出同一节奏），跨 JNI 边界的次数就从「每 token 一次」降到「每批一次」。反过来，别为了省这点开销把回调设计复杂化——JNI 层不是大模型推理的瓶颈所在。
+
 ### 5.4 CMake 与 .so
 
 `cpp/CMakeLists.txt` 描述怎么把 `modelinfer.cpp` 编成 `libmodelinfer.so`：
@@ -754,6 +761,22 @@ target_link_libraries(modelinfer inference_core log android_sdk)   # 链接依�
 > **库名约定**
 >
 > `add_library(... SHARED ...)` 的库名 `modelinfer` 决定产物叫 `libmodelinfer.so`，也决定 Java 侧 `System.loadLibrary("modelinfer")` 要填的名字（去掉 `lib` 前缀和 `.so` 后缀）。
+
+> [!NOTE]
+> **比 `-fvisibility=hidden` 更严的导出控制：链接期版本脚本**
+>
+> 可见性预设管的是「你自己编译的每个翻译单元」；若要把导出面收敛成**显式白名单**（如只导出 `JNI_OnLoad`），用链接期版本脚本：
+>
+> ```
+> # exports.map
+> { global: JNI_OnLoad; local: *; };
+> ```
+>
+> ```
+> target_link_options(modelinfer PRIVATE "-Wl,--version-script=${CMAKE_SOURCE_DIR}/exports.map")
+> ```
+>
+> 它对「拿不到源码、无法用 `-fvisibility` 重编」的静态库（.a）/目标文件同样有效——导出面在最终链接这一步收口。导出符号越少，与同进程其他 .so 发生符号冲突/被抢占（interposition）的面就越小，.so 也更小。审计任何库的导出面用 `llvm-readelf --dyn-syms libX.so`。
 
 > [!WARNING]
 > **`ANDROID_STL=c++_shared`：全进程只能有一份 STL**
@@ -802,6 +825,8 @@ flowchart TB
 > **③ 打包层（APK 组装）**：`useLegacyPackaging=false`（§2.2）时 .so 运行时直接从 APK 内加载，必须在 ZIP 里**未压缩存放 + 按 16KB 对齐**——`zipalign -P 16`（AGP 8.5.1+ 自动处理；手动重打包要自己做）。`useLegacyPackaging=true` 因安装时 .so 已解压落盘，只绕开**打包对齐**这一层，**绕不开 ELF 层的 max-page-size**——①② 对两种取值都不可豁免。
 >
 > 手动重打包时还要记住顺序：**`zipalign` 必须在签名之前**——先签名再对齐会破坏签名（v2/v3 签名覆盖 ZIP 内容，对齐挪动字节即失效）。
+>
+> **④ 权重文件的 mmap 同样受 16KB 影响**：16KB 页不只管 .so。推理引擎普遍直接 `mmap` 权重文件，而 `mmap` 的 offset 必须是**页大小的整数倍**——按 4KB 边界布局文件内数据段、并以该偏移 `mmap` 的引擎/自定义权重格式，在 16KB 页设备上直接 `EINVAL`。评估或自研推理引擎时，把「权重文件内部布局按 16KB 对齐」与 .so 对齐写进同一张发布检查单。
 
 ## 6. 端侧进阶主题
 
@@ -809,7 +834,7 @@ flowchart TB
 
 这是「端侧 AI」的灵魂，概念链：
 
-- **Hexagon NPU**：高通芯片里的 AI 加速器（张量算力口径见[硬件篇](hardware.html)开头的全站数据基准 NOTE），大模型推理靠它。
+- **Hexagon NPU**：高通芯片里的 AI 加速器（张量算力口径见[硬件篇](hardware.html)开头的全站数据口径 NOTE），大模型推理靠它。
 - **QNN**：高通统一推理框架，`libQnnHtp.so` 是 HTP（Hexagon Tensor Processor）后端。
 - **FastRPC**：CPU（跑 Android/APK）和 DSP（跑 NPU 计算）是**不同处理器**，通信靠 FastRPC，`libcdsprpc.so` 就是 cDSP 的 FastRPC 库。
 - **Skel/Stub 模式**：FastRPC 把一次跨处理器调用拆成两半——CPU 侧叫 **Stub**（桩），DSP 侧叫 **Skel**（骨架）。
@@ -823,6 +848,15 @@ flowchart TB
 | 要设 `ADSP_LIBRARY_PATH` | DSP 侧 Skel 库不在标准路径，得靠这个环境变量告诉 FastRPC 去哪找（取值与时机见 §3.1） |
 
 更底层的芯片/DSP/SSR 细节见 [硬件与系统底层](hardware.html)。
+
+> [!NOTE]
+> **为什么本篇不讲 NNAPI——Google 官方端侧 AI 栈的现状**
+>
+> 老教程常把 NNAPI（Neural Networks API）当作 Android 端侧推理的「官方答案」，这个口径已经过时：**NNAPI 自 Android 15（API 35）起被官方弃用**。它面向的是小模型 CV 类加速（经 HAL 分发给厂商驱动），算子覆盖与内存模型都不适合大模型；弃用后，TFLite 等框架的硬件加速转向 GPU delegate 与厂商自有运行时。
+>
+> Google 当前端侧生成式 AI 的官方栈是 **AICore**（系统级服务，托管 Gemini Nano 权重，支持 LoRA 适配与安全护栏）+ 其上的 **ML Kit GenAI API**——但可用范围基本限于 Pixel / 三星等特定旗舰手机，**车机平台普遍没有 AICore**，座舱大模型也不该把推理押在一个自己不可控的系统服务上。
+>
+> 所以座舱端侧大模型的现实路径就是本篇教的：**APK 直接桥接厂商运行时（QNN/HTP 等）**，自己管理模型权重、内存与会话生命周期。（AICore 的机型覆盖与 API 形态演进很快，引用前按官方文档核实。）
 
 ### 6.2 SELinux 与模型文件访问（上机头号坑）
 
@@ -843,9 +877,18 @@ avc: denied { read open } for comm="...infer" path="/data/models/model.bin"
 | **① 模型放应用沙箱** | 模型下发到 `getFilesDir()` / `getCodeCacheDir()`（随 APK 内置，或运行时下载） | 普通应用、快速原型。零 sepolicy 工作；代价是模型与应用绑定、多应用难共享、大模型挤占应用配额 |
 | **② 共享系统目录 + 平台策略** | 整机厂在 `file_contexts` 给目录定专属标签（如 `/data/models(/.*)?  u:object_r:vendor_model_file:s0`），再在 sepolicy 里放行目标域（`untrusted_app`，或给平台签名应用划专属域）`search/read/open/getattr` | 量产车机。推理服务通常是**平台签名的系统应用**，模型目录由系统服务在首启时初始化并打标 |
 
+> [!NOTE]
+> **模型权重怎么进设备：assets 内置 / 运行时下载 / 系统共享目录**
+>
+> 上表「方案①放沙箱」还有一层前置问题：几 GB 的大模型权重最初是怎么到设备上的。三条路各有硬约束：
+>
+> - **assets 随 APK 内置**：只适合小模型。权重进 assets 意味着 APK 体积爆炸（车机存储与 OTA 包都吃不消）；且被压缩的 asset **无法 `openFd`/mmap**，首启必须先整体拷进沙箱——拷贝完成前存储占用近乎翻倍，拷贝中断还要处理半成品。走 Google Play 分发另有 AAB 基础包与 Play Asset Delivery 的体积上限（具体数字以官方为准）；车机通常没有 Play，只能走整机厂应用商店或随系统镜像预置。
+> - **运行时下载到 `getFilesDir()`**：主流做法。三件事必须做对：**断点续传**（几 GB 的下载不能失败就从头再来）、**sha256 完整性校验**、**先写临时名再原子 `rename`**——否则引擎可能 mmap 到一个写了一半的权重文件，症状是「加载成功但输出乱码」，比下载失败难查得多。
+> - **系统共享目录（`/data/models` 等）**：量产车机常态，权重由系统侧统一预置/OTA，多个应用共享一份——代价就是本节主题：需要整机厂 sepolicy 配合（上表方案②）。
+
 **四个决定成败的细节**：
 
-- **先确认进程在哪个域，再写策略**。应用的 SELinux 域由**签名、安装位置、`sharedUserId` 共同决定**：普通安装的应用是 `untrusted_app`（32 位为 `untrusted_app_32`），平台签名装进 /system/app 是 `platform_app`，/system/priv-app 是 `priv_app`，整机厂还可能划专属域。同一个 APK 换一种安装方式，域就完全不同——**先用 `adb shell ps -Z` 确认目标进程实际跑在哪个域**，再决定给哪个域写放行，而不是照着代码想当然。
+- **先确认进程在哪个域，再写策略**。应用的 SELinux 域由**签名、安装位置、`sharedUserId` 共同决定**：普通安装的应用落在 `untrusted_app` 家族——新应用是 `untrusted_app`，32 位进程是 `untrusted_app_32`，低 targetSdk 的老应用还有 `untrusted_app_25` / `untrusted_app_27`；平台签名装进 /system/app 是 `platform_app`，/system/priv-app 是 `priv_app`，整机厂还可能划专属域。同一个 APK 换一种安装方式，域就完全不同——**先用 `adb shell ps -Z` 确认目标进程实际跑在哪个域**，再决定给哪个域写放行，而不是照着代码想当然。放行规则也要按实测域写全：只放了 `untrusted_app` 而进程实际跑在 `untrusted_app_32`，是常见的「策略写了还是 EACCES」。
 - **标签放行了，还有 DAC 这道门**。SELinux（MAC）与传统 Unix 权限（DAC）是**两道独立的门**：sepolicy 放行了 `read/open`，但文件 owner/mode 不让应用的 uid 读，照样 EACCES。排查时两个都看：`ls -Z` 看标签，`ls -l` 看属主与权限位。
 - **别撞 neverallow：要新建专属 type**。直接给 app 域放行 `system_data_file` 这类通用标签，会撞上 AOSP 的 **`neverallow`** 规则——sepolicy **编译期就过不去**，根本轮不到运行时。正解就是上表方案②：给模型目录新建专属 type（如 `vendor_model_file`）再放行。vendor 侧策略还要注意 Treble 的 system/vendor **策略分区**与 **mapping 兼容**约束（vendor 策略只能引用系统侧经 mapping 导出的类型）。
 - **标签取决于「谁创建」，错了要 `restorecon`**。`file_contexts` 里定义的标签在「有正确 transition 规则的进程在该目录创建文件」时自动生效；用脚本/adb 拷进去的文件可能带着原目录或创建进程的默认标签。发现标签不对，用 `restorecon -R /data/models` 重新打标。另外 avc 日志里的 `comm=` 字段**被截断到 15 字符**（内核任务名上限），定位进程要靠 `pid=` 再反查 `ps`，别盯着 `comm=` 猜。
@@ -883,7 +926,7 @@ adb shell getenforce                    # 确认 Enforcing（user 版恒为 Enfo
 
 **③ 对 `START_STICKY` 的可靠性要诚实**。系统对频繁重启的服务有**指数退避节流**。「崩溃（SIGABRT）≠ 可靠自愈，因为系统对崩溃有节流」这句话是对的——但 **`START_STICKY` 的重启受同一套节流约束**，不能把它当成绕过节流的旁路。真正能做的是：用 native watchdog 把「反复卡死」变成「单次卡死 + 修根因」，不把可用性押在重启速度上。
 
-**④ Android 12+ 的 FGS 后台启动限制**。被系统重启的 Service 再调 `startForeground` 时，可能抛 `ForegroundServiceStartNotAllowedException`。要 `try/catch` 并降级（记录 + 退避重试）；量产车机的推理服务通常是系统应用、不受此限，但按公开 SDK 规则写的代码必须处理它。
+**④ Android 12+ 的 FGS 后台启动限制**。被系统重启的 Service 再调 `startForeground` 时，可能抛 `ForegroundServiceStartNotAllowedException`。要 `try/catch` 并降级（记录 + 退避重试）；量产车机的推理服务通常是系统应用、不受此限，但按公开 SDK 规则写的代码必须处理它。限制还在逐年收紧：**Android 16 禁止从 `BOOT_COMPLETED` 启动 `dataSync` / `mediaProcessing` 类型的前台服务**——「开机预热推理会话」这条路径要按目标版本验证（该限制是否波及 `specialUse`、是否以 targetSdk 36 为前提，按官方行为变更清单核实）。这又一次印证 §2.3 的类型选择：常驻推理服务只有 `specialUse` 一条路。
 
 **⑤ 取证与自愈是两种互斥模式，要可切换**。`SIGKILL` **不可捕获、也不生成 tombstone**——进程当场消失，什么现场都不留。如果只有生产态的「卡死 → SIGKILL → 拉起」，会得到最被动的局面：**反复卡死、反复自愈、没有任何证据**，根因永远查不到。两种模式要显式设计、用构建变体或系统属性切换：
 
@@ -969,14 +1012,18 @@ ls app/src/main/jniLibs/arm64-v8a/        # 对照：每个 NEEDED 在这里或�
 **③ 符号化：把地址还原成函数名**。native 崩溃的现场在两处：`adb logcat -b crash`（crash 缓冲区，即时）和 `/data/tombstones/`（完整 tombstone，需 root 或 userdebug 版）。日志里的调用栈都是 `#00 pc 0000000000123abc libmodelinfer.so` 这样的裸地址，符号化需要**未 strip 的 .so**：
 
 ```
+# 未 strip .so 的位置随 AGP 版本而异：
+#   AGP 7+：app/build/intermediates/cxx/Debug/<hash>/obj/arm64-v8a/
+#   旧 AGP：app/build/intermediates/cmake/debug/obj/arm64-v8a/
+
 # 方式一：把整段 logcat 喂给 ndk-stack
-adb logcat | ndk-stack -sym app/build/intermediates/cmake/debug/obj/arm64-v8a/
+adb logcat | ndk-stack -sym app/build/intermediates/cxx/Debug/<hash>/obj/arm64-v8a/
 
 # 方式二：单个地址定位到文件行号
-llvm-addr2line -Cfe app/build/intermediates/cmake/debug/obj/arm64-v8a/libmodelinfer.so 0x123abc
+llvm-addr2line -Cfe app/build/intermediates/cxx/Debug/<hash>/obj/arm64-v8a/libmodelinfer.so 0x123abc
 ```
 
-注意：**未 strip 的 .so 在构建输出目录**（如 `build/intermediates/cmake/.../obj/`），打进 APK 的是 strip 后的版本——这与 §2.2 的 `keepDebugSymbols`（控制打包时哪些库不 strip）是**两件事**：符号化用的是构建期留在本机的「原件」，不要去 APK 里找符号。
+注意：**未 strip 的 .so 在构建输出目录**（如 `build/intermediates/cxx/.../obj/`），打进 APK 的是 strip 后的版本——这与 §2.2 的 `keepDebugSymbols`（控制打包时哪些库不 strip）是**两件事**：符号化用的是构建期留在本机的「原件」，不要去 APK 里找符号。
 
 **④ CheckJNI：把「随机崩溃」变成「当场带原因 abort」**。JNI 误用类问题（用错引用、pending exception 没清就继续调、方法签名不匹配、给 `NewStringUTF` 传非法 Modified UTF-8——见 §5.2/§5.3）在未开校验时往往**不在犯错处崩**，而是把运行时状态弄坏、在之后某个无关位置崩，极难排查。CheckJNI 是 ART 的 JNI 参数/状态校验器：
 
