@@ -140,7 +140,7 @@ BEV 检测的部署经验不能直接平移到 Occupancy 与端到端模型，�
 
 **INT8 / FP8 在车规芯片的落地现状（2025-2026 口径）**：
 
-- 量产基线仍是 **INT8**：NVIDIA DRIVE Orin（车规 254 TOPS INT8，见 [自动驾驶算力平台](soc-platform.html) §1）、Qualcomm SA8650P、TI TDA4 等均以 INT8 为主要推理精度，敏感层配 FP16/INT16。
+- 量产基线仍是 **INT8**：NVIDIA DRIVE Orin（车规 254 TOPS INT8，见 [自动驾驶算力平台](soc-platform.html) §1）、Qualcomm SA8650P、地平线征程6 等均以 INT8 为主要推理精度，敏感层配 FP16/INT16。
 - **FP8 于 2025 年进入车规、FP4 开始探索**：NVIDIA DRIVE AGX Thor（Blackwell 架构，2025 年起陆续可用/量产）公开规格提供 FP8/FP4 支持，AI 算力较 Orin 显著提升（具体数值以厂商规格书为准）。FP8 的浮点动态范围对 outlier 密集的 Transformer/BEV/VLA 更友好，但车规落地取决于工具链成熟度。
 - 选型口径：**精度格式跟着工具链与算子支持走**，不是"越新越好"；先用 INT8 + 混合精度打基线，再评估 FP8/INT16 是否值得。
 

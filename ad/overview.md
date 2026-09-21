@@ -23,7 +23,7 @@ flowchart LR
     style C fill:#e67e22,color:#fff
 ```
 
-- **第一层 · 领域知识**：理解自动驾驶端侧的完整技术栈——算力平台（Orin/SA8650P/TDA4）、BEV 感知与端到端模型、端侧部署（量化/多传感器融合/规划控制）、驾驶 Agent 与功能安全。
+- **第一层 · 领域知识**：理解自动驾驶端侧的完整技术栈——大模型级算力平台（Orin/Thor/SA8650P/征程6P）、BEV 感知与端到端模型、端侧部署（量化/多传感器融合/规划控制）、驾驶 Agent 与功能安全。
 - **第二层 · 边缘实战与专项场景**：把领域知识落到具体项目/专项上——**Alpamayo-Edge** 将 Cosmos-Reason2-8B 驾驶 VLM 做 INT4/INT8 量化，跑通 Jetson Orin 端到端推理，完成延迟/吞吐/显存/功耗/能效的完整权衡；**越野/非结构化场景专项**深潜结构化道路之外的地形理解、可通行性分析与数据稀缺破局。
 
 ## 2. 两层结构与阅读路径
@@ -32,7 +32,7 @@ flowchart LR
 
 | 文档 | 讲什么 |
 | :--- | :--- |
-| [自动驾驶算力平台](general/soc-platform.html) | SoC 全景（Orin/SA8650P/TDA4/EyeQ6）、异构计算架构、算力预算、功能安全分区 |
+| [自动驾驶算力平台](general/soc-platform.html) | 大模型级 SoC 全景（Orin/Thor/SA8650P/征程6P，低算力传统 ADAS 仅对照）、异构计算架构、算力预算、功能安全分区 |
 | [BEV 感知与端到端](general/perception.html) | BEV 感知、3D 检测分割、Occupancy、4D 成像雷达、端到端、轨迹预测、世界模型、数据飞轮、Mapless |
 | [端侧部署](general/deployment.html) | BEV 端侧部署、量化挑战、时序缓存、多传感器融合、规划与控制部署 |
 | [驾驶 Agent 与安全](general/agent-safety.html) | VLM 驾驶 Agent、端侧推理、V2X 云端协同、功能安全（ISO 26262/ASIL/SOTIF）、仿真验证 |

@@ -5,66 +5,72 @@
 > [!TIP]
 > **本篇讲什么**
 >
-> 自动驾驶域控制器的算力底座，两部分：
+> 自动驾驶域控制器的算力底座（聚焦能承载端侧大模型的高算力平台），两部分：
 >
-> - **SoC 全景**：四大主流自动驾驶 SoC 阵营（Qualcomm / NVIDIA / TI / Mobileye）的能力对比与选型逻辑
+> - **SoC 全景**：大模型级算力平台（NVIDIA Orin/Thor、Qualcomm Ride、地平线征程6、华为昇腾）的能力对比与选型逻辑；传统低算力 ADAS（TI/Mobileye）仅作对照
 > - **异构计算架构**：CPU+GPU+DSP+NPU 的任务分工、算力预算分配与功能安全分区
 >
-> 读完能回答：给定一个自动驾驶场景（L2 ADAS 还是 L4 Robotaxi），如何选择合适的 SoC，以及算力如何在各计算单元之间分配、安全如何分区兜底。
+> 读完能回答：要跑 BEV/端到端/VLA/世界模型，如何选择合适的 SoC（算力/内存带宽/显存怎么权衡），算力如何在各计算单元之间分配、安全如何分区兜底。
 
 ## 1. 自动驾驶 SoC 全景
 
-### 1.1 主流 SoC 概览
+### 1.1 大模型级算力平台（端侧 AI 的核心载体）
 
-自动驾驶对计算芯片的要求远超智能座舱：需要更高的算力 (TOPS)、更严格的功能安全认证 (ASIL)、更低的推理延迟以及更稳健的热设计。目前主流 SoC 形成了四大阵营（本文聚焦这四家全球主力，各有侧重）；2025 起的新一代平台与中国厂商进展见本节末尾的时效性提示。
+> [!IMPORTANT]
+> **本篇聚焦「能承载端侧大模型」的高算力平台**
+>
+> 本板块的「端侧 AI」指近两年的 **BEV/Occupancy 大模型、端到端、VLA、世界模型、驾驶 LLM/VLM Agent**——这些负载需要**高算力（百 TOPS 起）+ 高内存带宽 + 大显存**，只有新一代车规 SoC 才能承载。传统低算力 ADAS 芯片（如 TI TDA4VM ~8 TOPS、Mobileye EyeQ6 ~34 TOPS）面向 L2 前视感知，**跑不动端侧大模型**，虽在前装量产 ADAS 中仍大量使用，但不是本篇（端侧大模型算力底座）的重点，仅在 §1.3 末尾作对照。
 
-**Qualcomm SA8650P (Snapdragon Ride)**：Qualcomm 面向 L2+/L3 自动驾驶推出的高性能 SoC。综合算力约 **100 TOPS**（厂商口径，随配置而异），采用 CPU+GPU+NSP (Neural Signal Processor) 异构架构，支持多路摄像头输入和传感器融合。Snapdragon Ride 平台的方向是座舱 + 驾驶「一芯多域」融合 (Ride Flex)，用一颗芯片同时覆盖两个域以降低 BOM 成本（一芯多域的旗舰定位更多对应 SA8775P 一线，SA8650P 偏 ADAS 计算，具体以高通产品矩阵为准）。支持 QNN SDK 开发，生态与座舱 Snapdragon 系列高度统一。
+能承载端侧大模型的主流平台与代表芯片（按算力量级）：
 
-**NVIDIA DRIVE Orin**：目前高阶自动驾驶领域最广泛使用的车规 SoC。车规版 **DRIVE Orin 提供 254 TOPS** (INT8) 算力，基于 Ampere GPU 架构和 12 核 ARM Cortex-A78AE CPU。CUDA/TensorRT 生态极其成熟，开发效率最高。适合 L3/L4 级别的高算力需求场景，功耗较高（高配 45-60W，功耗可配置、可下探至 ~15W），功能安全上通过 lockstep CPU 与安全岛支持 ASIL-D。**口径提醒**：注意区分同代 Jetson 模组——**Jetson AGX Orin 为 275 TOPS、Jetson Orin NX 为 100 TOPS**；车规 DRIVE Orin (254) 与 Jetson 模组 (275/100) 是同一 Orin die 的不同产品形态/配置，引用 TOPS 时务必写清是哪一款，「AGX Orin = 254」是最常见的口径混用。
+**NVIDIA DRIVE Orin（当前量产主力）**：高阶智驾部署最广泛的车规 SoC，**254 TOPS INT8（稀疏）**，Ampere GPU（2048 CUDA core）+ 12 核 Cortex-A78AE + DLA，32GB LPDDR5。CUDA/TensorRT 生态最成熟，是 BEV/端到端/驾驶 VLM 的主流落地平台，功能安全上以 lockstep CPU + 安全岛支持 ASIL-D。**口径提醒**：车规 DRIVE Orin（254 TOPS）与同 die 的 Jetson 模组（AGX Orin 275 / Orin NX 100）是不同产品形态，引用 TOPS 务必写清是哪一款，「AGX Orin = 254」是最常见的口径混用。
 
-**TI TDA4VM**：德州仪器面向 L2/L2+ 前视 ADAS 的高能效 SoC，内置专用深度学习加速器 C7x-MMA，提供约 **8 TOPS** 算力。功耗极低 (典型 5-15W)。片上集成 R5F lockstep 安全岛，TI 提供较完整的功能安全文档包，是前装量产 ADAS 中安全认证成熟度较高的主流 AD SoC 之一。非常适合前装量产 ADAS 方案，但算力有限，无法支撑大规模 BEV 模型。
+**NVIDIA DRIVE Thor（2025 新一代旗舰）**：Blackwell GPU（2560 CUDA core）+ 14 核 Neoverse-V3AE + 128GB LPDDR5X，单 SoC AI 算力达**千 TOPS 量级（FP8 稀疏约 1000、稠密约 500；NVIDIA 宣传口径有「2000 TOPS」说法，含 FP4/不同配置，以官方规格书为准）**，内存带宽较 Orin 大幅提升——这正是端侧大模型自回归 decode 最需要的改善（带宽 roofline 见 [驾驶 Agent 与安全](agent-safety.html)）。2025 年起量产上车（首发车型如领克 900，比亚迪/小鹏/理想/极氪等跟进），是 Orin 的明确继任者，面向 L4 与「物理 AI」。
 
-**Mobileye EyeQ6**：Mobileye 采用固定管线 (Fixed Pipeline) + 可编程加速器的混合架构，面向大规模前装量产。其封闭生态限制了灵活性，但成熟的感知算法栈和极高的量产可靠性使其在传统 OEM 中广受欢迎。EyeQ6H 提供约 **34 TOPS**，EyeQ6L 为低成本 L2 方案。
+**Qualcomm Snapdragon Ride（SA8650P / Ride Elite）**：SA8650P 综合算力约 **100 TOPS**（厂商口径，随配置而异），CPU+GPU+Hexagon NSP 异构，支持 QNN SDK，与座舱 Snapdragon 生态统一；方向是座舱 + 驾驶「一芯多域」（Ride Flex，旗舰更多对应 SA8775P）。**Snapdragon Ride Elite**（2024 发布、2025-2026 上车）采用 Qualcomm Oryon CPU，是 Ride 系列新旗舰，AI 算力继续上探（具体以高通官方为准）。
+
+**地平线征程 6（中国高阶主力，2025 量产）**：征程 6P 达 **560 TOPS**（4 颗 Nash BPU 3.0），18 核 Cortex-A78AE（410k DMIPS）、192-bit LPDDR5x-8533（**204 GB/s 带宽**）、<50W、TSMC 7nm，2025 Q3 起量产；Nash BPU 专门面向**高参数 Transformer 与端到端架构**优化。系列覆盖 6B（10+ TOPS，主动安全）到 6P（560 TOPS，全场景 NOA），已大规模上车（理想/比亚迪/广汽/大众等）；后续征程 7P 目标 ~1000+ TOPS（预计 2027）。
+
+**华为 MDC / 昇腾（中国高阶）**：华为 MDC 智能驾驶计算平台（基于昇腾 AI 芯片）驱动问界/阿维塔等高阶智驾车型，算力量级与 Orin/征程 6P 同级或更高（具体规格以华为官方为准，封闭生态细节本板块不展开）。
 
 > [!NOTE]
-> **2025-2026 进展：新一代平台已开始量产（时效性提示）**
+> **传统低算力 ADAS 平台（对照，非端侧大模型重点）**
 >
-> 上面四款多为 **2022-2024 平台**，仍是当前量产主力；但**新一代平台自 2025 起已陆续发布并进入量产爬坡**，算力量级又上了一个台阶。选型方法与约束（TOPS 口径、内存带宽、功耗墙、安全分区）不变，只是数字要按新平台重估：
+> 以下平台在 L2 前装量产 ADAS 中仍占很大份额，但算力不足以承载 BEV 大模型/VLA/世界模型，**不属于本板块「端侧大模型」的核心载体**，列出仅作选型对照：
 >
-> - **NVIDIA DRIVE Thor / Jetson Thor（2025 起量产爬坡）**：Blackwell GPU 架构，面向 L4 与「物理 AI / 具身智能」，AI 算力较 Orin 提升近一个数量级（官方口径约 **2000 TOPS (FP8) 量级**），内存带宽大幅提升——这正是端侧大模型 decode 最需要的改善（见 [驾驶 Agent 与安全](agent-safety.html) 的带宽 roofline 推导）。Jetson AGX Thor 开发套件已于 2025 年推出，是 Orin 的明确继任者。
-> - **Qualcomm Snapdragon Ride Elite（2024 发布、2025-2026 上车）**：采用 Qualcomm Oryon CPU，是 SA8650P 与「一芯多域」Ride Flex 旗舰（SA8775P，座舱 + 驾驶融合）之上的新旗舰，AI 算力继续上探。
-> - **Mobileye EyeQ Ultra**：面向 L4（Chauffeur/Drive）的旗舰，官方口径约 **176 TOPS**，量产时间窗落在 2025-2026，是 EyeQ6 High 的下一代。
-> - **中国厂商加速量产（2025）**：地平线征程 6 系列（高阶版达数百 TOPS 量级）、华为 MDC/昇腾、黑芝麻智能等已大规模上车，是 L2+/高阶智驾市场不可忽视的力量（具体规格以厂商为准）。
-> - **TI**：TDA4 家族向更高算力变体（如 TDA4VH）扩展，覆盖更复杂的感知负载。
+> - **TI TDA4VM**：~8 TOPS（C7x-MMA），5-15W，R5F lockstep 安全岛，功能安全文档成熟——面向 L2 前视 ADAS，无法支撑大规模 BEV/大模型。
+> - **Mobileye EyeQ6**：固定管线 + 可编程加速器混合架构，封闭生态、量产可靠性高；EyeQ6 High ~34 TOPS（2025）、EyeQ6 Lite ~5 TOPS，下一代 EyeQ7 ~67 TOPS（2027）——算力量级仍偏低，走「成熟感知栈 + 交钥匙」路线而非端侧大模型路线。
 >
-> 本文给出的 TOPS/功耗均为撰写时的公开口径，**请以厂商最新规格书为准**，不要把本文数字当作最新值。
+> **选型提醒**：若目标是跑端侧大模型/VLA/世界模型，应在 Orin / Thor / 征程 6P / Ride Elite 这一档（百 TOPS 起、高带宽、大显存）里选，而不是传统低算力 ADAS 芯片。本文 TOPS/功耗均为撰写时公开口径，**以厂商最新规格书为准**。
 
 ### 1.2 SoC 能力雷达图
 
-**自动驾驶 SoC 能力雷达图**（1-10 为相对评分，非实测）
+**大模型级 SoC 能力雷达图**（1-10 为相对评分，非实测，示例口径；只含能承载端侧大模型的平台，内存带宽单列因其是大模型 decode 的关键瓶颈）
 
-| 指标 | SA8650P | Orin | TDA4VM | EyeQ6H |
+| 指标 | Orin | Thor | SA8650P | 征程6P |
 | :--- | :--- | :--- | :--- | :--- |
-| AI 算力 (TOPS) | 7 | 10 | 2 | 4 |
-| 能效比 | 7 | 5 | 10 | 7 |
-| 开发生态 | 7 | 10 | 5 | 3 |
-| 安全认证 | 5 | 6 | 10 | 8 |
-| BOM 成本 | 8 | 4 | 9 | 7 |
-| 灵活性 | 8 | 9 | 4 | 2 |
+| AI 算力 (TOPS) | 7 | 10 | 5 | 9 |
+| 内存带宽 | 6 | 10 | 5 | 8 |
+| 开发生态 | 10 | 10 | 7 | 7 |
+| 安全认证 | 7 | 8 | 6 | 8 |
+| BOM 成本 (越高越省) | 5 | 3 | 7 | 7 |
+| 开放 / 灵活性 | 9 | 9 | 7 | 7 |
 
-### 1.3 详细规格对比
+### 1.3 详细规格对比（大模型级平台）
 
-| 指标 | Qualcomm SA8650P | NVIDIA DRIVE Orin | TI TDA4VM | Mobileye EyeQ6H |
+| 指标 | NVIDIA DRIVE Orin | NVIDIA DRIVE Thor | Qualcomm SA8650P | 地平线征程6P |
 | :--- | :--- | :--- | :--- | :--- |
-| **AI 算力** | ~100 TOPS (INT8) | 254 TOPS (INT8, 车规) | 8 TOPS (INT8) | ~34 TOPS |
-| **CPU** | Kryo 车规 CPU (8 核) | 12x Cortex-A78AE | 2x Cortex-A72 + 6x Cortex-R5F | 多核 (封闭) |
-| **GPU** | Adreno 车规 GPU | 2048-core Ampere | 无独立 GPU | 无 (固定管线) |
-| **AI 加速器** | Hexagon NSP | 2x NVDLA + GPU | C7x-MMA DSP | XNN / CVP |
-| **功耗** | 25-35W | 45-60W | 5-15W | 12-18W |
-| **安全认证** | ASIL-B (向 D 推进) | ASIL-D (lockstep CPU) | ASIL-D (含安全岛) | ASIL-B/D (量产验证) |
-| **摄像头支持** | 最多 18 路 | 最多 16 路 | 最多 8 路 | 最多 12 路 |
-| **开发生态** | QNN / SNPE | CUDA / TensorRT | TI TIDL / Edge AI | 封闭 SDK |
-| **典型应用** | L2+/L3，Ride 一芯多域 | L3/L4 高阶智驾 | L2 前视 ADAS | L2/L2+ 前装量产 |
+| **AI 算力** | 254 TOPS INT8 (稀疏) | ~1000 TOPS FP8 (稀疏) / 500 (稠密) | ~100 TOPS (厂商口径) | 560 TOPS |
+| **CPU** | 12× Cortex-A78AE | 14× Neoverse-V3AE | Kryo 车规 (8 核) | 18× Cortex-A78AE (410k DMIPS) |
+| **GPU / AI 加速器** | 2048-core Ampere + DLA | Blackwell (2560 CUDA) | Adreno + Hexagon NSP | 4× Nash BPU 3.0 |
+| **内存** | 32GB LPDDR5 | 128GB LPDDR5X | LPDDR5 (随配置) | LPDDR5x-8533 (204 GB/s) |
+| **功耗** | 可配置 (模组 15-60W 量级) | 百瓦级 (以官方为准) | 25-35W | <50W |
+| **安全认证** | ASIL-D (lockstep + 安全岛) | ASIL-D | ASIL-B (向 D 推进) | ASIL-D (系列, 按型号) |
+| **开发生态** | CUDA / TensorRT | CUDA / TensorRT | QNN / SNPE | 地平线工具链 |
+| **量产状态** | 2022 起, 当前主力 | 2025 起 (领克 900 首发) | 量产中 | 2025 Q3 起 |
+| **大模型定位** | BEV/端到端/驾驶 VLM 主流 | L4/物理 AI/大 VLA | L2+/L3 | 全场景 NOA/端到端 |
+
+> 传统低算力 ADAS（TI TDA4VM ~8 TOPS、Mobileye EyeQ6 High ~34 TOPS / EyeQ7 ~67 TOPS）规格见 §1.1 末尾对照 NOTE——它们面向 L2 前视，不在本表（大模型级）之列。
 
 > [!NOTE]
 > **车规 SoC 的具体 IP 配置以厂商规格为准**
@@ -72,14 +78,14 @@
 > 上表中 CPU/GPU 的具体微架构型号，厂商在车规产品上往往不对外详细披露（或随版本演进），直接套用同代手机芯片的型号容易张冠李戴。这里只给出架构族（Kryo / Adreno / Cortex / Ampere）层面的口径，选型时以厂商正式规格书为准。**TOPS 口径同理**：表中 NVIDIA 一列是车规 DRIVE Orin (254 TOPS)，不要与 Jetson AGX Orin (275) / Orin NX (100) 的模组口径混用（见 §1.1 口径提醒）。
 
 > [!NOTE]
-> **没有"最佳" SoC — 选型取决于场景**
+> **没有"最佳" SoC — 选型取决于负载与场景**
 >
-> 自动驾驶 SoC 的选择必须综合考虑多个维度：
+> 大模型级平台的选择要综合多个维度：
 >
-> * **L2 vs L4**：L2 ADAS 优先考虑 TDA4VM (低成本、功能安全成熟)；L4 Robotaxi 需要 Orin 的高算力
-> * **成本 vs 性能**：Snapdragon Ride 的座舱驾驶一芯方案可大幅降低 BOM；Orin 性能最强但 BOM 成本最高
-> * **开发速度 vs 认证**：Orin 的 CUDA 生态开发最快；TDA4VM 的功能安全文档最完整
-> * **开放 vs 封闭**：Mobileye 交钥匙方案省心但灵活性差；Orin/SA8650P 开放生态适合自研
+> * **负载类型**：跑 BEV/端到端/驾驶 VLM，看算力 + 内存带宽 + 显存——大 VLA/世界模型上 Thor/征程6P，当前主流 BEV/端到端用 Orin 即可
+> * **成本 vs 性能**：Orin/Thor 性能最强但 BOM 高；SA8650P/征程6 在算力与成本间更均衡，Snapdragon Ride 一芯多域可进一步降 BOM
+> * **开发速度 vs 认证**：NVIDIA CUDA/TensorRT 生态开发最快；地平线/华为本土工具链与量产支持在国内有优势
+> * **开放 vs 封闭**：NVIDIA/Qualcomm/地平线开放生态适合自研大模型栈；封闭交钥匙方案（如 Mobileye）省心但灵活性差、算力量级也偏低，不适合端侧大模型自研
 
 ### 1.4 选型常见误区（资深视角）
 
@@ -98,7 +104,7 @@
 > [!NOTE]
 > **功耗墙才是车规的真实约束**
 >
-> 车规域控通常**被动散热或有限风冷**，且要在 -40~85°C 环温下长期工作——能持续散掉多少瓦，比芯片能跑多快更先成为硬约束。峰值算力往往只在短时 boost 下可达，持续负载会因热降频。因此要看**功耗墙内的持续算力 (TOPS/W)**，而不是峰值 TOPS；这也是 TDA4VM 这类低功耗 SoC 在前装 ADAS 大量上车的原因。
+> 车规域控通常**被动散热或有限风冷**，且要在 -40~85°C 环温下长期工作——能持续散掉多少瓦，比芯片能跑多快更先成为硬约束。峰值算力往往只在短时 boost 下可达，持续负载会因热降频。因此要看**功耗墙内的持续算力 (TOPS/W)**，而不是峰值 TOPS——这正是低功耗传统 ADAS SoC 在前装大量上车、而 Thor/征程6P 这类大模型平台必须配套认真热设计（液冷/强风冷）的原因。
 
 > [!NOTE]
 > **车规级 ≠ 消费级：AEC-Q100 与功能安全认证**
