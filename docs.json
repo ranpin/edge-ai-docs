@@ -17,9 +17,9 @@
           "title": "智能座舱面试指南",
           "file": "cockpit/general/interview.html",
           "kind": "面试",
-          "badge": "51 题",
+          "badge": "62 题",
           "status": "done",
-          "desc": "硬件系统、算法训练、部署优化、Agent 大模型、系统设计，51 题，难度分级，交互答题",
+          "desc": "硬件系统、算法训练、部署优化、Agent 大模型、系统设计、功能安全、面试方法论，62 题，难度分级，交互答题",
           "tags": [
             "面试",
             "交互答题"
