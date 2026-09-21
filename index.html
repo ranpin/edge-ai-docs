@@ -49,6 +49,13 @@ header p{color:var(--muted);font-size:15px;max-width:640px;margin:0 auto}
 .ptl-name{font-size:17px;font-weight:700}
 .ptl-period{font-size:11px;font-weight:600;color:var(--accent);background:var(--accentL);padding:2px 10px;border-radius:999px;white-space:nowrap}
 
+/* 拖拽排序 */
+.grid[data-sortable] .card{cursor:grab}
+.ptl-item[draggable]>.ptl-head{cursor:grab}
+.dragging{opacity:.35;cursor:grabbing!important}
+.reset-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:2px 10px;font-size:12px;color:var(--muted);cursor:pointer;margin-left:10px;transition:all .2s;vertical-align:middle}
+.reset-btn:hover{color:var(--accent);border-color:var(--accent)}
+
 footer{text-align:center;margin-top:56px;padding:20px;color:var(--muted);font-size:12px}
 </style>
 </head>
@@ -61,7 +68,7 @@ footer{text-align:center;margin-top:56px;padding:20px;color:var(--muted);font-si
   </header>
   <nav class="tabs" id="tabs"></nav>
   <main id="catalog"></main>
-  <footer>Edge AI Docs -- 算法训练/微调 | 部署与优化 | Agent 框架</footer>
+  <footer>Edge AI Docs -- 算法训练/微调 | 部署与优化 | Agent 框架 <button class="reset-btn" id="resetOrder" style="display:none">恢复默认排序</button></footer>
 </div>
 <script>
 // 主题切换
@@ -82,7 +89,18 @@ function card(d){
   if(d.tags&&d.tags.length){var t=el('div','tags');d.tags.forEach(function(tag){t.appendChild(el('span','tag',tag));});a.appendChild(t);}
   return a;
 }
-function grid(docs){var g=el('div','grid');(docs||[]).forEach(function(d){g.appendChild(card(d));});return g;}
+// grid：section 非空时该网格可拖拽排序（记录 cat/section/project 供持久化）
+function grid(docs,cid,section,project){
+  var g=el('div','grid');
+  var sortable=(section!=null);
+  if(sortable){g.dataset.sortable='1';g.dataset.cat=cid;g.dataset.section=section;if(project!=null)g.dataset.project=project;}
+  (docs||[]).forEach(function(d){
+    var c=card(d);
+    if(sortable){c.setAttribute('draggable','true');c.dataset.file=d.file;c.title='拖拽调整顺序';}
+    g.appendChild(c);
+  });
+  return g;
+}
 
 // 兼容旧结构：老 docs.json 用扁平 groups；新结构用 categories(general + projects)
 function normalize(data){
@@ -91,40 +109,139 @@ function normalize(data){
 }
 function catId(cat,i){return cat.id||('c'+i);}
 
-// 渲染单个大类（相当于一个「页面」）
-function renderCategory(cat){
+/* ===== 拖拽排序 =====
+ * 顺序写入 localStorage（静态站无法回写 docs.json，只在本浏览器生效）。
+ * 结构：{ <catid>: { general:[file...], projects:[name...], "pdocs:<name>":[file...] } } */
+var ORDER_KEY='edgeai-order';
+function loadAllOrder(){try{var o=JSON.parse(localStorage.getItem(ORDER_KEY)||'{}');return (o&&typeof o==='object')?o:{};}catch(e){return{};}}
+function saveAllOrder(o){try{localStorage.setItem(ORDER_KEY,JSON.stringify(o));}catch(e){}}
+function hasAnyOrder(){var o=loadAllOrder();for(var k in o){if(o.hasOwnProperty(k))return true;}return false;}
+// 按 saved 顺序重排 arr；saved 里没有的新条目按原顺序追加到末尾
+function applyOrder(arr,saved,keyFn){
+  if(!saved||!saved.length)return arr.slice();
+  var byKey={};arr.forEach(function(it){byKey[keyFn(it)]=it;});
+  var res=[],used={};
+  saved.forEach(function(k){if(byKey.hasOwnProperty(k)&&!used[k]){res.push(byKey[k]);used[k]=1;}});
+  arr.forEach(function(it){var k=keyFn(it);if(!used[k]){res.push(it);used[k]=1;}});
+  return res;
+}
+function saveContainerOrder(container){
+  var cat=container.dataset.cat,section=container.dataset.section;
+  var isProj=(section==='projects');
+  var cls=isProj?'ptl-item':'card',attr=isProj?'project':'file';
+  var order=[].slice.call(container.children).filter(function(x){return x.classList&&x.classList.contains(cls);}).map(function(x){return x.dataset[attr];});
+  var all=loadAllOrder();
+  if(!all[cat])all[cat]={};
+  all[cat][isProj?'projects':(section==='general'?'general':'pdocs:'+container.dataset.project)]=order;
+  saveAllOrder(all);
+  updateResetBtn();
+}
+
+var dragEl=null,dragSel=null;
+function getAfter(container,sel,x,y,isGrid){
+  var els=[].slice.call(container.querySelectorAll(sel+':not(.dragging)'));
+  if(!els.length)return null;
+  if(!isGrid){ // 竖向列表：按 Y 找插入点
+    var closest=null,closestOffset=Number.NEGATIVE_INFINITY;
+    els.forEach(function(child){
+      var box=child.getBoundingClientRect();
+      var offset=y-box.top-box.height/2;
+      if(offset<0&&offset>closestOffset){closestOffset=offset;closest=child;}
+    });
+    return closest;
+  }
+  // 网格：找中心最近的卡片，光标在其右半则插到它后面
+  var nearest=null,minDist=Infinity;
+  els.forEach(function(child){
+    var box=child.getBoundingClientRect();
+    var cx=box.left+box.width/2,cy=box.top+box.height/2;
+    var d=(x-cx)*(x-cx)+(y-cy)*(y-cy);
+    if(d<minDist){minDist=d;nearest=child;}
+  });
+  if(!nearest)return null;
+  var nb=nearest.getBoundingClientRect();
+  if(x<=nb.left+nb.width/2)return nearest;
+  var next=nearest.nextElementSibling;
+  while(next&&next.classList.contains('dragging'))next=next.nextElementSibling;
+  return next;
+}
+function makeSortable(container,sel,isGrid){
+  container.addEventListener('dragstart',function(e){
+    var item=(e.target&&e.target.closest)?e.target.closest(sel):null;
+    if(!item||item.parentElement!==container)return;
+    dragEl=item;dragSel=sel;
+    item.classList.add('dragging');
+    e.dataTransfer.effectAllowed='move';
+    try{e.dataTransfer.setData('text/plain','');}catch(_){}
+    if(isGrid)e.stopPropagation(); // 拖卡片时不要连带拖动外层项目
+  });
+  container.addEventListener('dragover',function(e){
+    if(!dragEl||dragSel!==sel||dragEl.parentElement!==container)return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect='move';
+    var after=getAfter(container,sel,e.clientX,e.clientY,isGrid);
+    if(after==null)container.appendChild(dragEl);
+    else container.insertBefore(dragEl,after);
+  });
+  container.addEventListener('drop',function(e){e.preventDefault();});
+  container.addEventListener('dragend',function(){
+    if(!dragEl)return;
+    dragEl.classList.remove('dragging');
+    var c=dragEl.parentElement;
+    dragEl=null;dragSel=null;
+    if(c&&c.dataset&&c.dataset.sortable)saveContainerOrder(c);
+  });
+}
+
+// 渲染单个大类（相当于一个「页面」），按 localStorage 里的自定义顺序
+function renderCategory(cat,cid){
   var catalog=document.getElementById('catalog');
   catalog.innerHTML='';
+  var saved=loadAllOrder()[cid]||{};
   var name=el('div','cat-name');
   name.appendChild(el('span',null,cat.name));
   if(cat.note)name.appendChild(el('span','cat-note',cat.note));
   catalog.appendChild(name);
 
-  // 置顶导读（overview）
-  if(cat.overview){
-    catalog.appendChild(grid([cat.overview]));
-  }
+  // 置顶导读（overview，固定不可拖）
+  if(cat.overview)catalog.appendChild(grid([cat.overview]));
 
-  // 上半：通用文档（网格）
-  if(cat.general&&cat.general.length){
+  // 上半：通用文档（网格，可拖）
+  var general=applyOrder(cat.general||[],saved.general,function(d){return d.file;});
+  if(general.length){
     catalog.appendChild(el('div','subhead','通用文档 · 基础与面试'));
-    catalog.appendChild(grid(cat.general));
+    catalog.appendChild(grid(general,cid,'general'));
   }
-  // 下半：项目（竖向时间轴）
-  if(cat.projects&&cat.projects.length){
+  // 下半：项目（竖向时间轴，项目整体可上下拖）
+  var projects=applyOrder(cat.projects||[],saved.projects,function(p){return p.name;});
+  if(projects.length){
     catalog.appendChild(el('div','subhead','项目 · 时间轴'));
     var ptl=el('div','ptl');
-    cat.projects.forEach(function(p){
+    ptl.dataset.sortable='1';ptl.dataset.cat=cid;ptl.dataset.section='projects';
+    projects.forEach(function(p){
+      var pdocs=applyOrder(p.docs||[],saved['pdocs:'+p.name],function(d){return d.file;});
       var item=el('div','ptl-item');
+      item.dataset.project=p.name;
+      item.setAttribute('draggable','true');
       var head=el('div','ptl-head');
       head.appendChild(el('span','ptl-name',p.name));
       if(p.period)head.appendChild(el('span','ptl-period',p.period));
       item.appendChild(head);
-      item.appendChild(grid(p.docs));
+      item.appendChild(grid(pdocs,cid,'project',p.name));
       ptl.appendChild(item);
     });
     catalog.appendChild(ptl);
   }
+
+  // 绑定拖拽
+  [].slice.call(catalog.querySelectorAll('.grid[data-sortable]')).forEach(function(g){makeSortable(g,'.card',true);});
+  var ptlEl=catalog.querySelector('.ptl[data-sortable]');
+  if(ptlEl)makeSortable(ptlEl,'.ptl-item',false);
+}
+
+function updateResetBtn(){
+  var rb=document.getElementById('resetOrder');
+  if(rb)rb.style.display=hasAnyOrder()?'':'none';
 }
 
 fetch('docs.json',{cache:'no-cache'}).then(function(r){return r.json();}).then(function(data){
@@ -136,8 +253,8 @@ fetch('docs.json',{cache:'no-cache'}).then(function(r){return r.json();}).then(f
 
   function activate(i){
     btns.forEach(function(btn,j){btn.className='tab'+(j===i?' active':'');});
-    renderCategory(cats[i]);
     var id=catId(cats[i],i);
+    renderCategory(cats[i],id);
     if(('#'+id)!==location.hash){try{history.replaceState(null,'',location.pathname+'#'+id);}catch(e){location.hash=id;}}
   }
 
@@ -152,6 +269,15 @@ fetch('docs.json',{cache:'no-cache'}).then(function(r){return r.json();}).then(f
   var start=0;
   cats.forEach(function(cat,i){if(catId(cat,i)===want)start=i;});
   activate(start);
+  updateResetBtn();
+
+  var rb=document.getElementById('resetOrder');
+  if(rb)rb.onclick=function(){
+    try{localStorage.removeItem(ORDER_KEY);}catch(e){}
+    var ai=0;for(var k=0;k<btns.length;k++){if(btns[k].classList.contains('active')){ai=k;break;}}
+    activate(ai);
+    updateResetBtn();
+  };
 
   window.addEventListener('hashchange',function(){
     var h=(location.hash||'').replace('#','');
