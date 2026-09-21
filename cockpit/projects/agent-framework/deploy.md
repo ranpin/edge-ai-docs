@@ -62,6 +62,15 @@ flowchart LR
     style H fill:#e74c3c,color:#fff
 ```
 
+> [!NOTE]
+> **CNN/感知模型 vs LLM/VLM 的转换路径不同（2025+ 工具链口径）**
+>
+> 上图的经典链路（`qnn-onnx-converter → .cpp → qnn-model-lib-generator → .so → qnn-context-binary-generator → Context Binary`）适用于 CNN / 检测 / 分类类模型。LLM/VLM（如本篇锚点 Qwen3-Omni-4B）走的是 **Genie / QAIRT** 路径：模型量化（W4A16，见 [量化](../../general/quantization.html)）后由 Genie 编译为**序列化 Context Binary**（即 §4.3 模型配置里的 `*.serialized.bin`），运行时由 Genie/QAIRT runtime 负责 KV Cache 管理与 LoRA 热插拔，而非手写 `.cpp` 模型库。
+>
+> **工具链演进**：2024–2025 起高通把原 SNPE / QNN / Genie 整合进统一品牌 **QAIRT（Qualcomm AI Runtime）**，原 `qnn-*` 命令逐步归入 QAIRT 套件（具体命令改名随 SDK 版本变化，**升级时以随包文档为准 — 需核实**）。车规平台跟进该演进；无论叫 QNN 还是 QAIRT，**升级工具链后必须重刷全部 Context Binary**（§3.3 WARNING），因为 `.serialized.bin` 与工具链 / HTP 架构版本强绑定（§4.3 NOTE）。
+>
+> **精度格式口径**：本篇锚点模型当前产物以 **W4A16**（LLM 权重，见 [量化](../../general/quantization.html)）与 **FP16**（视觉/音频编码器 Context Binary）为主。**FP8** 等更低位宽是 2025+ 新一代 HTP 的方向，但 SA8397P（HTP arch v81）是否支持 FP8 推理**需核实**，勿想当然地写进部署方案。
+
 ### 1.3 推理框架详细对比
 
 > [!NOTE]
@@ -135,6 +144,13 @@ xychart-beta
 >
 > **ION → dma-buf 演进**：ION 是 Android 早期的共享内存分配器，主线内核已用 **dma-buf heap**（`/dev/dma_heap/*`）取代。二者对上层都表现为「一块可跨引擎共享、可被 FastRPC/SMMU 映射的 dma-buf」，但分配接口与节点名不同；移植到新 BSP 时注意分配器 API 与 heap 名的变化。
 
+> [!NOTE]
+> **Zero-Copy 的真实约束（不是「免费」的）**
+>
+> Zero-Copy 能成立有前提：(1) **定长 POD 张量**——buffer 的形状/字节数在生产端（ISP）与消费端（HTP graph 输入）必须事先约定，变长数据（如文本 token、动态分辨率图）走不了这条通路；(2) **对齐与 stride**——NV12 的行 stride / scanline 对齐、以及 dma-buf 的页对齐要满足各引擎 DMA 要求，生产/消费双方必须用同一套 layout，否则「同一块内存」读出来是错位的；(3) **同一可映射 heap**——buffer 必须从所有引擎都能映射的 heap（system heap 经 SMMU/FastRPC）分配，secure/专用 heap 会破坏共享。
+>
+> **对 aadkcore 的 VLM 链路尤其如此**：平台级 Zero-Copy（ISP→HTP dma-buf）覆盖的是「摄像头→原始帧」这一段；而 aadkcore 收到的是经 Fusion IPC 传来的**图像字节**，先在 **CPU 做预处理**（resize / patchify / normalize 成 float 张量），再 `memcpy` 进 AISA 张量喂给 HTP 上的视觉编码器。也就是说 VLM Agent 的端到端链路**并非纯 Zero-Copy**——预处理这一段存在 CPU 拷贝。真正端到端 Zero-Copy（ISP 输出直灌视觉编码器）属于定长管线的 DMS/感知范式，与通用 VLM-Agent 的「任意分辨率 + 预处理」模式不同，做延迟预算时要分开算。
+
 ## 3. 多模型调度与优化
 
 ### 3.1 单帧多模型调度时序
@@ -162,6 +178,9 @@ gantt
     section GPU
     AR 渲染 + HUD 显示     :gpu, 21, 25
 ```
+
+> [!NOTE]
+> 图中模型名（RetinaFace / FaceMesh / MoveNet 等）是 DMS / 感知类管线的**示意例子**，并非 aadkcore 框架内置模型。aadkcore 是 LLM/VLM Agent 框架，它的「多模型」体现为**同一基座上的多 LoRA**（§4.3）与**请求级优先级调度**（§3.4 ModelScheduler），而非这里画的逐帧视觉流水线。本图只用来说明「单 cDSP 上多 graph 时分复用」这一通用约束；aadkcore 真实的调度粒度见 §3.4。
 
 ### 3.2 调度策略对比
 
@@ -205,6 +224,32 @@ gantt
 > **推理优化与量化工具**
 >
 > AIMET 量化工具、W4A16 机制 → [**端侧模型量化与压缩**](../../general/quantization.html)；推理引擎对比、Genie/QAIRT 运行时 → [**LLM 推理原理与性能模型**](../../general/infer-principles.html)
+
+### 3.4 aadkcore 请求级调度：ModelScheduler（优先级 / 抢占 / worker）
+
+§3.1–§3.2 讲的是「一帧内多个模型如何共享 HTP」的通用时序；而 aadkcore 框架自身的调度发生在**请求级**——`ModelScheduler`（`src/runtime/model_scheduler.cpp`，单例）把各场景 Agent 提交的推理请求排成一个**优先级队列**，再交给模型实例执行。它直接消费 §4.3 `runtime_config.json` 的 `worker_count` / `capacity` / `timeout_s` 三个字段。
+
+**优先级与出队顺序**：任务优先级取自 `PriorityBase` 枚举（`LOW=10 / NORMAL=20 / HIGH=30 / CRITICAL=40`）。出队不是单纯按优先级，而是一个加权分数（`CompareTask`）：
+
+```
+score = priority × 2.0 + wait_ms × 0.1 × 0.001
+```
+
+即**优先级为主、等待时间为辅**，低优任务等得越久分数越高，避免饿死。
+
+**抢占（PreemptAndSubmit）**：队列已满（达到 `capacity`）时，新任务会找出队列中优先级最低者；若新任务优先级更高，就把最低优任务以 `TASK_PREEMPTED` 踢出、腾位。带 `breakTag` 的高优任务还会把**正在运行**的低优任务置 `cancel_flag`（协作式中断——运行中的解码循环会检查该标志而退出）；显式 `StopTask` 则更进一步，额外调用 `runner_->stopGenerate(scenario_id)` 主动停止生成。这就是「车控 / 主动视觉等高优场景打断闲聊等低优场景」的落地机制。
+
+**超时提权**：`SubmitTask` 等待结果超过一个 `timeout_s` 后调用 `BoostPriority(+10)`（封顶 30）把任务往前挪，再等一个 `timeout_s`；二次超时则 `StopTask` 取消。
+
+**worker ≠ 并行推理**：`Start()` 按 `worker_count` 起若干 worker 线程从队列取任务，但真正的推理（`onProcessing`）被一把 `generate_mutex_` **串行化**——同一时刻只有一个任务在模型实例上执行。因此调大 `worker_count` 提升的是「取任务 + 前后处理」的并发度，**不是** HTP 上的并行推理度；这与 §3.1「单 cDSP 时分复用」一致：多 worker 抢的是同一把推理锁、同一个 HTP。
+
+> [!WARNING]
+> **分支口径：本节描述的是岚图 `lantu_sdk_dev` 分支的调度行为**
+>
+> 本篇属框架研发层，但 §3.4/§4.3 的调度器细节是对**岚图 `lantu_sdk_dev` 分支**（当前部署形态）核实的——该分支上 `generate_mutex_` 恒串行化、`generate_concurrent`/`enable_timeslice`/`batch_count` 无读取点、`worker_count` 被钳到硬件并发数。**主线 `origin/agent_core_dev` 与此分叉**：`generate_concurrent`（默认 true）为 true 时 `SchedulerLoop` 不取 `generate_mutex_`（可并发跑 `onProcessing`）、上述字段均被读取、`worker_count` 不钳制（对应 assert 已注释）。两者是真实代码分叉而非笔误，调优前务必确认自己所在分支，分支差异对照见 [aadkcore 核心框架](agent-core.html) §3.4。
+
+> [!NOTE]
+> **端侧权衡**：请求级优先级 + 抢占保住了高优场景的 TTFT，代价是被抢占任务已生成的 token 作废、需重新排队；`generate_mutex_` 串行化避免了多请求同时压 HTP 造成 KV Cache 抖动，但也意味着**加 worker 对吞吐几乎无益**（瓶颈在单实例串行推理）。尤其要注意：`ModelScheduler` 是**单例**、`generate_mutex_` 全局只有一把——即便开 §4.3 `--dual` 建了第二个 ModelInstance，两个实例的推理仍被**同一把锁串行化**、仍时分复用同一 HTP。`--dual` 换来的是「主对话与主动视觉各持独立权重 / KV Cache、省去角色间 LoRA 切换与缓存抖动」的**隔离性**，而**不是并行度**。要在单 cDSP 上真正提吞吐，只能寄望模型引擎侧的批处理 / 时分复用（即 §4.3 那几个当前未接线的字段）；框架层加 worker 或加实例都改变不了「同一时刻只有一个任务在 HTP 上跑」这一事实。
 
 ## 4. 集成部署方式
 
@@ -283,9 +328,12 @@ flowchart LR
 ├── lib/
 │   ├── libaadkcore.so         # 核心框架库
 │   ├── libagent_group.so      # Agent 插件库
-│   ├── libllms.so             # GenAI 推理引擎
+│   ├── libllms.so             # GenAI 推理引擎（Genie/QAIRT，来自 genai_sdk-*.rel-linux）
 │   ├── libaisa.so             # AISA 模型库
-│   └── ...                    # OpenCV, curl, yaml-cpp 等依赖
+│   └── ...                    # OpenCV, curl, yaml-cpp, libjsoncpp 等依赖
+├── libqnn/                    # QNN/HTP 运行时（libQnnHtp.so / libQnnSystem.so / *skel* / stub）
+│                              #   ← ADSP_LIBRARY_PATH 要指到这里（见下方 WARNING 2）
+├── torch/lib/                 # libtorch 等依赖（run.sh 的 LD_LIBRARY_PATH 已含此路径，见 WARNING 5）
 ├── data/
 │   ├── config/                # 运行时配置（按平台分子目录，见 §4.3）
 │   │   ├── 8397/              # 每平台一套：runtime_config.json + multi_lora_runtime_config.json + 模型配置
@@ -299,7 +347,7 @@ flowchart LR
 ├── run.sh                     # 启动脚本
 ├── postInstall.sh             # 安装脚本
 └── monitor/
-    ├── aadk_monitor           # 监控进程
+    ├── aadk_monitor_server    # 监控进程（可执行文件；libaadk_monitor.so 在 lib/）
     ├── aadk_monitor.service   # 监控服务单元
     ├── start_aadk_monitor.sh
     └── stop_aadk_monitor.sh
@@ -356,7 +404,7 @@ WantedBy=multi-user.target
 > 2. **未设 `ADSP_LIBRARY_PATH`**：QNN 通过 `ADSP_LIBRARY_PATH` 定位 cDSP 侧 skel 库（`*skel*.so`）。未设置时 FastRPC 找不到 skel 或加载到错误版本，正是 §3.3 WARNING「runtime 与 skel 版本必须一致」的落地点。`run.sh` / service 单元须显式 `export ADSP_LIBRARY_PATH=<设备 skel 目录>`，并与部署的 QNN runtime 版本匹配。
 > 3. **未用 `exec` 启动**：`run.sh` 若以普通子进程方式拉起 `system_agent`，SIGTERM 只送到 bash、不转发给真正的 Agent 进程，导致 systemd 停止/重启时 FastRPC/DSP 会话无法干净释放，残留会话可能触发 cDSP SSR（子系统重启）。`run.sh` 末行须用 `exec /opt/agentcore/bin/system_agent ...`，让 Agent 直接接管 PID、接收信号。
 > 4. **`DDS_LOG=off` 默认关 Fusion 日志**：示例脚本常设 `DDS_LOG=off`，调试 Fusion/DataTransport 通信问题时会「无日志可看」。排查 IPC 问题前先把 `DDS_LOG` 调到 info/debug。
-> 5. **依赖 `/opt/agentcore/torch/lib`**：部分构建产物运行时依赖 `torch/lib` 下的库，而 §4.2 目录树未列出该路径。部署时确认 `torch/lib` 一并推送，或在 `LD_LIBRARY_PATH` 中包含它，否则 `system_agent` 启动即报缺库。
+> 5. **依赖 `/opt/agentcore/torch/lib`**：部分构建产物运行时依赖 `torch/lib` 下的库（主线 `run.sh` 的 `LD_LIBRARY_PATH` 已含 `/opt/agentcore/torch/lib`，§4.2 目录树也已列出）。部署时确认 `torch/lib` 一并推送、且 `LD_LIBRARY_PATH` 包含它，否则 `system_agent` 启动即报缺库。
 
 ### 4.3 模型配置与多 LoRA
 
@@ -380,10 +428,15 @@ aadkcore 的运行时配置**按平台目录组织**：`runtime/data/config/` �
 | :--- | :--- |
 | `generate_concurrent` | 是否允许并发生成（多请求同时进入 decode） |
 | `enable_timeslice` / `timeslice_ms` | 时间片轮转开关与片长，多请求时分复用同一模型实例 |
-| `worker_count` | ModelScheduler 工作线程数 |
+| `worker_count` | ModelScheduler 工作线程数（实际取 `min(配置值, 硬件并发数)`） |
 | `batch_count` | 批处理大小 |
 | `capacity` | 任务队列容量 |
 | `timeout_s` | 单次推理超时时间（秒） |
+
+> [!WARNING]
+> **并非所有字段都被框架消费（核对代码后的口径）**
+>
+> `ModelScheduler` 构造函数实际只读取 **`worker_count` / `capacity` / `timeout_s`** 三个字段（见 §3.4）。`generate_concurrent`、`enable_timeslice` / `timeslice_ms`、`batch_count` 在当前 aadkcore 框架源码中**没有任何读取点**——它们随配置文件保留，但调度行为并不受其影响。这几项要么是为闭源推理引擎（`libllms.so`）侧的并发/时分复用预留、要么是历史遗留字段（**具体由谁消费需核实**）。调参时不要指望改这几个字段能改变框架的并发/批处理行为；真正生效的并发杠杆是 `--dual` 双实例（§4.3）与 `worker_count`（仅影响取任务并发，不影响 HTP 并行度，见 §3.4）。
 
 > [!NOTE]
 > **runtime\_config.json 只承载调度参数，模型本体加载走 multi\_lora\_runtime\_config.json**
@@ -429,6 +482,18 @@ aadkcore 的运行时配置**按平台目录组织**：`runtime/data/config/` �
 | `lora[]` | 各场景 LoRA 列表，每项含 `scene_id`（路由键）、`name`（场景名）、`lora_path`（增量权重目录），可选 `ebnf_path`（约束解码语法） |
 | `model_config` | **主对话模型**配置（CarControl / Chitchat 等使用） |
 | `active_model_config` | **主动视觉模型**配置（ActiveVision 使用）；与 `model_config` 指向同一文件即共用基座，指向不同文件即独立基座 |
+
+> [!NOTE]
+> **`config_path` 指向的模型部署配置（如 `qwen3-omni-4b.json`）长什么样**
+>
+> `base_model.config_path` / `model_config` 指向的模型 json 才是真正描述「模型怎么部署」的文件。主线 8397 的 `qwen3-omni-4b.json` 含四类内容：
+>
+> - **`model_path`**：基座模型目录（LoRA-capable，由 GenAI 引擎加载，非单个 Context Binary）；
+> - **`veg_params[]`**：**多分辨率视觉编码器**——每个分辨率（主线为 448×448 / 1024×768 / 1088×512）对应一个**预编译序列化 Context Binary**（`*.serialized.bin`）外加 RoPE 的 `position_ids_cos/sin` `.raw`。运行时按输入图分辨率用 `get_vit_shape` 选对应 VEG。这正是 §2.3「定长 POD + 预编译」的体现：一个分辨率一个固化 graph，不支持任意分辨率零拷贝直灌；
+> - **`lora_params[]`**：各 LoRA 的 `adapter_alpha`（缩放系数），按 adapter 名与 `multi_lora_runtime_config.json` 的 `lora[].lora_path` 对应；
+> - **生成参数**：`temperature` / `top_k` / `top_p` / `seed` / `repetition_penalty`（由 `ModelConfig` 读取）。
+>
+> `*.serialized.bin` 文件名里的 `archv81`（HTP 架构版本）、`mc3`（多核编译标记）、`socid72`（SoC ID）等后缀说明 Context Binary 与**具体 HTP 架构 / 核配置 / SoC 强绑定**——换 SoC、换 QNN 工具链或换 HTP 核配置都要重新生成（呼应 §3.3 WARNING 的「版本绑定」与 §7.2 的「硬件绑定」）。
 
 **scene\_id ↔ Agent ↔ LoRA 映射**（主线 8397 代表性子集；`scene_id` 与 `scenario_id` 为同一 ID 空间，见下方 NOTE。完整列表以 `multi_lora_runtime_config.json` 的 `lora[]` 为准，本表只列与本篇 Agent 直接相关的常用项）：
 
@@ -510,7 +575,18 @@ flowchart TB
 > [!WARNING]
 > **模型更新的安全红线**
 >
-> (1) **绝不在行驶中更新**：模型切换瞬间推理服务中断，必须在停车且充电状态下执行；(2) **A/B 分区保障回滚**：新模型写入备用分区，冒烟测试通过后才切换，失败自动回滚；(3) **签名校验防篡改**：防止恶意模型注入；(4) **版本兼容性**：新 LoRA 必须与当前基座模型版本兼容，版本号在 runtime\_config.json 中管理。
+> (1) **绝不在行驶中更新**：模型切换瞬间推理服务中断，必须在停车且充电状态下执行；(2) **A/B 分区保障回滚**：新模型写入备用分区，冒烟测试通过后才切换，失败自动回滚；(3) **签名校验防篡改**：防止恶意模型注入；(4) **版本兼容性**：新 LoRA 必须与当前基座模型兼容——兼容性由**模型包与配置的配对**保证（基座 `model_path` + `multi_lora_runtime_config.json` 的 `lora[]` 列表 + 模型 json 的 `lora_params[].adapter_alpha`），而**不是** `runtime_config.json` 里的某个版本号字段（该文件只承载 §3.4 的调度参数，无版本字段）。此外 Context Binary 还受 QNN 工具链 / HTP 架构版本绑定（§3.3 WARNING、§4.3 NOTE），OTA 升级 QNN runtime 时必须连同 `*.serialized.bin` 一起重刷。
+
+> [!NOTE]
+> **原子性 / 双槽 / 回滚的落地要点（资深视角）**
+>
+> 上图的 A/B 切换要真正安全，需满足：
+>
+> - **原子切换**：模型目录的「换版」必须是原子的——用「staging 目录下载校验 → 切换 current 软链/指针」而非就地覆盖，避免某次请求读到「半旧半新」的权重（基座换了、LoRA 没换）。aadkcore 侧 `model_path` / `lora_path` 都是目录引用，切换指针即可让下次加载生效。
+> - **双槽（dual-slot）**：A/B 两份模型包常驻 flash，`current` 指针指向其一；新包写另一槽，冒烟通过再翻指针。flash 预算紧张时也可「单槽 + 回滚包」，但要保证回滚包不被新包覆盖。
+> - **回滚判据要客观**：冒烟测试不能只看「进程没崩」，要断言**实际输出**（如固定 prompt 的 Function Calling 命中、cosine 相似度阈值），否则「加载成功但输出全错」会被误判为成功（参见 §7 转换验证 Checklist）。
+> - **重启一致性**：翻指针后若下次启动冒烟仍失败，bootloader/看门狗应能自动回退到旧槽（标记 success 前不删旧槽）。
+> - **与调度的交互**：换版/回滚瞬间在途请求会被打断，应借 §3.4 的 `StopTask` / 抢占机制优雅排空，而非硬切。
 
 ## 6. 性能基准测试
 
@@ -583,6 +659,11 @@ dmabuf_dump $PID                               # 看 userspace_rss 列（勿用�
 | **模型加载** | 冷启动到推理就绪 | < 5s (Context Binary) | 进程启动日志时间戳 |
 | **吞吐量** | 单位时间处理的 token 总数 | > 10 tok/s | Profiling 回调统计 |
 | **内存峰值** | 推理过程中**总占用**（VmRSS + per-process dma-buf）最大值 | < 4 GB（示例） | `dmabuf_dump <pid>` 看 userspace\_rss，或 VmRSS + 遍历 /proc/PID/fdinfo；**仅看 VmRSS 会低估 3 倍以上**（QNN/HTP 权重与 KV cache 在 dma-buf，不计入 VmRSS），见 §6.2 |
+
+> [!NOTE]
+> 表中「目标值」为**示例口径的设计参考目标**（用于演示「该量哪些指标、怎么量」），非本平台实测、也非保证值；请代入你自己平台与模型的实测替换（全站数据口径见 [硬件平台](../../general/hardware.html) 顶部 NOTE）。
+>
+> **持续算力 vs 峰值（热降频）**：端侧 SoC 在连续负载下会因热降频（thermal throttling）掉速，**冷态峰值吞吐往往显著高于热稳态**。基准必须同时报告「冷态峰值」与「预热后热稳态」两组数（§6.1 的「预热 10 分钟」正是为此），并以**热稳态作为量产口径**——只报冷态峰值会系统性高估体验与续航。TTFT / TPOT 同理要区分首请求（冷）与稳态（热）；DVFS 不锁频（§6.1）测出的才是真实持续性能。
 
 ## 7. ONNX → QNN 转换陷阱
 

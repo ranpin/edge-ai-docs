@@ -135,10 +135,15 @@ AIMET（AI Model Efficiency Toolkit，高通开源量化工具）把浮点权重
 
 | 根目录 | 存什么 | 例子 |
 | :--- | :--- | :--- |
-| `/AI/VLM/models/qwen3-omni-4b` | **模型权重 / Context Binary**（`.bin`） | `base/omni3/veg_448_448_8397.bin`、各 LoRA adapter `.bin` |
-| `/AI/vllm_sdk/models` | **运行时配置 / 模板**（JSON / EBNF / prefix） | `config/qwen3-omni-4b_8397.json`、`config/multi_lora_runtime_config.json`、`vlm_ebnf/`、`prefix/` |
+| `/AI/VLM/models/qwen3-omni-4b` | **模型权重 / Context Binary**（`.bin`），以及 **Genie 按 `model_path` 就地解析的前缀 KV / 解码格式**（genai 包实测 `prefix/` 在 `qwen3-omni-4b/prefix`） | `base/omni3/veg_448_448_8397.bin`、各 LoRA adapter `.bin`、`prefix/<name>` |
+| `/AI/vllm_sdk/models` | **SDK 直接解析的运行时配置 / 模板**（JSON） | `config/qwen3-omni-4b_8397.json`、`config/multi_lora_runtime_config.json` |
 
 两者由配置里的 `model_path` 串联：`qwen3-omni-4b_8397.json`（在 `/AI/vllm_sdk/models/config/`）的 `model_path` 字段指向 `/AI/VLM/models/qwen3-omni-4b`，运行时据此从**权重根目录**加载 Context Binary。VIT 的 `position_ids` / `pixel_values` 等 raw 模板另落在 `/AI/VLM/models/raw_src/`。
+
+> [!NOTE]
+> **prefix / EBNF 归属：跟模型包走，不跟 SDK 配置走**
+>
+> 前缀 KV（`SetCommonPrefix` 按名引用）与解码格式文件是 **Genie 侧产物**，由 Genie 相对 `model_path`（即模型包 `/AI/VLM/models/qwen3-omni-4b`）解析，**不在 `/AI/vllm_sdk/models` 下**——后者只放 SDK 自己要 parse 的运行时 JSON。设备实测 genai 包的前缀在 `qwen3-omni-4b/prefix/`（与 aiservice 包把 prefix 放顶层的布局不同，见 [AIService 后端集成](aiservice-integration.html)）。也因此**换模型包版本时前缀 KV 一并换**，跨包复用旧前缀属未定义行为（具体目录层级以当期模型包为准，待随包核对）。
 
 > [!NOTE]
 > **关于旧版「方案 A/B（Genie 闭源 / GenieX 开源）」对比表**
@@ -153,7 +158,7 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 | :--- | :--- | :--- |
 | **多 LoRA / scene 映射** | 7 条 LoRA 配置覆盖 4 个 scene、5 个 adapter；用 `LoRA ID`(scene) + `LoRA Name` 唯一定位并动态加载（见 3.1） | `model_runner.cpp` `getModelDetailsByScene(scene_id, lora_name)` |
 | **多 VIT 两档路由** | 小档 448×448 / 大档 1024×768 两档 Context Binary，按业务设定的分辨率精确等值路由（见 3.2） | `qnn_model.cpp` `veg_model_small_` / `veg_model_large_` |
-| **DeepStack 适配** | 适配 Qwen3-Omni 的 DeepStack 多层视觉注入，缓解深层网络遗忘图像信息 | `qnn_model.cpp` `deepstack_vit` |
+| **DeepStack 适配** | VIT 输出多路 tensor：第 0 路作主视觉 embedding，第 1..N-1 路作 DeepStack 特征一并注入 LLM，缓解深层网络遗忘图像信息（机制见 5.2） | `qnn_model.cpp` `buildLlmsPrompt` 里 `aios::llms::Deepstack` |
 | **低功耗被动监听** | CPU 轮询改事件驱动（`poll=false`），降 SDK 进程 CPU 占用（见 5.3） | 配置 `poll=false` |
 | **稳定性兜底** | 各业务节点异常捕获 + 空 JSON 降级，避免进程直接 Crash | 各 dispatcher |
 
@@ -167,9 +172,9 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 | 1100 | incar_item_detect | `cnyb` | `cnyb-left`（遗留物）、`cnyb-child`（儿童 person_desc） |
 | 1200 | cloth_detect | `cnyb` | `cnyb-cloth`（dress_detect） |
 | 1300 | grounding_sr | `dwsr` | `dwsr`（一阶段粗分类，约束解码） |
-| 1300 | grounding_base | `dwbs` | `dwbs`（Bbox 为空时全图 + 基模） |
+| 1300 | grounding_base | `dwbs` | `dwbs`（无特定目标时的兜底 grounding；**仍是 dwbs adapter，非基模**，按 camera_id 选用，见 4.2 代码落点） |
 | 1300 | visual_assistant | `znzs` | `znzs-car/sign/animal/plant/general`（二阶段精细化）、`znzs-nlg`（三阶段 NLG） |
-| 1300 | general_base | `default_adapter` | 通识兜底 |
+| 1300 | general_base | `default_adapter` | 通识兜底（二阶段 label=通识 时挂 `znzs-general` 前缀——prefix 名与 adapter 解耦，见 4.2.2） |
 
 **数量关系（务必分清四个层级，不要混为一谈）**：
 
@@ -193,9 +198,9 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 
 - `1024×768` → 大 VIT（`veg_model_large_`，`veg_1024_768_8397.bin`）
 - `448×448` → 小 VIT（`veg_model_small_`，`veg_448_448_8397.bin`）
-- **非两档尺寸（fallback）**：两个等值条件都不命中时，`LOG_E("unsupported image size {}x{}, fallback to veg_model_small (448x448)")` 后**回退到 448 小档**并返回 `(448,448)`——即任意非法/未登记尺寸都会被静默归到小档，排查「图像尺寸不对却仍出结果」时要留意这条 fallback。
+- **非两档尺寸（fallback，注意是「两段门」，最终不是「小档出图」）**：`get_vit_shape` 两个等值条件都不命中时，`LOG_E("unsupported image size {}x{}, fallback to veg_model_small (448x448)")` 后把 **VIT 路由回退到 448 小档**并返回 `(448,448)`，预处理也按 448×448 跑——**但这不等于图像被用上**。`buildLlmsPrompt` 里真正决定「要不要把视觉 embedding 拼进 prompt」的是**另一道门**：`if ((c.resized_width==1024 && c.resized_height==768) || (c.resized_width==448 && c.resized_height==448))`，它判的是**消息里请求的原始尺寸**（`c.resized_width/height`），**不是** fallback 后的值。所以请求一个未登记尺寸（如 800×600）时：小档 VIT 仍白跑一遍，但视觉 embedding + DeepStack **不会被 Append**，只打一条 `LOG_E("image size error {} {}")`，最终退化成**纯文本推理**。排查「图像尺寸不对却仍出文本结果」时，根因往往是这道 append 门，而非 VIT 路由本身。
 
-图像进 VIT 前先 Resize 到对应档位，减少冗余计算。两档 VIT 的 Context Binary 由 2.3 的链路离线生成。
+图像进 VIT 前先 Resize 到对应档位，减少冗余计算。两档 VIT 的 Context Binary 由 2.3 的链路离线生成。另有一处历史残留可作旁证：`preprocessImageInner` 里 `bool large_model = (resized_width > 500 || resized_height > 500)` 是**已不再使用的死变量**（无任何消费方）——说明早期确曾按面积阈值归档，现已改为纯等值匹配。
 
 > [!NOTE]
 > **各业务实际走哪一档（已对 agent_group dispatcher 核实，修正旧版「舱内 448 / 舱外 1024」的粗略说法）**
@@ -210,6 +215,25 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 > | 舱外问答 stage2 | 按 `Stage2ImageMode`：`USE_FULL_1024`→`1024×768`（大档）；`USE_CROP_448`/`USE_FULL_448`→`448×448`（小档） | 视模式而定 |
 >
 > 即**舱内遗留物走的是大档（1024×768），不是小档**——这一点是 5.2 / 7.3 前缀缓存收益因场景而异的根因之一（遗留物帧的视觉 token 多，见 7.3 的预算核算 NOTE）。
+
+### 3.3 Genie 推理选项链（LoRA / 前缀 / 解码格式如何实际下发）
+
+3.1 的「scene + lora_name 映射」与 3.2 的「VIT 档位」最终都收敛到 `qnn_model.cpp::streamGenerate` 里对 Genie `GenerateOption` 的一组 `Set*` 调用——**这才是「多 LoRA 切换 / 前缀缓存 / 约束解码」在 genai 形态的真实落点**。`lora_id` 由 `model_runner` 按 scene+name 查 `scene_named_lora_details_` 得到，是 `lora_names_`（经 `addLora` 注册的 adapter 名数组）的下标：
+
+| Genie 选项 | 代码（`qnn_model.cpp`） | 触发条件 | 作用 |
+| :--- | :--- | :--- | :--- |
+| `SetLora(name)` | `prompt.Option().SetLora(lora_names_[lora_id])` | `lora_id != -1` | 选定 LoRA adapter（cnyb/dwsr/dwbs/znzs/default_adapter） |
+| `SetLoraStrength(2.0)` | 硬编码 | `lora_id != -1` | LoRA 融合强度（即 Genie 的 lora_alpha），**genai 路径写死 2.0、非配置项**（配置里的 `lora_alpha` 字段不被解析器读取） |
+| `SetTemperature/TopP/TopK` = `0.0/1.0/1.0` | 硬编码 | 两分支都设 | 等价 greedy，与 2.4 的 `config.json sampler greedy:true` 一致（见 7.2） |
+| `SetCommonPrefix(prefix)` | `if(!prefix_name.empty()) SetCommonPrefix(...)` | **`lora_id != -1` 且 prefix_name 非空** | 命中前缀缓存（见 5.2 / 7.3） |
+| `SetDecodeFormat(name)` | `if(cur_lora!="znzs" && cur_lora!="default_adapter") SetDecodeFormat(cur_lora)` | 仅 cnyb / dwsr / dwbs | 解码格式约束（见 4.2） |
+
+> [!IMPORTANT]
+> **三条容易踩的结构耦合（均已对 `qnn_model.cpp` 逐行核实）**
+>
+> 1. **前缀缓存与「具名 LoRA」绑定**：`SetCommonPrefix` 写在 `if (lora_id != -1)` 分支内。走基模（`lora_id == -1`，即 scene 1003 或 `__base__`/`base`/`base_model` 强制基模）时，**即使 dispatcher 传了 prefix_name 也不会下发前缀**——基模分支只设 temperature/top_p/top_k。所以「基模 + 前缀缓存」在 genai 形态**不是合法组合**。
+> 2. **解码格式约束只覆盖 3 个 adapter**：`SetDecodeFormat` 对 `znzs` 与 `default_adapter` **显式跳过**（源码注释 "does not need to set"）。即舱外二阶段（visual_assistant=znzs）、三阶段 NLG（znzs）、通识兜底（general_base=default_adapter）**都不走 Genie 解码格式约束**，只有舱内 cnyb 与一阶段 grounding（dwsr/dwbs）走。这直接修正了 4.2 旧版「二阶段约束解码」的说法（见 4.2.1）。
+> 3. **`SetDecodeFormat` 传的是 LoRA 名**，由 Genie 侧据此选择已注册的解码格式；**改名 / 缺对应格式会静默失效**（不报错、只是不再约束），与 [AIService 后端集成](aiservice-integration.html) 记录的 grammar 改名坑同源。genai 形态的 `multi_lora_runtime_config.json` 已**不含** `ebnf_path`/`enable_constrained_decoding` 字段（`model_runner` 里那道 `enable_constrained_decoding && ebnf_path` 门禁在本形态恒不触发），约束解码只经 `SetDecodeFormat` 这一条路。
 
 ## 4. AgentGroup 业务流程
 
@@ -240,12 +264,12 @@ sequenceDiagram
     Note over Cam,S1: 全局策略：开启前缀缓存(Prefix Caching)，提前计算System Prompt
 
     Cam->>S1: 传入原始图像
-    Note right of S1: 预处理：所有场景先翻转一次<br/>若Bbox为空，用全图+基模(需切LoRA)
-    S1->>S1: 约束解码推理
+    Note right of S1: 预处理：所有场景先翻转一次<br/>按camera_id选grounding_sr/base(均为LoRA,非基模)
+    S1->>S1: 约束解码推理(SetDecodeFormat dwsr/dwbs)
     S1-->>S2: 输出：1024x768 Bbox(映射回原图)、粗分类标签、流式累积结果
 
-    Note over S2: 预处理：图像/Bbox翻转回去<br/>(车辆/动物/交通标识反转，植物/通识不反转)<br/>按Bbox裁剪原图(空则跳过)<br/>类别差异化处理(如交通标识缩放10%)
-    S2->>S2: 组织图像+Prompt，约束解码推理
+    Note over S2: 预处理：图像/Bbox翻转回去<br/>(车辆/动物/交通标识反转，植物/通识不反转)<br/>车辆/动物/交通标识按Bbox扩框10%后裁448(过小/空则跳过)<br/>植物/通识整图1024不裁剪(忽略Bbox)
+    S2->>S2: 组织图像+Prompt推理<br/>(结构化输出靠prompt约定+后处理解析，非Genie解码格式约束)
     S2-->>S3: 输出：细分类标签(name/type/caption)<br/>置信度映射(基于Bbox大小)<br/>标准图像库映射、流式解析
 
     Note over S3: 无图像处理，纯文本推理<br/>不使用约束解码
@@ -257,16 +281,36 @@ sequenceDiagram
 
 | 推理阶段 | 图像与 Bbox 处理 | 推理策略与 Prompt 组织 | 输出与后处理 |
 | :--- | :--- | :--- | :--- |
-| **第一阶段** | ① 后视摄像头所有场景先翻转一次 ② Bbox 为空则用全图+基模（需调一次 LoRA 切换）③ Bbox 对应 1024×768，需映射回原图坐标 | 约束解码（Constrained Decoding） | ① 粗分类标签 ② 流式结果累积 |
-| **第二阶段** | ① 图像/Bbox 翻转回去（车辆/动物/交通标识反转，植物/通识不反转）② 按一阶段 Bbox（缩放回原图）裁剪，空则跳过（如植物）③ 类别差异化预处理（如交通标识缩放 10%） | ① 组织图像+Prompt ② 约束解码 | ① 置信度映射（基于 Bbox 大小）② 标准图像库映射 ③ 细分类标签（name/type/caption），流式解析 |
-| **第三阶段** | 无图像处理 | ① 拼接用户 Query + 二阶段结构化输出作为 User Prompt ② 纯文本推理，**不使用**约束解码 | NLG 流式输出，用于 TTS 播报 |
+| **第一阶段** | ① 后视摄像头所有场景先翻转一次 ② 按 `camera_id` 选 `grounding_sr`/`grounding_base`（均为 LoRA adapter，非基模；一阶段无输入 bbox，选择依据是相机位）③ 输出 Bbox 对应 1024×768，需映射回原图坐标 | 约束解码（`SetDecodeFormat(dwsr/dwbs)`，见 3.3） | ① 粗分类标签 ② 流式结果累积 |
+| **第二阶段** | ① 图像/Bbox 翻转回去（车辆/动物/交通标识反转，植物/通识不反转）② **车辆/动物/交通标识**按 Bbox 扩框 10% 后裁剪到 448×448，bbox 过小/为空则跳过；**植物/通识**忽略 bbox、整图 1024×768（当前 `USE_20260423_RULE` 正式版，逐 label 见下表）③ 类别差异化预处理 | ① 组织图像+Prompt ② **不走 Genie 解码格式约束**（znzs/default_adapter 被 `SetDecodeFormat` 显式跳过，见 3.3）；结构化输出靠 prompt 约定 + 后处理 `parseModelOutputToUnifiedByLabel` 解析 | ① 置信度映射（基于 Bbox 大小）② 标准图像库映射 ③ 细分类标签（name/type/caption），流式解析 |
+| **第三阶段** | 无图像处理 | ① 拼接用户 Query + 二阶段结构化输出作为 User Prompt ② 纯文本推理，**不使用**约束解码（znzs 同样被 `SetDecodeFormat` 跳过） | NLG 流式输出，用于 TTS 播报 |
+
+#### 4.2.2 二阶段逐 label 决策表（`decide_stage2_by_label`，已对 `outcar_process.hpp` 核实）
+
+二阶段「用哪个 LoRA、裁不裁图、走哪档 VIT、挂哪个 prefix」全部由一阶段 label 决定。当前源码 `USE_20260423_RULE = true`（正式版）下的实际行为：
+
+| 一阶段 label | 二阶段模型（LoRA） | 图像处理（`Stage2ImageMode`） | VIT 档 | prefix | bbox 门限 / 扩框 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 车辆 | visual_assistant（znzs） | crop 448×448（`USE_CROP_448`） | 小档 | `znzs-car` | 扩框 10%；bbox 宽或高 < 120（或空）→ 跳过二阶段 |
+| 动物 | visual_assistant（znzs） | crop 448×448 | 小档 | `znzs-animal` | 扩框 10%；bbox 宽或高 < 80（或空）→ 跳过 |
+| 交通标识 | visual_assistant（znzs） | crop 448×448 | 小档 | `znzs-sign` | 扩框 10%；bbox 宽或高 < 30（或空）→ 跳过 |
+| 植物 | visual_assistant（znzs） | 整图 1024×768（`USE_FULL_1024`） | 大档 | `znzs-plant` | 忽略 bbox，不裁剪、不跳过 |
+| 通识 | **general_base（default_adapter）** | 整图 1024×768（`USE_FULL_1024`） | 大档 | `znzs-general` | 忽略 bbox，不裁剪、不跳过 |
+| 其它 | —（跳过二阶段） | `SKIP_STAGE2` | — | — | `clear_bbox`，直接走兜底回复 |
+
+> [!NOTE]
+> **两处易错点**
+>
+> - **通识二阶段走的是 `general_base`（default_adapter），不是 znzs**——但它的 prefix 仍叫 `znzs-general`（prefix 名与 adapter 解耦，呼应 3.1「prefix 数 > adapter 数」）。且 default_adapter 被 `SetDecodeFormat` 跳过，故通识二阶段无解码格式约束。
+> - **植物/通识在正式版下不再「bbox 为空就跳过」**：旧「临时版」逻辑（bbox 空或过小 → `SKIP_STAGE2`）已被 `USE_20260423_RULE` 分支取代为「忽略 bbox、整图 1024×768 送二阶段」。只有车辆/动物/交通标识这三个 crop 类仍保留 bbox 门限与跳过逻辑。
 
 代码落点（`outcar_qa_dispatcher.cpp`）：
 
-- 翻转：`cv::flip(src, src, 1)`（一阶段入口 + 二阶段翻回）
-- 一阶段 grounding：`handle_view_request(msg, model_data, "outcar_qa.grounding_sr.system_prompt")` / `grounding_base`
+- 翻转：`cv::flip(src, src, 1)`（一阶段入口 + 二阶段翻回；二阶段翻回仅对车辆/动物/交通标识，且限 `camera_id==5`）
+- 一阶段 grounding：`handle_view_request(msg, model_data, ...)`——**按 `camera_id` 选模板**（`0`/`5` → `grounding_sr`，挂 dwsr adapter + `dwsr` 前缀；其余 → `grounding_base`，挂 dwbs adapter + `dwbs` 前缀）。注意一阶段本身**没有输入 bbox**（bbox 是它的产出），故选择依据是相机位而非「bbox 是否为空」；grounding_sr/grounding_base **都是 LoRA adapter，不是基模**
 - Bbox 映射：`bbox1000ToOriginal(meta.bbox, cols, rows, 1024, 768)`（模型输出 0~1000 → 原图坐标）
-- 二阶段决策：`decide_stage2_by_label(label, bbox)`；二阶段走 `data_message_lora5`
+- 二阶段决策：`decide_stage2_by_label(label, bbox)`（逐 label 见 4.2.2）；二阶段走 `data_message_lora5`，模型名取 `decision.stage2_model_name`（visual_assistant / general_base），prefix 按 label 映射 `znzs-*`
+- 三阶段 NLG：`schedule_run_sync(..., "visual_assistant", ..., "znzs-nlg")`，纯文本、无解码格式约束
 
 ## 5. 性能优化体系
 
@@ -312,9 +356,9 @@ graph LR
 | **模型量化（W4A16）** | **降内存占用、首次加载时间与 decode TPOT**（decode memory-bound，压权重直接减每 token 读取字节）。注意：**对 compute-bound 的 prefill / TTFT 基本无收益**——W4A16 的 matmul 仍走 FP16 通路、峰值算力不变，dequant 反加开销（推导见 [解码服务化 · TTFT 优化（§5.3）](../../general/infer-serving.html)） | VIT + LLM 权重均 INT4（W4A16；基模 + **7 条 LoRA 配置 / 5 个 adapter**，见 3.1；制备方法见 2.2） | 0527 浮点 vs 端侧：多数场景差 0~6pp（nlg/儿童遗留/遗留物近乎无损），植物 caption 约 −10pp；衣着描述 0527 版异常塌至 ~0%（见 7.1）。**VIT INT4 是激进选择，权衡见下方专门讨论** |
 | **模型 SSD（经核查未启用）** | 经核查为 greedy 单模型解码，非推测性采样解码 | `config.json` sampler `greedy:true/type:basic`；源码无 speculative/draft/forecast 字段 | 原"开启 SSD"笔记存疑，既非 Single Shot Detector 也无存储 Swap 证据（见 7.2） |
 | **多 VIT 动态切换** | 按场景/阶段用不同大小 VIT 缩短时延 | 进 VIT 前 Resize，按业务选 `1024×768`（大档）或 `448×448`（小档）两档 Context Binary（各业务实际档位见 3.2，**舱内遗留物走大档、衣着走小档**） | 减少冗余计算 |
-| **单核改多核** | 利用 SA8397 多核算力 | VIT/LLM 由单核改三核/四核（导出时配置，改 `default.json`） | 吞吐量大幅提升 |
-| **前缀缓存** | 提前算 System Prompt，加速 Prefill | 框架级 Prefix Caching，开关在**设备侧 Genie `config.json: enable_prefix_caching=true`**（见 2.4；`base_model.json` 里的同名字段是 Orin/Lape 配置，不在本链路） | 11 个 prefix 的 System Prompt 约 318~959 tokens、均值 ~610，每次省去这段 prefill；上下文 cl2560、max_tokens 512（见 7.3） |
-| **开启 DeepStack** | 避免深层模型遗忘图像信息（Qwen3-Omni 专属） | 将 VIT 多尺度图像特征注入 LLM Decoder 的**多个层**（DeepStack 典型为多层注入，非仅"前几层"；具体注入层位以 Qwen3-Omni 设计为准） | 提升多模态对齐 |
+| **单核改多核** | 利用 SA8397 多核算力 | VIT/LLM 由单核改三核/四核（导出时配置，改 `default.json`）。代码侧可证：两档 VEG 的 context 配置文件**硬编码**为 `/AI/VLM/models/qwen3-omni-4b/base/omni3/default.json`（`qnn_model.cpp::resume`），HTP 核数/backend 扩展即在此与 Context Binary 生成期定下 | 吞吐量大幅提升 |
+| **前缀缓存** | 提前算 System Prompt，加速 Prefill | 框架级 Prefix Caching，开关在**设备侧 Genie `config.json: enable_prefix_caching=true`**（见 2.4；`base_model.json` 里的同名字段是 Orin/Lape 配置，不在本链路）；运行期由 `SetCommonPrefix(prefix_name)` 按请求下发，**且只在具名 LoRA（`lora_id!=-1`）分支生效**（见 3.3） | 11 个 prefix 的 System Prompt 约 318~959 tokens、均值 ~610，每次省去这段 prefill；上下文 cl2560、max_tokens 512（见 7.3） |
+| **开启 DeepStack** | 避免深层模型遗忘图像信息（Qwen3-Omni 专属） | VIT（`MultiVegModel::Predict`）输出**多路** tensor：`buildLlmsPrompt` 取第 0 路作主视觉 embedding（`Image`），第 1..N-1 路逐路 `Append` 进 `aios::llms::Deepstack` 再拼入 prompt，由 Genie 注入 LLM Decoder 的**多个层**（注入层位/层数由模型与 Genie 决定，aadkcore 只透传 VIT 多路输出；非仅"前几层"） | 提升多模态对齐 |
 
 > [!IMPORTANT]
 > **VIT INT4 是激进选择，需配套精度恢复（不要只当既定优化项罗列）**
@@ -394,6 +438,24 @@ graph LR
 ### 7.3 前缀缓存 Token 数
 
 用 `tokenizer_qwen3.json` 对 11 个 prefix 的 system_prompt（含 `<|fim_prefix|>system…<|fim_suffix|>` sys_tags）逐条统计：**318~959 tokens、均值 ~610**（11 项之和 6709 ÷ 11 ≈ 610）。即每次推理可省去这段 prefill（上下文预算 cl2560、max_tokens 512）。11 个 prefix 与 5 个 adapter 的对应关系见 3.1。
+
+> [!IMPORTANT]
+> **前缀缓存的命中条件与逐阶段下发（genai 形态，已对代码核实）**
+>
+> 前缀缓存不是「开了就自动命中」，genai 形态下要**同时**满足三条：
+>
+> 1. **设备侧 Genie `config.json: enable_prefix_caching=true`**（总开关，见 2.4）；
+> 2. **该请求走具名 LoRA（`lora_id != -1`）**——`SetCommonPrefix` 只在具名 LoRA 分支调用；基模推理（scene 1003 / `__base__`）即使传了 prefix_name 也不下发（见 3.3）；
+> 3. **dispatcher 在 `schedule_run_sync(..., prefix_name)` 末参显式传入**，且模型包内存在该 prefix 的预计算 KV（`SetCommonPrefix` 只传名字，KV 由 Genie 按名解析；缺文件 / 改名会静默不命中）。
+>
+> 各链路实际下发的 prefix（舱外逐 label 见 4.2.2，舱内见 3.1）：
+>
+> - 舱内遗留物 → `cnyb-left`；舱内儿童（整图 child detect）→ `cnyb-child`；舱内衣着 → `cnyb-cloth`
+> - 舱外一阶段 → `dwsr`（grounding_sr）/ `dwbs`（grounding_base）
+> - 舱外二阶段 → `znzs-car/animal/sign/plant/general`（按 label）
+> - 舱外三阶段 NLG → `znzs-nlg`
+>
+> 反例（条件 3 不满足）：舱内**逐座位 person_desc 裁剪**那次 `schedule_run_sync` 未传 prefix_name，故该次推理**不命中前缀缓存**——同一 `person_desc.system_prompt` 在「整图 child detect」走 `cnyb-child`、在「逐座位 crop」不走前缀，二者不要混为一谈。
 
 > [!NOTE]
 > **均值复算说明（修正旧版「~634」）**：旧版正文与 5.2 写「均值 ~634」，与下表 11 个值之和不符（6709 ÷ 11 ≈ 610），现已统一为 **~610**。用 `tokenizer_qwen3.json` + 最新模板（`vllm_sdk/models/template/*.yaml`）按 system sys_tags 包裹复算，**11 项中 10 项与下表逐值精确吻合**；唯一差异是 `znzs-nlg`（复算 751，下表记 770）——该 nlg prompt 在 0811 前后改过版，不同模板包复算值在 751~772 间浮动，下表沿用项目记录的 770，不影响均值量级（~608~610）。

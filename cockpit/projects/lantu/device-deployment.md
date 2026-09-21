@@ -26,7 +26,7 @@
 | CMake | **3.28 必须在 PATH 上**——`build_8397_android.sh` 直接调 `cmake`；系统老版本 CMake（如 3.16）会对 Android+LTO 强加 `-fuse-ld=gold` 而构建失败 |
 | ABI | `arm64-v8a`（aarch64，匹配车机 SoC；APK 侧同样用 `abiFilters` 限定此 ABI） |
 | Platform | `ANDROID_PLATFORM=android-33`（脚本内写死） |
-| STL | `libc++_shared`（GenAI SDK 依赖，交付包 `lib/` 随附 `libc++_shared.so`） |
+| STL | 脚本**未显式传** `-DANDROID_STL`（用 NDK 工具链默认）；交付包 `lib/` 随附 `libc++_shared.so`（厂商 GenAI 预编译库依赖）。上机前建议 `readelf -d libaadkcore.so libllms.so | grep NEEDED` 核对两者 libc++ 口径——自身 `.so` 与 vendor `.so` 若一个静链、一个动链 libc++，跨边界传 STL 对象/异常有 ODR 风险 |
 | 构建类型 | **Release 型构建**（`-O3 -ffast-math -funroll-loops -fomit-frame-pointer -fopenmp` + IPO/LTO，aarch64 加 `-march=armv8-a`），**未 strip** 故保留符号——这是下面目录树里 `.so` 体积偏大的原因，见 1.2 注 |
 
 > [!NOTE]
@@ -41,7 +41,12 @@
 | `ENABLE_LANTU_SDK` | 岚图项目闸门：agent\_group 是否编入三个场景 dispatcher（dress\_detect / incar\_item\_detect / outcar\_qa）与岚图形态的模板安装规则（只装编入 dispatcher 实际打开的模板，见 1.2） |
 | `ENABLE_QNN_MODEL` | GenAI/QNN 后端：**四层**——源码（`qnn_model.cpp` 是否编入）、include 路径、链接项、install 规则（`lib/` 相关库 + 整个 `libqnn/` 目录） |
 
-现行岚图构建脚本（`build_8397_android.sh`）只传 `-DENABLE_QNN_MODEL=ON -DENABLE_LANTU_SDK=ON`，是**纯 GenAI 形态**：全仓库 CMakeLists 里 grep 不到 `ENABLE_AISERVICE_MODEL`，即 genai 形态构建**不含** AIService 后端开关/源码。运行期按配置里 `model_name` 前缀路由后端（`qnn/…` → 进程内 QNN，`aiservice/…` → HTTP 8090）的机制**属 aiservice 形态分支**，genai 形态不编入该后端，详见 [AIService 后端集成与重构](aiservice-integration.html)。
+现行岚图构建脚本（`build_8397_android.sh`）传 `-DENABLE_QNN_MODEL=ON -DENABLE_LANTU_SDK=ON -DENABLE_ANDROID_NDK=ON -DENABLE_AGENT_GROUP_BUILD=ON`，外加一串 `-DFEATURE_*=OFF`（car_control / chit_chat / active_vision / gui / car_sentinel / rain_dection / soprt_mode / welcome_mode / video_chat / chery_project，**仅** `FEATURE_OAI_INFERENCE=ON`），并指定 `-DGENAI_SDK_ANDROID_NAME="genai_sdk-sa8397.rel-android"`、`-DCMAKE_INSTALL_PREFIX=vllm_sdk`、`-DAADK_TARGET_PLATFORM=android`、`-DAADK_ENV_PATH=<repo>/aadk_lib`。它是**纯 GenAI 形态**：全仓库 CMakeLists 里 grep 不到 `ENABLE_AISERVICE_MODEL`，脚本也不传任何 AIService 后端开关，即 genai 形态构建**不含** AIService 后端开关/源码。运行期按配置里 `model_name` 前缀路由后端（`qnn/…` → 进程内 QNN，`aiservice/…` → HTTP 8090）的机制**属 aiservice 形态分支**，genai 形态不编入该后端，详见 [AIService 后端集成与重构](aiservice-integration.html)。
+
+> [!NOTE]
+> **芯片宏由 `GENAI_SDK_ANDROID_NAME` 字符串解析而来（写错包名会静默走错平台分支）**
+>
+> 顶层 `CMakeLists.txt` 用正则 `-sa([0-9]+)\.` 从 SDK 包名里抠出 SoC 代号，再据此 `add_compile_definitions`：命中 `8397` → `ENABLE_ANDROID_LLM_8397_PLAINTEXT`（另有 8295 / 9075 分支）。脚本传 `genai_sdk-sa8397.rel-android` 正好命中 8397。若包名写错（漏了 `-sa8397.` 之类），CMake 只打一条 `Could not detect SoC ID from SDK name` 的 **warning 就静默跳过该宏**，编译照样通过，但运行期平台分支会走错——改 SDK 包名时务必确认 configure 日志里没出现这条 warning。`ENABLE_QNN_MODEL` 的四层闸门（源码 `qnn_model.cpp` / include / 链接 / install）也都在同一 `if(ENABLE_QNN_MODEL)` 块里：install 把 `genai_sdk` 包 `lib/*.so*`（含 `libllms.so`）装进 `lib/`、把 `third_party/lib/*` 装进 `libqnn/`。
 
 **编译与安装**：
 
@@ -93,8 +98,8 @@ adb push build_8397_android/vllm_sdk/ /AI/vllm_sdk/
 ├── example/
 │   ├── bin/android_test        # 测试可执行文件（三场景用例）★ android_sdk_run.sh 当前入口
 │   ├── bin/new_api_test        # 新 API 测试程序（android_sdk_run.sh 里被注释，非当前入口）
-│   ├── src/android_sdk_test.cpp  # 测试源码
-│   └── data/                   # 测试图片和用例（test_cases.json + 全部测试图）
+│   ├── src/                    # 测试源码（android_sdk_test.cpp + new_api_test.cpp）
+│   └── data/                   # 测试图片（img_test.jpg + demo_test_0416/）与 test_cases.json
 ├── android_sdk_run.sh          # 运行脚本
 └── version.txt                 # 版本号（上机后第一眼要看的，见 1.4）
 ```
@@ -156,12 +161,17 @@ export LD_LIBRARY_PATH=/AI/vllm_sdk/lib:$GENAI_THIRTY_LIB
 
 | 层级 | 判据 | 方法 / 说明 |
 | :--- | :--- | :--- |
-| **版本** | `version.txt` 与预期一致 | `cat /AI/vllm_sdk/version.txt`（如 `qnn246-sdk_*` / `H47A3632017DA.26081401`），上机后第一眼先看它 |
+| **版本** | `version.txt` 与预期一致 | `cat /AI/vllm_sdk/version.txt`（两行：`versionNameInternal=fp0603_qat0610_arn256_qnn246-sdk_<时间戳>` / `versionName=H47A3632017DA.<YYmmdd>01`），上机后第一眼先看它——但它只编码构建时刻，见下注 |
 | **形态** | 目录形状与预期形态一致 | GenAI 形态有 `libqnn/`；AIService 形态没有 `libqnn/` 且 `lib/` 文件数明显更少。防「推错包」 |
 | **完整性** | 产物与构建侧一致 | md5 比对**只对同一构建路径的产物可复现**——产物 Release 型但**未 strip**，仍嵌构建目录等路径信息，换机/换目录构建 md5 必变；跨环境比对改用 `llvm-nm -D` 动态符号（去掉地址列）、归一化后的 `strings`、`readelf -SW` 节区大小 |
 | **加载** | 库与模型真实映射 | `cat /proc/<pid>/maps`：确认进程映射了哪些 `.so`、哪些模型 `.bin` 及其真实路径。aiservice 形态下 `GET /v1/models` 说 `loaded` **不等于**新模型已生效——`VoyahAIService` 只在启动时扫描，硬证据是 maps 里 lora `.bin` 的真实路径 |
 | **功能** | 用例结果，而非退出码 | GenAI 形态即使三链路全部跑通，teardown 阶段也会 **SIGABRT**（`FORTIFY: pthread_mutex_lock called on a destroyed mutex`，RC=134，改动前后指纹一致的既有问题）；判据是输出里的 `ran=N` 与 `RESULT` JSON 内容，**不要看退出码** |
 | **APK 侧** | 包内 3 个 `.so` 的 md5 定版 | 核对 APK 配的是哪版 SDK，比包内 `libaadkcore` / `libagent_group` / `libandroid_sdk` 的 md5，别信构建时间戳（每次构建都变） |
+
+> [!NOTE]
+> **`version.txt` 只编码「哪天编的」，不编码「哪版代码」**
+>
+> `build_8397_android.sh` 末尾用 `date` 现场拼出两行，先写到仓库**父目录** `../version.txt` 再 `cp` 进 `build_8397_android/vllm_sdk/`：前缀 `fp0603_qat0610_arn256_qnn246-sdk_` 与 `H47A3632017DA.` 都是脚本里**写死的字面量**，只有尾部时间戳随构建时刻变。因此两次不同代码、同一脚本的构建，`version.txt` 只差时间戳——它能回答「这是哪天编的包」，**不能**回答「这是哪版代码」。定版仍要靠上表「完整性 / APK 侧」的符号或 md5 判据，别把 `version.txt` 当代码版本用。
 
 ## 2. APK 部署与设备文件放置
 
@@ -216,7 +226,9 @@ flowchart TB
 部署中最容易混淆的是把 `/AI/vllm_sdk/models` 当成「模型目录」。实际上有**两个根目录**，职责不同：
 
 - **`/AI/vllm_sdk/models` = 运行时配置/模板根**（「怎么跑」）：是 `ModelInference::init(model_path)` 的入参，里面只有 JSON 配置与 YAML 模板，**没有权重**；
-- **`/AI/VLM/models/qwen3-omni-4b` = 模型权重/Context Binary 根**（「跑什么」）：`qwen3-omni-4b` 是内部定制模型型号；该根目录同时是 `VoyahAIService` 的模型扫描根（**硬编码**）。
+- **`/AI/VLM/models/qwen3-omni-4b` = 模型权重/Context Binary 根**（「跑什么」）：`qwen3-omni-4b` 是内部定制模型型号，genai 形态由 `qwen3-omni-4b_8397.json` 的 `model_path`（绝对路径）直连到这一层；其**父目录** `/AI/VLM/models` 才是 aiservice 形态 `VoyahAIService` 的模型扫描根（**硬编码**，扫到的是其下各模型包）。
+
+两者**刻意解耦**：配置/模板根随 SDK 交付包走（CMake `install` 进 `vllm_sdk/models`，与 `.so` 同版本同生命周期），权重根是独立交付/OTA 的模型包（体积大、aiservice 形态下由 `VoyahAIService` 管 OTA 双槽）——升级 SDK 不动权重、OTA 权重不动 SDK。这也是为什么「把权重塞进 `/AI/vllm_sdk/models`」是高频坑（见 2.2 末 WARNING ①）。
 
 genai 形态下，权重根**不是**靠 `model_root` 相对跟随定位的——`multi_lora_runtime_config.json` 里**没有** `model_root` 字段。实际链路是：`multi_lora_runtime_config.json` 的 `model_config` → `config/qwen3-omni-4b_8397.json` 的 `model_path`（**绝对路径** `/AI/VLM/models/qwen3-omni-4b`）直接定位权重根；`model_root` 相对跟随是 **aiservice 形态**的机制。此外 `veg_params` 还引用**第三个根** `/AI/VLM/models/raw_src/`（VIT 的 `position_ids`/`pixel_values` `.raw` 文件，按 448×448 / 1024×768 两档分目录）。权威目录树：
 
@@ -235,13 +247,14 @@ genai 形态下，权重根**不是**靠 `model_root` 相对跟随定位的—�
     ├── qwen3-omni-4b/                   ← 模型包
     │   ├── info.json                    # 模型元数据（id: qwen3_omni）
     │   ├── base/                        # 基模 config.json + Context Binary / KV 缓存 (.bin)
+    │   │                                #   VIT 两档 bin 在 base/omni3/veg_448_448_8397.bin / veg_1024_768_8397.bin
     │   ├── loras/                       # 场景 LoRA 权重 (.bin)
     │   ├── prefix/                      # 前缀缓存（与配置中 prefix_name 1:1 对应）
     │   ├── vlm_ebnf/                    # 约束解码 grammar
     │   └── template/                    # 包内模板副本（厂商 Example 读这份；与 SDK 自带副本内容实测相同）
     └── raw_src/                         ← 第三个根：VIT 预处理 .raw（qwen3-omni-4b_8397.json 的 veg_params 引用）
-        ├── 448_448/                     # position_ids_cos/sin.raw + pixel_values.raw（舱内档）
-        └── 1024_768/                    # 同上（舱外档）
+        ├── 448_448/                     # position_ids_cos/sin.raw + pixel_values.raw（小档；衣着走这档）
+        └── 1024_768/                    # 同上（大档；舱内遗留物 / 舱外问答走这档——非「舱内一律小档」，见 genai-architecture §3.2）
 ```
 
 > [!WARNING]

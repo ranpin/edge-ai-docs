@@ -28,7 +28,7 @@ MCP 工具协议、A2A 协议、运行时与插件机制、LLM Flow 与 Tool Use
 
 ### 1.3 场景 Agent 应用
 
-车辆控制 Agent（30+ 技能）、主动视觉 Agent（6 大模式）、闲聊 Agent、GUI Agent、Prompt 模板工程、数据通路与 Fusion 通信
+车辆控制 Agent（30+ 技能）、主动视觉 Agent（迎宾/送宾/行中三模式，行中含危险行为/玩手机/睡觉/吃东西等多项视觉检测）、闲聊 Agent、GUI Agent、Prompt 模板工程、数据通路与 Fusion 通信
 
 `车控` · `主动视觉` · `闲聊` · `GUI Agent`
 
@@ -48,7 +48,7 @@ graph TD
     end
 
     subgraph CORE["内部实现层"]
-        C1["BaseAgent / LlmFlow / ModelScheduler"]
+        C1["BaseAgent / BaseLlmFlow / ModelScheduler"]
         C2["AgentRuntime / BaseTool"]
     end
 
@@ -83,6 +83,17 @@ graph TD
 
 表中生成速度与内存占用为 INT4 量化下的量级示例，实际取决于具体平台带宽与算力，请按自己的平台代入推导（方法见 [**LLM 推理原理与性能模型**](../../general/infer-principles.html)）。
 
+> [!NOTE]
+> **哪些模型是框架真正接好的，哪些只是选型候选**
+>
+> 上表是「选型对比」，不代表每一行都已在 aadkcore 里接好后端。按代码核实，框架当前**已注册并带配置**的端侧模型是：
+>
+> - **Qwen3-Omni-4B**：QNN（`qnn/qwen3-omni-4b`，SA8397）与 Lape（`lape/Qwen3-Omni-4B`，Orin）双后端均有，是当前主推的多模态座舱模型；
+> - **Qwen2.5-Omni-7B**：Lape 后端（`lape/Qwen2.5-Omni-7B`），Orin 上以 GPTQ-Int4 权重部署；
+> - **Qwen2.5-VL-3B**：Lape 后端（`lape/Qwen2.5-VL-3B`），纯视觉场景。
+>
+> 表中 **Qwen3-4B / Qwen3-1.7B / Llama3.2-3B 属于选型候选**，用于说明「按延迟/内存预算挑模型」的方法，框架里暂无对应的注册后端与量产配置，落地前需自行接入并实测。另外，Qwen3-Omni 模型族原生支持文本/图像/音频/视频，但 aadkcore 目前接好的预处理器是**图像（ViT）+ 音频**两路（`qwen2_vl_processor` / `qwen25_audio_processor`），视频输入尚未在框架内打通。
+
 > [!TIP]
 > **选型建议**
 >
@@ -97,12 +108,12 @@ graph LR
     subgraph 输入层
         A1["语音ASR 文本 / 原生音频"]
         A2["视觉车内/前向摄像头图像帧"]
-        A3["车辆状态CAN 信号"]
-        A4["上下文时间/位置/天气/乘客"]
+        A3["车辆状态车控服务 JSON 快照"]
+        A4["乘客信息 / 实时上下文"]
     end
 
     subgraph Prompt 组装层
-        B["PromptManager占位符替换 +[CAR_STATE] 注入"]
+        B["Prompt 组装PromptManager 场景模板 + [CAR_STATE] 注入"]
     end
 
     subgraph 推理层
@@ -129,12 +140,14 @@ graph LR
     D --> E4
 ```
 
-具体分工：语音经 ASR 转为文本进入用户消息（或使用 Qwen3-Omni 的原生音频输入）；图像帧作为 VLM 的原生多模态内容直接送入模型；车辆状态由 `CarSignalManager` 读取 CAN 信号后，以 `[CAR_STATE]` 文本（如"空调24度, 车窗关闭, 风速3档"）注入 system prompt；时间、位置、天气、乘客信息等上下文由 `PromptManager` 做占位符替换。
+具体分工：语音经 ASR 转为文本进入用户消息（或使用 Qwen3-Omni 的原生音频输入）；图像帧作为 VLM 的原生多模态内容直接送入模型；车辆状态走的是**文本注入**这条路——`CarSignalManager` 并不直接读 CAN，而是接收上游车控服务经 Fusion/DataTransport 推来的车辆状态 JSON 快照（`SystemAgentDispatcher::handle_car_signal_request` 解析后调 `setCarSignalInfo`），解析成 `VehicleState` 后按当前技能 mask 生成 `[CAR_STATE]` 文本（如"空调24度, 车窗关闭, 风速3档"）注入 system prompt；`PromptManager` 则是按场景从 YAML 加载、按 `prompt_id` 取用的 prompt 模板仓库，乘客信息随 `[CAR_STATE]` 一并注入。时间/位置/天气这类实时上下文，框架里不是由 PromptManager 自动占位符替换，而是经 Tool（如 MCP `get_weather`）或上游消息带入。
 
 > [!NOTE]
 > **为什么不是 token 级 embedding 融合**
 >
-> 文献中常见的"理想化多模态融合架构"是用独立的多模态编码器把各模态对齐到统一 embedding 空间、车态也编码为结构化 token。aadkcore **没有**采用这种方式，而是 prompt 注入：LLM 只看到"文本 prompt + 原生多模态内容"，车态就是 prompt 里的结构化文本。这样无需定制融合编码器、不增加训练成本，新增车态信号只需扩展 prompt 模板。占位符替换机制与场景模板详见 [**场景 Agent 应用**](agent-group.html)。
+> 文献中常见的"理想化多模态融合架构"是用独立的多模态编码器把各模态对齐到统一 embedding 空间、车态也编码为结构化 token。aadkcore **没有**采用这种方式，而是 prompt 注入：LLM 只看到"文本 prompt + 原生多模态内容"，车态就是 prompt 里的结构化文本。这样无需定制融合编码器、不增加训练成本，新增车态信号只需扩展 prompt 模板。
+>
+> 两个值得注意的工程取舍：① **车态按技能 mask 裁剪**——`to_carsignal_prompt` 只输出当前意图命中的技能对应的车态字段，而非把整车信号全量塞进 prompt，避免无谓拉长 prefill、挤占端侧本就紧张的上下文预算；② **CAN 边界在框架之外**——aadkcore 消费的是车控服务已经解析好的车辆状态 JSON 快照，不直接碰 CAN 总线，这样框架与具体车型的信号矩阵解耦，换车型只需上游适配。场景模板与技能体系详见 [**场景 Agent 应用**](agent-group.html)。
 
 ## 3. 端侧 Agent 框架设计
 
@@ -161,6 +174,11 @@ sequenceDiagram
     LLM->>U: "已把空调调到22度。最近的加油站是中石化，前方2.3公里，约4分钟到达，已为您开始导航。"
 ```
 
+> [!NOTE]
+> **图里的 "Tool Router" 对应到代码是什么**
+>
+> 框架里没有一个叫 "Tool Router" 的独立类，这一步实际由 Flow 引擎的 `FunctionHandler::handle_function_calls_async` 完成：LLM 返回的每个 function call 按名字在 `tools_dict` 里查表定位到 `BaseTool`，依次跑 before-tool 回调（`before_tool_callback`）→ 执行工具 → after-tool 回调（`after_tool_callback`）（回调可拦截或改写参数/结果，这是做安全校验和车控 shortcut 的挂点），最后把本轮所有工具结果**合并成一条 user 角色消息**回填给 LLM 生成最终回复。图里画成"并行分发"是为表达复合意图，但当前实现是**顺序执行后合并**——真正的并行 Tool 执行见 §3.2「并发调度」里的说明（设计方向）。
+
 ### 3.2 Tool Use 设计要点
 
 端侧 Agent 的 Tool 体系需要兼顾灵活性和安全性。以下是关键设计考量：
@@ -172,11 +190,17 @@ sequenceDiagram
 | **延迟预算** | < 2s 端到端（示例目标） | 从用户说完到执行完成 < 2 秒。以下数字为**预算分配示例（非实测）**：ASR ~300ms，LLM 推理 ~800ms，Tool 执行 ~500ms，TTS ~400ms。其中 LLM 项应按平台 roofline/带宽模型推导（TTFT 看算力、decode 看带宽），不要拍固定毫秒数，推导方法见 [**LLM 推理原理与性能模型**](../../general/infer-principles.html) 与 [**端侧解码与服务化优化**](../../general/infer-serving.html)。 |
 | **离线能力** | 本地优先 + 云端 fallback | 核心 Tools（车控、本地音乐、导航缓存）全部本地化。联网后自动同步云端 Tools（在线搜索、实时路况）。 |
 | **错误处理** | 重试 + 降级 + 告知 | Tool 调用失败时：先重试 1 次 → 尝试降级方案 → 告知用户并建议替代操作。 |
-| **并发调度** | A2A 并行分发 + ModelScheduler 优先级调度 | 已记录的两层并发机制：Agent 层由 SystemAgent 把意图拆分为子任务，经 A2A **并行分发**给各场景 Agent（如上例空调和导航可并行）后汇总结果，见 [**协议与运行时执行**](agent-protocols.html) §2.4；模型层由 ModelScheduler 对多音区并发请求做优先级/抢占调度。基于 DAG 依赖分析的 Tool 自动并行为设计方向（未实现）。 |
+| **并发调度** | ModelScheduler 优先级/抢占（已实现）+ 场景 scenario_id 路由；A2A 为可选协议、未用于此链路 | 两层机制要分开看：**模型层**由 ModelScheduler 对并发推理请求做优先级/抢占调度——LOW/NORMAL/HIGH/CRITICAL 四级、`PreemptAndSubmit` 抢占低优任务、按「优先级+等待时长」加权出队、`BoostPriority` 动态提权，这是已实现的；**Agent 层**当前是 SystemAgent/SystemAgentDispatcher 按 `scenario_id` 经 Fusion/DataTransport IPC 把消息路由给 dlopen 进来的 agent_group 场景插件，属于**场景分发**而非 A2A 并行编排。aadkcore 里 A2A 协议本身是实现好的（与 a2a-protocol.org 规范对齐的 A2AClient/A2AServer，含多 agent 共服务示例），但 agent_group 目前没有任何 A2A 用法，因此「SystemAgent 经 A2A 把子任务并行分发给各场景 Agent」应视为**设计方向**而非现状。基于 DAG 依赖分析的 Tool 自动并行同为设计方向（未实现）。见 [**协议与运行时执行**](agent-protocols.html)。 |
 
 ### 3.3 记忆系统
 
-端侧 Agent 的记忆分三层：**短期记忆**（KV Cache 与对话窗口，随对话实时更新）、**长期记忆**（用户偏好与驾驶习惯，本地持久化、按需注入上下文）、**情景记忆**（行程/交互/事件记录，按需检索补充）。aadkcore 中由 ChatHistory（多音区对话历史）与 memory 模块承载；实现细节与端侧/云端记忆取舍见 [**aadkcore 核心框架**](agent-core.html)。座舱场景下驾驶习惯与个人偏好属高敏感数据，端侧记忆（零上传、零网络延迟、完全离线可用）是首选方案。
+端侧 Agent 的记忆分三层，对应到 aadkcore 的实现程度并不一样：
+
+- **短期记忆（对话窗口，已实现）**：由 `ChatHistory` 承载——多音区对话历史，支持按轮数（`getHistoryByNum`）、时间段（`getHistoryByPeriod`）、token 预算（`getHistoryByTokenLimit`）和音区/关键人物裁剪取用。注意 KV/prefix cache（Lape `OmniThinker` 的 `enable_prefix_caching`）属于**推理层的复用加速**，用来省 system prompt 的重复 prefill，它不是记忆存储，别和对话窗口混为一谈。
+- **长期记忆（用户画像，部分实现）**：`ChatHistory` 的关键人物识别（`detectUserInfo`/`addUserinfo`，按音区认人、以 alias 指代）+ `UserInfoExtractor` 从对话里抽取姓名/品牌等信息；持久化由 `SQLiteDataService` 落库（对话历史、带位置/时间戳的图片等，按 app/user 隔离）。
+- **情景记忆（按事件检索，偏设计方向）**：`BaseMemoryService` 定义了 `add_session_to_memory`/`search_memory` 的会话级检索接口，但目前的 `InMemoryMemoryService` 实现基本是占位，真正的「行程/事件按需检索」尚未落地。
+
+实现细节与端侧/云端记忆取舍见 [**aadkcore 核心框架**](agent-core.html)。座舱场景下驾驶习惯与个人偏好属高敏感数据，端侧记忆（零上传、零网络延迟、完全离线可用）是首选方案；也正因为落在端侧，记忆容量和检索成本都受限，所以框架把「认人」做成轻量的关键人物 alias 机制，而不是在端上维护一个重量级的向量记忆库。
 
 ## 4. 座舱场景 Agent 应用
 

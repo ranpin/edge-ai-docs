@@ -154,6 +154,8 @@ flowchart TB
 > **libQnnHtpV81Skel.so 不能被 strip**
 >
 > `build.gradle` 中显式声明 `doNotStrip "**/libQnnHtpV81Skel.so"`。Skel（skeleton）库运行在 Hexagon DSP 侧，其符号在 Host 端「看起来没用」，但被 strip 掉会导致 DSP 侧加载失败、推理直接起不来。这是 APK 集成 QNN 时最典型的坑之一。
+>
+> **但 jniLibs 里其实有两个 DSP 侧 skel**：除 `libQnnHtpV81Skel.so` 外还有 `libCalculator_skel.so`（QNN HTP 算子级性能计算用，配 `libQnnHtpV81CalculatorStub.so`），而 `doNotStrip` 只白名单了前者。主推理链路只依赖 V81Skel，所以现网不受影响；但若后续启用 QNN 的 calculator/profiling 能力，`libCalculator_skel.so` 被 strip 同样会在 DSP 侧加载失败——届时需把它一并加进 `doNotStrip`。这是一个「现在不疼、用到才疼」的潜在坑。
 
 ## 3. 进程级初始化（MyApplication）
 
@@ -295,7 +297,7 @@ NPU 是独占资源，同一时刻只能有一个推理在跑。这个串行**�
 > [!NOTE]
 > **背压 / 拒绝策略：现状与量产差距**
 >
-> - **现状**：串行锁本身**无界**——没有排队深度上限、没有排队超时、没有针对「等待过长」的显式拒绝。实际的背压来自三处：① 全局串行锁保证同一时刻只有一个推理；② 同步路径 35s 超时（见 第 8 节）；③ SSE 路径 `BlockingQueue.put()` 队满阻塞（见 5.4）。唯一的显式拒绝是**模型未就绪**（`infer == null`）时推理端点直接返回 503 `Model is still initializing`，不入队。
+> - **现状**：串行锁本身**无界**——没有排队深度上限、没有排队超时、没有针对「等待过长」的显式拒绝。实际的背压来自两处：① 全局串行锁保证同一时刻只有一个推理；② 同步路径 35s 超时（见 第 8 节）。**SSE 路径并没有队列背压**——`StreamingInputStream` 用的是无界 `LinkedBlockingQueue`，`put()` 永不阻塞（详见 5.4 的 WARNING），所以「生产快于消费」时只会堆内存、不会反压。唯一的显式拒绝是**模型未就绪**（`infer == null`）时推理端点直接返回 503 `Model is still initializing`，不入队。
 > - **量产差距**：持续高压下排队积压只表现为后续请求等待时间变长，客户端只能靠自身超时兜底。需要补：排队深度上限 + 超限快速拒绝（429/503 + `Retry-After`）、排队等待时间上限（超时即弃并回错误帧）、以及请求级优先级调度（SDK 协议已有 `priority` 字段，见 6.3 的 DataMessage 表，HTTP 层尚未映射）。
 
 ## 5. HTTP 服务层（TestHttpEndpoint）
@@ -321,11 +323,11 @@ flowchart TB
     KEEP --> MT["decideMsgTypeFromProtocol()扫描 content[].type"]
     CONV --> MT
     MT --> IMG["提取图片extractBase64ImageData()BitmapFactory 取宽高"]
-    IMG --> V{"fastjson 校验 JSON 合法?"}
-    V -->|否| EBAD["400 + 错误 JSON（拦截在进 C++ 之前）"]
-    V -->|是| ST{"stream ?"}
-    ST -->|false| SYNC["handleInjectRequestSync()串行锁 + CompletableFuture.get(35s)"]
-    ST -->|true| SSE["handleInjectRequestStream()StreamingInputStream + text/event-stream"]
+    IMG --> ST{"stream ?"}
+    ST -->|false| V{"fastjson 校验 JSON 合法?（仅 sync 路径内有此闸门）"}
+    V -->|否| EBAD["错误 JSON 帧HTTP 200 / code=1拦截在进 C++ 之前"]
+    V -->|是| SYNC["handleInjectRequestSync()串行锁 + CompletableFuture.get(35s)"]
+    ST -->|true| SSE["handleInjectRequestStream()无校验闸门StreamingInputStream + text/event-stream"]
 
     style S fill:#4361ee,color:#fff
     style HOK fill:#2ecc71,color:#fff
@@ -341,9 +343,16 @@ flowchart TB
 > [!WARNING]
 > **两个防御性设计，和一个 15MB 上限的盲区**
 >
-> ① **body 必须读满**：按 `Content-Length` 循环 `read()` 直到读满，否则抛 `Incomplete body read`——避免半截 JSON 流入 native 层导致崩溃。② **进 C++ 前先校验 JSON**：用 fastjson 试解析，非法则直接返回 400，**绝不让坏数据进入 SDK**（native 崩溃无法被 Java try/catch 捕获）。
+> ① **body 必须读满**：按 `Content-Length` 循环 `read()` 直到读满，否则抛 `Incomplete body read`——避免半截 JSON 流入 native 层导致崩溃。② **进 C++ 前先校验 JSON（仅 sync 路径）**：`processSingleRequest()` 在调 JNI 前用 fastjson `JSON.parse()` 试解析，非法则**不进 native**、直接回一帧错误 JSON——注意这帧是 **HTTP 200 + body `code=1`**（沿用协议帧形态），**不是 400**；且该闸门**只在 sync 路径**，SSE 路径（`handleInjectRequestStream`）没有等价校验，payload 直接进 `inferenceWithImage`（见 5.4）。设计意图「绝不让坏数据进入 SDK」是对的（native 崩溃无法被 Java try/catch 捕获），但覆盖面与状态码都值得在量产前补齐。
 >
 > ③ **15MB 上限只在「有 Content-Length」时生效**：超限判断 `contentLength > 15MB` 位于 Content-Length 分支内；若请求**不带 Content-Length**，会回退到 `session.parseBody()`，那条路径**没有大小上限**（防 OOM 形同虚设）。且超限/读失败统一返回 **400**（`BAD_REQUEST`）而非语义正确的 **413**（Payload Too Large）。叠加 1.1 的 `0.0.0.0` 无鉴权，这是一个可被大 payload 打穿 OOM 的暴露面，量产要补「无 Content-Length 也限长」与正确的 413。
+
+> [!WARNING]
+> **图片提取 `extractBase64ImageData()` 是一条未设防的本地文件读取通道**
+>
+> 该方法接受三种 `image_url.url`：`data:image/...`（base64 内联）、`file://...`、以及**裸绝对路径**（`url.startsWith("/")`）。后两种会直接 `new File(path)` + `FileInputStream` 把**该路径的原始字节**读进 `image_info.image_data` 交给 SDK——**没有任何路径白名单 / 前缀校验 / 大小上限**。叠加 1.1 的 `0.0.0.0:8080` 无鉴权，这构成一个**任意文件读取原语**：同网段任意主机 POST 一个 `{"messages":[{"content":[{"type":"image_url","image_url":{"url":"/data/data/com.example.myapplication/..."}}]}]}` 就能让 APK 进程去读它权限范围内的任意文件。字节本身不会原样回显给调用方（要经 SDK 解码，多半失败），但**读取动作已发生**，且文件尺寸/解码结果会进日志——足以做存在性探测与信息侧漏。
+>
+> 另有两处工程瑕疵：① 文件读取用**单次** `fis.read(fileBytes)`（非循环读满），大文件可能只读到一部分；② 该路径**不受 15MB body 上限约束**（上限只卡 HTTP body，不卡 body 里引用的本地文件大小），一个指向超大文件的 `url` 可绕过 OOM 防护。量产应收敛为「仅允许 `data:` 内联 + 固定图片目录白名单」，并对文件读取循环读满 + 限长。这与 [运维、安全与功能安全](ops-security.html) 5.3 的暴露面收敛是同一类问题。
 
 ### 5.2 协议解析与转换
 
@@ -368,6 +377,13 @@ flowchart TB
 
 枚举完整定义见 `data_message.h` 的 `banma::MsgType`（0~6 共 7 种组合）。
 
+> [!WARNING]
+> **音频是「判得出类型、传不进数据」的半截链路**
+>
+> `decideMsgTypeFromProtocol()` 会因 payload 里出现 `type=audio` 而把 `msg_type` 判成 `TEXT_AUDIO`(4) / `TEXT_IMAGE_AUDIO`(6)，但**整条 JNI 链路根本没有音频通道**：`nativeInference` 的入参只有 `imageData / imageFormat / imageWidth / imageHeight`，`modelinfer.cpp` 里**从不填充 `msg.audio_info`**（全文件无 `audio` 字样），HTTP 层也没有任何 `audio_info` 赋值。于是 SDK 收到的是「`msg_type` 声称有音频、`audio_info` 却是默认构造的空结构」。
+>
+> 更隐蔽的是 `data_message.h` 里 `AudioInfo` 的 `int sample_rate;` / `int bit_depth;` **没有默认初始化**（只有 `channels = 0` 有），`banma::DataMessage msg;` 默认构造后这两个字段是**未定义值**。一旦 SDK 侧按 `msg_type` 去读 `audio_info.sample_rate`，读到的就是栈/堆上的垃圾。当前业务（遗留物 / 衣着 / 舱外 QA）都是图像 + 文本，音频路径实际不会被触发，所以这是**潜伏缺陷而非现网故障**；但若后续接入语音场景，必须先补「JNI 音频入参 + `audio_info` 填充 + 结构体字段默认值」三件事，否则 `msg_type` 与数据不一致会把请求送进错误的推理链路。
+
 ### 5.4 同步与 SSE 流式
 
 **同步路径（stream=false）**：`handleInjectRequestSync()` 持有全局 `requestProcessingLock`，调用 `processSingleRequest()`，内部用 `CountDownLatch` 等待 SDK 回调 `finished=true`，再返回完整 JSON。
@@ -375,12 +391,30 @@ flowchart TB
 **流式路径（stream=true）**：返回 `text/event-stream`。`StreamingInputStream` 用一个 `BlockingQueue<byte[]>` 桥接「推理线程生产 chunk」与「HTTP 线程消费写出」：
 
 ```
-// 推理回调线程：每个 chunk 入队（队列满则阻塞，背压防内存膨胀）
+// 队列是无界 LinkedBlockingQueue（默认容量 Integer.MAX_VALUE）
+private final BlockingQueue<byte[]> queue = new LinkedBlockingQueue<>();
+// 推理回调线程：每个 chunk 入队
 public void writeChunk(String text) { queue.put(text.getBytes(UTF_8)); }
 // finished=true 时 complete()；HTTP 线程 read() 到 EOF 结束 SSE
 ```
 
 每个 SSE 事件的 `data` 是一个完整协议帧 JSON（见下）。SDK 回调的文本可能是「已是协议帧」或「纯文本」两种，服务端用 `looksLikeProtocolResponse()` 判别，纯文本则由 `buildProtocolFrame()` 包装。
+
+> [!WARNING]
+> **`put()` 的「队满阻塞」背压并不存在——队列是无界的**
+>
+> 代码注释写「阻塞直到被消费，避免内存无限增长」，但 `StreamingInputStream` 用的是**无参构造的 `LinkedBlockingQueue`**，容量是 `Integer.MAX_VALUE`——`put()` **永远不会阻塞**，所谓「队满背压」形同虚设。真实后果：若 HTTP 消费端慢（客户端读得慢 / 网络拥塞）而 native 生产端快，chunk 会在队列里**无上限堆积**，内存随生成长度线性膨胀。对短回答无感，对长生成 + 慢客户端是实打实的 OOM 风险。要真背压，得给队列**显式容量**（`new LinkedBlockingQueue<>(N)`），让 `put()` 在队满时阻塞生产者。4.3 NOTE 的「背压现状」已据此更正——SSE 路径不计入有效背压来源。
+
+> [!NOTE]
+> **SSE 路径与 sync 路径的三处不对称（读代码易踩）**
+>
+> 两条路径共用 `requestProcessingLock` 串行，但其余实现并不对称：
+>
+> - **默认 `scenario_id` 不同**：sync 路径取不到 `scenario_id` 时默认 **0（`OAI_INFERENCE`）**；SSE 路径 `handleInjectRequestStream` 里初值是 **100（`INCAR_ITEM_LEFT_DETECTION`）**，且只有解析出非 0 值才覆盖。同一个「不带 scenario_id」的 payload，走 sync 与走 stream 会进**不同的 Agent 链路**。
+> - **校验闸门缺失**：sync 路径进 JNI 前有 fastjson 合法性校验（见 5.1 ②），SSE 路径**没有**，payload 直接进 `inferenceWithImage`。
+> - **场景元数据校验缺失**：`camera_id` / `voice_zone` / `seat_pressure` 的 WARNING 校验只在 sync 路径的 `processSingleRequest` 里，SSE 路径不做。
+>
+> 另：`StreamingInputStream.read()` 在 `queue.poll(5s)` 超时且未 `completed` 时**返回 `0`**（不是 `-1`）。`InputStream.read()` 返回 0 在语义上是「读到一个值为 0x00 的字节」，因此生产者卡顿超过 5s 时，消费端可能把 NUL 字节写进 SSE 流——表现为客户端收到夹杂 `\0` 的帧。正常推理 chunk 间隔远小于 5s，所以现网少见，但属于该实现的已知毛刺。
 
 ### 5.5 响应协议帧
 
@@ -401,13 +435,18 @@ public void writeChunk(String text) { queue.put(text.getBytes(UTF_8)); }
 }
 ```
 
+> [!NOTE]
+> **sync 路径返回前还会改写帧：注入耗时 + 把 `frame_text` 反序列化成 JSON 对象**
+>
+> 同步路径的最终响应都过一道 `addProcessingTimeToDebugInfo(raw, totalTime)`，它做两件事：① 在 `data.debug_info` 里写入 `total_processing_time`（毫秒）；② **尝试把 `data.frame_text` 从字符串 `JSON.parse` 成 JSON 对象再放回**（解析失败则保留原字符串）。第 ② 点是评测侧（元启）要求——它希望 `frame_text` 直接是结构化对象而非被转义的 JSON 字符串。后果是：**同一个字段 `frame_text` 的类型不固定**，可能是 string 也可能是 object，取决于内容能否被 parse。客户端/评测脚本不能假设它一定是字符串。SSE 路径的逐帧 `buildProtocolFrame` 不做这道改写（`frame_text` 始终是 string），只有末帧汇总与 sync 响应会经过它。另注：`buildProtocolFrame` 已**移除 `complete_content` 字段**（代码里注释掉），末帧的完整文本就放在 `frame_text`，不再单独给一份。
+
 ## 6. JNI 桥接层与 SDK 接口面
 
 `BanmaModelInference` 的每个 native 方法都在 `modelinfer.cpp` 中有对应实现，核心是 `nativeInference`。本节同时收录 SDK 接口面（`ModelInference` API）与 `DataMessage` 结构——[设备部署与上车流程](device-deployment.html) 不再重复这部分内容，只讲构建 / push / 设备目录 / 运行 / 验证。
 
 ### 6.1 句柄模型
 
-`nativeCreate()` 在堆上 `new banma::ModelInference()`，把指针 `reinterpret_cast<jlong>` 返回给 Java 作为 `nativeHandle`；后续所有调用把该 long 转回指针。`nativeDestroy()` 负责 `delete`。Java 侧 `BanmaModelInference` 实现 `AutoCloseable`，`close()` 与 `finalize()` 双保险释放。
+`nativeCreate()` 在堆上 `new (std::nothrow) banma::ModelInference()`，把指针 `reinterpret_cast<jlong>` 返回给 Java 作为 `nativeHandle`；分配失败返回 **0** 作为哨兵（Java 侧构造函数检测到 0 即抛 `RuntimeException`）。后续所有调用把该 long 转回指针，且每个入口先 `ThrowIfNull` + `ExceptionCheck` 兜底空 handle。`nativeDestroy()` 负责 `delete`。Java 侧 `BanmaModelInference` 实现 `AutoCloseable`，`close()` 与 `finalize()` 双保险释放（`close()` 后把 `nativeHandle` 置 0，避免重复 `delete`）。
 
 ### 6.2 SDK 接口面（ModelInference API）
 
@@ -421,6 +460,11 @@ JNI 层对接 SDK 的唯一入口是 `banma::ModelInference`（`include/model_in
 | `releaseModelResources` | — | bool | 释放模型资源（推理进行中返回 false）；释放后需重新 `init` |
 
 app 侧实际只调 `init` + `inference_msg`；`stopInferenceTask` / `releaseModelResources` 已实现但 app 尚未接入（打断与资源释放是后续工作）。
+
+> [!NOTE]
+> **接口状态由两个原子量守住，停止有约定哨兵串**
+>
+> `ModelInference` 私有成员只有 `std::atomic<bool> is_inferencing_{false}` 与 `is_stopped_{false}`——「推理进行中返回 false」「无任务可停返回 false」这些语义就是靠这两个原子量判定的。头文件还定义了一个停止哨兵 `static const std::string INFERENCETASK_STOPPED = "InferenceTask_stopped";`：被 `stopInferenceTask()` 打断的任务，其末帧回调文本约定为该串，调用方据此区分「正常完成」与「被打断」。另外 `inference_msg` 的 `msg` 形参是**非 const 引用**（`banma::DataMessage&`），SDK 可能在内部改写它（如填回处理结果），调用方不应假设调用后 `msg` 原样。
 
 不经 JNI 的最小调用示例（`android_test` 与厂商 Example 同形）：
 
@@ -450,19 +494,26 @@ model.inference_msg(msg, true, [](const std::string& result, bool is_finished) {
 
 ### 6.3 DataMessage 结构
 
-`banma::DataMessage`（`include/data_message.h`）是推理请求的唯一输入契约：
+`banma::DataMessage`（`include/data_message.h`）是推理请求的唯一输入契约。下表按头文件**实际声明顺序**列出全部 11 个字段（含默认值）：
 
-| 字段 | 类型 | 说明 |
-| :--- | :--- | :--- |
-| `scenario_id` | uint16 | 场景 ID：0=OAI 推理, 100=车内遗留物, 200=着装识别, 300=舱外问答（详见 7.1） |
-| `content` | string | 文本内容（用户查询 / 协议 JSON） |
-| `image_info` | ImageInfo | 主图像数据（支持 JPEG/YUV\_NV12/RGB/BGR/RGBA 等格式） |
-| `extra_images` | vector<ImageInfo> | 附加图像帧（多帧推理场景） |
-| `audio_info` | AudioInfo | 音频数据（PCM 格式，含采样率/位深度） |
-| `msg_type` | MsgType | 消息类型：TEXT / IMAGE / AUDIO / TEXT\_IMAGE / TEXT\_AUDIO 等组合（判定规则见 5.3） |
-| `request_type` | RequestType | REQUEST=推理 / CONTEXT=上下文 / PREPROCESS=预处理 / CANCEL=取消 |
-| `priority` | uint16 | 优先级：0=LOW, 1=NORMAL, 2=HIGH, 3=CRITICAL |
-| `stream` | bool | 是否流式返回结果 |
+| 字段 | 类型 | 默认值 | 说明 |
+| :--- | :--- | :--- | :--- |
+| `scenario_id` | uint16 | `-1`（即 65535） | 场景 ID：0=OAI 推理, 100=车内遗留物, 200=着装识别, 300=舱外问答（详见 7.1）。注意默认值是 `-1` 而非 0，未显式赋值时不会落到 OAI 链路 |
+| `priority` | uint16 | `1` | 优先级（`Priority` 枚举）：0=LOW, 1=NORMAL, 2=HIGH, 3=CRITICAL。**HTTP 层尚未映射该字段**（见 4.3 量产差距） |
+| `scenario_name` | string | 空 | 场景名（自由字符串，SDK 侧用于日志/路由辅助） |
+| `content` | string | 空 | 文本内容（用户查询 / 协议 JSON） |
+| `image_info` | ImageInfo | 默认构造 | 主图像数据。`ImageFormat` 共 **8 种**：JPEG=0 / YUV\_I420=1 / YUV\_NV12=2 / RGB=3 / BGR=4 / PNG=5 / RGBA=6 / YUV\_NV21=7。头文件注明 **`url` 字段优先于 `image_data`**，但 JNI 桥接只填 `image_data`、从不填 `url`（见 6.4） |
+| `extra_images` | vector<ImageInfo> | 空 | 附加图像帧（多帧推理场景，frame 2..N） |
+| `audio_info` | AudioInfo | 默认构造 | 音频数据（`vector<int16_t>` PCM + `audio_type` / `sample_rate` / `bit_depth` / `channels`）。**JNI 链路从不填充**，且 `sample_rate`/`bit_depth` 无默认初始化（见 5.3 WARNING） |
+| `msg_type` | MsgType | `TEXT` | 消息类型：TEXT=0 / IMAGE=1 / AUDIO=2 / TEXT\_IMAGE=3 / TEXT\_AUDIO=4 / IMAGE\_AUDIO=5 / TEXT\_IMAGE\_AUDIO=6（判定规则见 5.3） |
+| `request_type` | RequestType | `REQUEST` | 请求类型，共 **7 种**：REQUEST=0（推理）/ CONTEXT=1（补充上下文/历史）/ EVENT=2（事件，如 VAD start）/ CLEAR\_MEMORY=3（清历史）/ PREPROCESS=4（数据预处理）/ CAR\_SIGNAL=5（车辆信息）/ CANCEL=6（取消推理） |
+| `stream` | bool | `true` | 是否流式返回结果 |
+| `reply_handler` | ScenarioReplyHandler | 空 | 回调句柄（`std::function<void(const std::string&, bool)>`）。JNI 路径不用此字段，而是把回调作为 `inference_msg` 的第三参传入（见 6.2 / 6.5） |
+
+> [!NOTE]
+> **`request_type` 的 7 个取值里，APK 只用到 REQUEST(0)**
+>
+> `modelinfer.cpp` 把 Java 传来的 `requestType` 直接 `static_cast<banma::RequestType>`，而 HTTP 层两条路径都硬编码传 `REQUEST_TYPE_REQUEST = 0`。也就是说 CONTEXT / EVENT / CLEAR\_MEMORY / PREPROCESS / CAR\_SIGNAL / CANCEL 这 6 个语义**在 APK 侧完全没有入口**——多轮上下文靠 `content` 里的 `messages` 数组自带历史，取消靠第 8 节的超时自愈而非 `CANCEL`。这与 6.2 里「`stopInferenceTask` / `releaseModelResources` 已实现但 app 未接入」是同一类「SDK 能力面 > APK 暴露面」的差距。
 
 ### 6.4 构造 DataMessage
 
@@ -474,13 +525,21 @@ msg.request_type = (banma::RequestType) requestType;
 msg.content      = JStringToStdString(env, contentJson);
 // 有图时填充 image_info：宽高/通道/resize 尺寸/格式 + 拷贝像素到 vector
 if (imageData != nullptr && imageFormat >= 0) {
+    msg.image_info.frame_index = 0;                          // 真实代码还填这两个字段
+    msg.image_info.timestamp   = (uint64_t) std::time(nullptr);
     msg.image_info.width = imageWidth;  msg.image_info.height = imageHeight;
     msg.image_info.channels = 3;        msg.image_info.resized_width = 448;
     msg.image_info.resized_height = 448;
     msg.image_info.image_type = (banma::ImageFormat) imageFormat;
-    msg.image_info.image_data.assign(bytes, bytes + dataSize);
+    msg.image_info.image_data.assign(bytes, bytes + dataSize); // 像素拷进 vector（见下方内存说明）
+    // 注意：url 字段从不填（头文件里 url 优先于 image_data，但 APK 走 image_data 路线）
 }
 ```
+
+> [!NOTE]
+> **图像字节进 native 的拷贝与释放**
+>
+> `bytes` 来自 `env->GetByteArrayElements(imageData, nullptr)`，拷进 `image_data` 这个 `std::vector` 后用 `env->ReleaseByteArrayElements(imageData, dataBytes, JNI_ABORT)` 释放——`JNI_ABORT` 表示「释放但不回写 Java 数组」（只读场景，省一次回写）。注意 `GetByteArrayElements` **不保证零拷贝**：GC 无法原地 pin 数组时运行时会先拷一份再给指针，所以这里对每张图实际是「JNI 拷入 + `assign` 拷进 vector」两次拷贝。对 1080p 图（约 6MB）这是实打实的开销；真零拷贝路径（`GetPrimitiveArrayCritical` / DirectByteBuffer / AHardwareBuffer）与取舍见 [Android 开发 & JNI 基础 §5.2](../../general/android-jni.html)。另：`GetObjectClass(handler)` 产生的 `jclass` 局部引用未显式 `DeleteLocalRef`，靠 native 方法返回时自动回收，单次调用无碍，但若把这段逻辑挪进循环就要手动释放（局部引用表默认上限 512）。
 
 > [!NOTE]
 > **`resized_*` 按场景 / VIT 档位而定，不是全局固定值**
@@ -494,7 +553,8 @@ SDK 推理在 native 工作线程产出结果，回调必须回到 JVM。实现�
 ```
 // 1. 保存 handler 的全局引用，避免回调期间被 GC
 jobject gHandler = env->NewGlobalRef(handler);
-// 2. 缓存 onReply(String, boolean) 的 jmethodID
+// 2. 查 onReply(String, boolean) 的 jmethodID
+//    （真实代码在每次 nativeInference 内现查，未做跨调用缓存；jmethodID 稳定、可缓存）
 jmethodID onReplyMid = env->GetMethodID(cls, "onReply", "(Ljava/lang/String;Z)V");
 
 banma::ScenarioReplyHandler cb = [jvm, gHandler, onReplyMid](const std::string& result, bool finished){
@@ -520,9 +580,13 @@ p->inference_msg(msg, stream, cb);
 ```
 
 > [!WARNING]
-> **四个 JNI 易错点（含两个真实代码里踩过的）**
+> **六个 JNI 易错点（含真实代码里踩过的）**
 >
-> ① **全局引用**：局部引用跨线程即失效，必须 `NewGlobalRef`，且记得在末帧 `DeleteGlobalRef` 防泄漏。② **AttachCurrentThread 要配 `needDetach` 守卫**：若回调恰好发生在**已 attach 的 Java 线程**上（`GetEnv` 返回 `JNI_OK`），对它无条件 `DetachCurrentThread()` 是经典错误（会解掉别人的 attach）。真实代码用 `needDetach` 标志，只 detach 本线程自己 attach 的情况。③ **`DeleteGlobalRef` 只在 `finished` 时做 → 超时请求会泄漏全局引用**：若一次推理被第 8 节的 35s 超时掐掉、SDK 始终没回 `finished=true`，`gHandler` 这个全局引用就永远不会被释放（每超时一次泄一个）。④ **GetStringUTFChars 配对 Release**：`JStringToStdString` 内取完即释放，避免内存泄漏。
+> ① **全局引用**：局部引用跨线程即失效，必须 `NewGlobalRef`，且记得在末帧 `DeleteGlobalRef` 防泄漏。② **AttachCurrentThread 要配 `needDetach` 守卫**：若回调恰好发生在**已 attach 的 Java 线程**上（`GetEnv` 返回 `JNI_OK`），对它无条件 `DetachCurrentThread()` 是经典错误（会解掉别人的 attach）。真实代码用 `needDetach` 标志，只 detach 本线程自己 attach 的情况。③ **`DeleteGlobalRef` 只在 `finished` 时做 → 超时请求会泄漏全局引用**：若一次推理被第 8 节的 35s 超时掐掉、SDK 始终没回 `finished=true`，`gHandler` 这个全局引用就永远不会被释放（每超时一次泄一个）；`inference_msg` 直接返回 false 时倒是会立即 `DeleteGlobalRef`，泄漏只发生在「调用成功但末帧不来」这一种情形。④ **GetStringUTFChars 配对 Release**：`JStringToStdString` 内取完即释放，避免内存泄漏。
+>
+> ⑤ **`NewStringUTF` 回传模型文本踩 Modified UTF-8 陷阱**：回调里 `envCb->NewStringUTF(result.c_str())` 把 SDK 产出的**标准 UTF-8** 文本直接喂给 `NewStringUTF`，而后者期望的是 JNI 的 **Modified UTF-8**（≈CESU-8 + NUL 编成 `0xC0 0x80`）。模型生成的对话文本几乎必然含 emoji / 增补平面字符（码点 > U+FFFF，标准 UTF-8 是 4 字节、Modified 要拆成代理对各 3 字节），开 CheckJNI 会当场 abort（`input is not valid Modified UTF-8`），未开 CheckJNI 则**静默产出错乱字符串**——不崩但结果错，比崩更难查。反方向 `JStringToStdString` 用 `GetStringUTFChars` 取到的也是 Modified UTF-8，直接塞进 `msg.content` 交给按标准 UTF-8 处理的 tokenizer 同样有风险。正解是绕开 `*StringUTF`、用 `GetStringChars`/`NewString` 自行做 UTF-16↔标准 UTF-8 转换，详见 [Android 开发 & JNI 基础 §5.2](../../general/android-jni.html)。
+>
+> ⑥ **回调后缺 `ExceptionCheck`**：`CallVoidMethod(gHandler, onReplyMid, ...)` 之后没有 `envCb->ExceptionCheck()`。若 Java 侧 `onReply` 抛异常，异常会**挂起在该 native 线程上**，后续 JNI 调用（包括同线程下一次回调）行为未定义；正确做法是回调后检查并 `ExceptionClear()`（或记录后清除），避免 pending exception 污染线程状态。
 
 ## 7. 场景与三阶段流式协议
 
@@ -590,6 +654,11 @@ flowchart TB
 | `MAX_CONSECUTIVE_TIMEOUTS` | 2 | 2 | 连续超时阈值；取 2 避免单次偶发慢请求误触发重启 |
 | `SELF_HEAL_ENABLED` | false | **true** | 生产自愈：达阈值即 `killProcess`，靠 `START_STICKY` 干净重启 |
 | `CRASH_FOR_TOMBSTONE` | **true** | false | 诊断取证：超时即 SIGABRT 让 debuggerd 抓全线程 native 栈，**取证后不自动拉起**（优先级最高） |
+
+> [!NOTE]
+> **自愈对 sync 与 SSE 两条路径都生效，但触发机制不同**
+>
+> 上图的 `WAIT → 超时` 画的是 sync 路径：`processSingleRequest` 用 `latch.await(SYNC_TIMEOUT_MS)` **原地等**，超时即调 `maybeSelfHealOnTimeout()`。SSE 路径**没有原地 await**（`serve()` 要立刻把 chunked 响应交回 NanoHTTPD），所以改用**看门狗**：推理线程进 `synchronized(requestProcessingLock)` 后另起一个 `banma-stream-watchdog-<rid>` 线程，对 `streamDone` 这个 `CountDownLatch` 做 `await(SYNC_TIMEOUT_MS)`；推理正常/失败/异常退出都会在 `finally` 里 `countDown()` 放行看门狗，**唯独 native 卡死时线程卡在 JNI 内、`finally` 不执行**，latch 不减 → 看门狗超时 → 同样调 `maybeSelfHealOnTimeout()`。两条路径共用 `SYNC_TIMEOUT_MS`(35s)、`sConsecutiveTimeouts` 计数与三个开关，所以「连续超时 ≥ 2 即自愈」的语义对 SSE 一样成立。看门狗**在拿到串行锁之后才启动**，等锁时间不计入 35s 预算——否则排队久的请求会被误判超时。
 
 > [!WARNING]
 > **35s 是被上下界夹出来的窗口，不是随手「留余量」**
@@ -670,10 +739,10 @@ flowchart LR
 > **③ Skel 不 strip**：`doNotStrip libQnnHtpV81Skel.so`，否则 DSP 侧加载失败。
 > **④ 常驻 + 自愈**：前台服务 `dataSync` + `START_STICKY`；native 卡死靠 `killProcess` 干净重启。
 > **⑤ 服务化**：NanoHTTPD :8080，兼容 OpenAI 协议，跨语言可调用。
-> **⑥ 进 C++ 前校验**：body 读满 + fastjson 校验，坏数据绝不入 native。
-> **⑦ JNI 回调**：全局引用 + AttachCurrentThread（配 `needDetach` 守卫）+ 末帧释放，缺一不可；超时未回末帧会泄全局引用（见 6.5）。
-> **⑧ NPU 独占**：全局串行锁（HTTP 层 `requestProcessingLock`）保证同一时刻仅一个推理在跑；服务内队列是死代码（见 4.3）。
-> **⑨ 量产安全收敛**：`0.0.0.0:8080` 无鉴权 + SSE CORS 通配 + manifest `exported=true` 都是 demo 姿态，量产改回环绑定 / 加鉴权 / SELinux 域限制 / 收敛 CORS 与导出（见 1.1、4.1）。
+> **⑥ 进 C++ 前校验**：body 读满 + fastjson 校验（**仅 sync 路径**），坏数据绝不入 native；SSE 路径无此闸门（见 5.1 ②、5.4）。
+> **⑦ JNI 回调**：全局引用 + AttachCurrentThread（配 `needDetach` 守卫）+ 末帧释放，缺一不可；超时未回末帧会泄全局引用；回传模型文本用 `NewStringUTF` 踩 Modified UTF-8 陷阱、回调后缺 `ExceptionCheck`（见 6.5）。
+> **⑧ NPU 独占**：全局串行锁（HTTP 层 `requestProcessingLock`）保证同一时刻仅一个推理在跑；服务内队列是死代码（见 4.3）；SSE 的 `LinkedBlockingQueue` 无界、`put()` 不阻塞，**没有真背压**（见 5.4）。
+> **⑨ 量产安全收敛**：`0.0.0.0:8080` 无鉴权 + SSE CORS 通配 + manifest `exported=true` + 图片提取 `extractBase64ImageData` 可按裸绝对路径**任意读本地文件**，都是 demo 姿态，量产改回环绑定 / 加鉴权 / SELinux 域限制 / 收敛 CORS 与导出 / 图片路径白名单（见 1.1、4.1、5.1）。
 
 > [!NOTE]
 > **与本篇相关的其他文档**

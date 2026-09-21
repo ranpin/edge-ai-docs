@@ -11,9 +11,9 @@
 > - LLM 精度调试（量化精度损失定位、量化敏感层分析）
 > - 内存与 OOM 排障（内存构成、KV Cache OOM、内存监控预警）
 > - Crash 分析与案例（常见 Crash 类型、DSP Crash 分析流程、典型案例）
-> - 日志与监控体系（aadkcore 日志、aadk\_monitor 健康监控、性能 Profiling）
+> - 日志与监控体系（aadkcore 日志、aadk\_monitor 日志汇聚与数据回传、性能 Profiling）
 >
-> **代码基线**：aadkcore 仓库 `src/log`、`src/runtime`；工具链 mini-dm / Snapdragon Profiler / `dmabuf_dump` / `dumpsys meminfo` 等。
+> **代码基线**：aadkcore 仓库 `aadkapi/aadk_log.hpp`（日志宏与 sink）、`monitor/`（aadk\_monitor\_server 日志汇聚 + 数据回传）、`src/runtime`（ModelResponse / PERF 日志）、`runtime/src/system_agent`（`--dump`/`--upload` 入口）；工具链 mini-dm / Snapdragon Profiler / `dmabuf_dump` / `dumpsys meminfo` 等。
 
 ## 1. 调试工具全景
 
@@ -29,6 +29,14 @@
 | **Snapdragon Profiler** | 系统级分析 | 全系统性能分析工具，支持 CPU/GPU/DSP/NPU 多核心负载监控和时间线分析 | 多模型并发时分析各核心利用率；端到端 pipeline 延迟分解；CPU-DSP 交互时序分析 |
 | **mini-dm** | 日志诊断 | 高通轻量级诊断日志工具，捕获 DSP 子系统的实时日志和 crash 信息 | DSP crash 后获取 crash dump 和调用栈；FastRPC 通信异常排查；SSR（子系统重启）事件分析 |
 | **AIMET** | 量化工具 | AI Model Efficiency Toolkit，高通开源的模型量化与压缩工具，支持 PTQ/QAT | 量化敏感度分析（逐层量化精度影响）；混合精度量化策略搜索；量化后模型精度恢复（AdaRound / CLE） |
+
+> [!NOTE]
+> **工具链时效（2025-2026）**
+>
+> - **QNN SDK → QAIRT**：高通自 2024 年起将 AI Engine Direct（QNN）SDK 并入 **QAIRT（Qualcomm AI Runtime）** 品牌，`qnn-net-run` / `qnn-profile-viewer` / `qnn-context-binary-generator` 等命令行工具名保持不变，随 QAIRT 版本迭代。车规平台（SA8397P）实际可用的工具版本**以 Tier-1/OEM 拿到的 BSP 配套 SDK 为准**，与消费级公开发布节奏不同步。
+> - **Snapdragon Profiler → Qualcomm Profiler**：2025 年起高通推出 Snapdragon Profiler 的后继工具（并入 QAIRT 工具链生态），HTP/NPU 计数器支持持续演进；新旧工具并存期以目标 BSP 支持的版本为准（**具体版本对应关系需核实**，本篇不锁定版本号）。
+> - **Hexagon SDK**：v6.x 起工具链全面转向 LLVM（hexagon-clang），IDE/调试器/Profiler 形态随版本变化，DSP 侧符号解析工具名以所用 SDK 版本为准（见 §4.2）。
+> - 上表工具在 aadkcore 仓库内**无直接代码依赖**（仓库脚本只设置 `ADSP_LIBRARY_PATH` 等运行环境变量），属于平台侧配套工具链——文档描述其用法方法论，不绑定具体版本。
 
 ### 1.2 排障决策树
 
@@ -76,12 +84,12 @@ FastRPC 是 ARM CPU 与 Hexagon DSP 之间的远程过程调用机制。FastRPC 
 > [!NOTE]
 > **FastRPC 排障六步法**
 >
-> 1. **检查 FastRPC 驱动状态**  
->    运行 `dmesg | grep fastrpc` 查看 FastRPC 驱动加载日志。正常应看到 `fastrpc: device opened`。如果出现 `fastrpc: error`，说明驱动未正确加载或设备节点异常。
-> 2. **获取 DSP 实时日志**  
+> 1. **检查 FastRPC 驱动状态**
+>    运行 `dmesg | grep fastrpc` 查看 FastRPC 驱动加载日志。正常应看到驱动 probe 成功、设备节点创建相关日志；如果出现 error/timeout 字样，说明驱动未正确加载或设备节点异常。
+> 2. **获取 DSP 实时日志**
 >    运行 `mini-dm` 捕获 DSP 子系统日志。关注 `HAP_` 前缀的日志行，特别是 `HAP_power`、`HAP_mem` 相关错误。如果 mini-dm 无输出，说明 DSP 子系统可能未启动。DSP 侧日志不走 logcat，mini-dm 是唯一出口，用法与排障经验见 [硬件架构 · DSP 侧日志：mini-dm（§4.5）](../../general/hardware.html)。
-> 3. **验证设备节点**  
->    运行 `ls /dev/adsprpc-smd*` 检查 FastRPC 设备节点是否存在。正常应看到 `/dev/adsprpc-smd` 和 `/dev/adsprpc-smd-secure`。节点缺失说明 DSP 固件未加载或 remoteproc 异常。
+> 3. **验证设备节点**
+>    HTP 推理跑在 **cDSP** 上，对应节点是 `ls /dev/cdsprpc-smd*`（正常应看到 `/dev/cdsprpc-smd` 和 `/dev/cdsprpc-smd-secure`）；`/dev/adsprpc-smd*` 是 aDSP（音频）的节点，别查错对象（三大 DSP 子系统与 FastRPC 库对照见 [硬件架构 · CDSP vs ADSP vs SDSP（§3.2）](../../general/hardware.html)）。节点缺失说明 DSP 固件未加载或 remoteproc 异常。
 > 4. **检查 remoteproc 状态**  
 >    运行 `cat /sys/class/remoteproc/remoteproc*/state` 查看 DSP 子系统运行状态。正常应为 `running`。如果是 `offline` 或 `crashed`，需要检查固件路径和 SSR 日志。
 > 5. **检查 SELinux 策略**  
@@ -92,7 +100,7 @@ FastRPC 是 ARM CPU 与 Hexagon DSP 之间的远程过程调用机制。FastRPC 
 > [!WARNING]
 > **常见陷阱**
 >
-> FastRPC 调用返回 `AEE_ECONNREFUSED`（具体数值以 FastRPC 头文件 `AEEStdErr.h` 为准，勿在代码/文档中写死）时，通常不是网络问题而是 DSP 侧 skeleton 库加载失败。请检查：(1) skeleton .so 文件是否推送到 `/vendor/lib/rfsa/dsp/`；(2) 文件权限是否为 755；(3) testsig 是否与当前设备 UID 匹配（见 §1.3 步 6）。
+> FastRPC 调用返回"模块未找到/加载失败"类错误码（具体数值以 FastRPC 头文件 `AEEStdErr.h` 为准，勿在代码/文档中写死）时，通常不是通信问题而是 DSP 侧 skeleton 库加载失败。请检查：(1) skeleton `_skel.so` 是否推送到 DSP 加载器搜索路径——搜索路径由环境变量 `ADSP_LIBRARY_PATH` 决定（变量名沿用 ADSP 历史命名，对 cDSP 同样生效），aadkcore 运行脚本中的实际配置为 `/vendor/dsp/cdsp;/vendor/lib/rfsa/adsp;/system/lib/rfsa/adsp;/dsp;<SDK库目录>`（见 `runtime/src/test/android_sdk_run.sh`）；(2) 文件权限是否可读（755）；(3) testsig 是否与当前设备 UID 匹配（见 §1.3 步 6）。
 
 ### 1.4 常见性能优化清单
 
@@ -102,7 +110,7 @@ FastRPC 是 ARM CPU 与 Hexagon DSP 之间的远程过程调用机制。FastRPC 
 | :--- | :--- | :--- | :--- | :--- |
 | **P0** | 消除 CPU fallback 算子 | `qnn-profile-viewer` 查看每个算子的 backend 字段 | 单算子 10-100x | Fallback 到 CPU 的算子会引入 CPU-DSP 数据搬运开销，是性能杀手。替换为 HTP 原生支持的算子或拆分为可支持的算子组合。 |
 | **P0** | 使用 Context Binary | 对比 `.so` 模式和 `.bin` 模式的加载时间 | 加载时间减少 50-80% | Context Binary 将图优化、内存规划等离线完成，避免运行时开销。生产环境必须使用 Context Binary。 |
-| **P1** | VTCM 利用率优化 | Hexagon Profiler 查看 VTCM hit/miss ratio | 10-30% | VTCM 是 DSP 的片上高速缓存（典型 8 MB，视 HTP 架构版本而定，以 `QnnHtpDevice` 实际查询为准）。确保热点算子的权重和中间结果能放入 VTCM，避免 spill 到 DDR。存储层级与 HTP 版本对照见 [硬件架构 · Hexagon DSP 微架构（§2）](../../general/hardware.html)。 |
+| **P1** | VTCM 利用率优化 | Snapdragon Profiler 的 HTP 计数器（或 Hexagon SDK 配套 profiling 工具，工具名随 SDK 版本）查看 VTCM hit/miss、spill 情况 | 10-30% | VTCM 是 DSP 的片上高速缓存（典型 8 MB，视 HTP 架构版本而定，以 `QnnHtpDevice` 实际查询为准）。确保热点算子的权重和中间结果能放入 VTCM，避免 spill 到 DDR。存储层级与 HTP 版本对照见 [硬件架构 · Hexagon DSP 微架构（§2）](../../general/hardware.html)。 |
 | **P1** | 量化精度选择 | 对比 INT8 vs INT16 精度和速度 | INT8 通常快于 INT16（幅度视具体 HTP 代际） | 优先使用 INT8；对精度敏感的层（如最后的分类头）可保持 INT16 混合精度。 |
 | **P1** | 输入预处理 offload | Snapdragon Profiler 对比 CPU vs GPU 预处理耗时 | 20-40% | 将 resize/normalize/color conversion 从 CPU offload 到 GPU 或 ISP，减少 CPU 负担和数据搬运。 |
 | **P2** | Batch 优化 | 测试不同 batch size 的吞吐量 | 10-30% | 在多路摄像头场景下，合并多路输入为 batch 推理可提高 NPU 利用率。但会增加单帧延迟。 |
@@ -110,6 +118,9 @@ FastRPC 是 ARM CPU 与 Hexagon DSP 之间的远程过程调用机制。FastRPC 
 | **P2** | 模型结构优化 | AIMET + qnn-net-run 对比 | 模型级别变化 | 通道剪枝、深度可分离卷积替换、激活函数替换（Swish → ReLU6）。需重新训练/微调。 |
 | **P3** | 电源管理配置（频率观测 + 主动控频） | 观测：先 `ls /sys/class/devfreq/` 确认 CDSP 节点名（随 BSP 变化），再 `cat /sys/class/devfreq/<cdsp节点名>/cur_freq`。注意 `soc:qcom,cpubw` 是 CPU-DDR 带宽节点，**不是** CDSP，看它判断不了 DSP 频率 | 5-15% | 主动控频走 DCVS 频率投票：推理（尤其 prefill）前用 `QnnHtpPerfInfrastructure` 或 skel 侧 `HAP_power_request` 投票升频，空闲时撤销投票；开发阶段可锁 governor 高频，勿用于量产。机制、与热降频的联动见 [硬件架构 · DCVS 与主动频率投票（§7.4）](../../general/hardware.html)。 |
 | **P3** | 内存对齐与布局 | 检查输入 tensor 的 stride 和 alignment | 5-10% | 确保输入 tensor 128 字节对齐；使用 NHWC 布局（HTP 原生格式）避免运行时 transpose。 |
+
+> [!NOTE]
+> **"预期提升"列为经验性示例量级（非本平台实测）**，仅用于排优先级；实际收益取决于模型结构、HTP 代际与瓶颈位置（compute-bound 还是 memory-bound），请以自己平台的 profiling 实测为准。
 
 > [!TIP]
 > **性能优化黄金法则**
@@ -189,6 +200,16 @@ for layer_idx in range(num_layers):
 # Layer 17 (FFN):    PPL = 7.68 (delta = +0.05)  ← 低敏感
 # Layer 35 (LMHead): PPL = 9.21 (delta = +1.58)  ← 高敏感
 ```
+
+> [!NOTE]
+> **逐层定位的两条实操路线**
+>
+> 上面的伪代码示意"单层量化、其余高精度"的敏感度扫描思路（示例 PPL 数字非实测）。落到 QNN/QAIRT 部署时有两条互补路线：
+>
+> 1. **量化前（浮点侧）**：用 AIMET 做逐层敏感度分析/混合精度搜索，确定哪些层保 INT8/FP16、哪些层可压 INT4——在 PyTorch/ONNX 侧完成，再把混合精度配置带入 QNN 转换流程。
+> 2. **量化后（目标硬件侧）**：用 `qnn-net-run` 的 debug 输出 dump 中间层 tensor（选项名以所用 QAIRT 版本的 `qnn-net-run --help` 为准），与浮点参考实现逐层对比余弦相似度/SNR，定位**转换与量化真正落地后**的误差放大层——浮点侧敏感度分析无法覆盖图优化（算子融合、layout 变换）引入的偏差，两侧结论可能不一致，以硬件侧为准。
+>
+> 两条路线的分工：浮点侧决定"该给哪层多少 bit"，硬件侧验证"实际误差在哪层放大"。
 
 > [!TIP]
 > **混合精度量化策略**
@@ -285,6 +306,11 @@ while true; do
 done
 ```
 
+> [!NOTE]
+> **框架自带测试程序用的就是这套口径**
+>
+> aadkcore 的运行时测试程序（`runtime/src/test/new_api_test.cpp`）在每个测试步骤前后读取 `/proc/self/status` 的 **VmRSS / VmSize** 并打印前后差值（如 `[step 2] 内存: VmRSS xxxMB -> xxxMB`），用于确认模型加载/释放的内存增量符合预期——与上面的标准口径同源。做加载/释放类排障时，可直接复用该测试程序的输出定位"哪一步内存没回落"。注意它只覆盖 CPU 侧 VmRSS，DSP 侧 dma-buf 仍需 `dmabuf_dump` 补测。
+
 > [!WARNING]
 > **两个口径，不可互比**
 >
@@ -293,7 +319,7 @@ done
 > [!WARNING]
 > **内存水位线设计**
 >
-> 建议设置三级内存水位线：**绿色**（< 70% 总内存）正常运行；**黄色**（70-85%）触发 KV Cache 压缩和低优先级请求淘汰；**红色**（> 85%）停止接受新请求，仅完成当前请求后释放。通过 aadk\_monitor 服务定期检查并上报内存使用。
+> 建议设置三级内存水位线：**绿色**（< 70% 总内存）正常运行；**黄色**（70-85%）触发 KV Cache 压缩和低优先级请求淘汰；**红色**（> 85%）停止接受新请求，仅完成当前请求后释放。注意：**aadkcore 当前未内置内存水位检查**（aadk\_monitor 的实际职责是日志汇聚与数据回传，见 §5.2），水位线检查需要外部监控脚本（按本节口径采样）或框架扩展实现；进程崩溃后的兜底拉起依赖 systemd `Restart=always`（见 §5.1）。
 
 ## 4. Crash 分析与案例
 
@@ -320,8 +346,8 @@ done
 >
 > 1. **获取 Crash Dump**
 >    `mini-dm` 启动实时日志捕获（DSP 侧日志的唯一出口，见 [硬件架构 · mini-dm（§4.5）](../../general/hardware.html)）。Crash 发生后，DSP 会输出 crash info 包括 crash PC、LR（返回地址）、寄存器状态。同时通过 `dmesg | grep -i "ssr\|subsys\|crash\|fastrpc"` 获取内核侧日志。
-> 2. **定位 Crash 地址**  
->    使用 `hexagon-addr2line` 将 crash PC 地址映射到具体的源文件和行号。需要带调试符号的 DSP 库（`_skel.so` 的调试版本）。
+> 2. **定位 Crash 地址**
+>    使用 Hexagon 工具链的 addr2line / llvm-symbolizer（具体工具名随 Hexagon SDK 版本，如 `hexagon-addr2line` 或 LLVM 系 `llvm-symbolizer`）将 crash PC 地址映射到具体的源文件和行号。需要带调试符号的 DSP 库（`_skel.so` 的调试版本）。
 > 3. **分析调用上下文**  
 >    根据 LR（返回地址链）还原调用栈。关注：是在哪个 QNN 算子执行时 crash？输入 tensor 的 shape 和数值范围是否异常？是否在特定输入条件下才会复现？
 > 4. **复现与验证**  
@@ -362,57 +388,79 @@ done
 
 ### 5.1 aadkcore 日志系统
 
-aadkcore 框架内置了多级日志系统，用于端侧 Agent 的运行时诊断：
+aadkcore 的日志基于 **spdlog**，核心定义在 `aadkapi/aadk_log.hpp`，提供两套宏：带日志器名的 `AADK_LOG_TRACE/DEBUG/INFO/WARN/ERROR/CRITICAL(name, ...)`，以及按平台分流的简化宏 `LOG_V/D/I/W/E/F(...)`——Android 平台走 `__android_log_print` 直接进 logcat（tag 为编译期 `TAGNAME`），YunOS 走 `YUNOS_LOG`，Linux 走 spdlog socket 日志器（默认 sink 是 unix socket `/tmp/aadk_log.sock`）。
 
-| 日志级别 | 用途 | 典型内容 | 生产环境开启 |
+| 日志级别 | 宏（简化 / 命名） | 典型内容 | 说明 |
 | :--- | :--- | :--- | :--- |
-| **ERROR** | 不可恢复错误 | 模型加载失败、FastRPC crash、OOM | 始终开启 |
-| **WARN** | 可恢复异常 | Tool 调用超时后重试、KV Cache 接近上限 | 始终开启 |
-| **INFO** | 关键流程 | 请求开始/结束、模型加载完成、LoRA 切换 | 推荐开启 |
-| **DEBUG** | 详细调试 | 每个 token 的生成时间、KV Cache 使用量、Prompt 内容 | 仅调试时开启 |
-| **TRACE** | 算子级追踪 | QNN 每个算子的执行时间和内存分配 | 仅性能分析时开启 |
+| **CRITICAL** | `LOG_F` / `AADK_LOG_CRITICAL` | 致命错误（如日志服务 socket 创建失败） | 最严重级别 |
+| **ERROR** | `LOG_E` / `AADK_LOG_ERROR` | 模型加载失败、FastRPC 错误、dump 文件写入失败 | 生产环境始终开启 |
+| **WARN** | `LOG_W` / `AADK_LOG_WARN` | 可恢复异常 | 生产环境始终开启 |
+| **INFO** | `LOG_I` / `AADK_LOG_INFO` | 关键流程：请求开始/结束、模型加载完成、PERF 性能行（ttft/tps） | 推荐开启 |
+| **DEBUG** | `LOG_D` / `AADK_LOG_DEBUG` | 详细调试：preprocess time、first\_token\_time、duration 等 | 运行时默认级别即 debug |
+| **TRACE** | `LOG_V` / `AADK_LOG_TRACE` | 最详细追踪 | 默认被编译期裁剪（`SPDLOG_ACTIVE_LEVEL` 缺省为 DEBUG） |
+
+日志格式默认含时间戳、日志器名、线程、级别与源码位置（`[时间] [name] [tid] [level] [file:line:func] message`），编译期定义 `SPDLOG_NO_SOURCE_LOC` 可关闭源码位置。
+
+**日志汇聚链路（Linux 形态）**：各组件 socket sink → `/tmp/aadk_log.sock` → `aadk_monitor_server`（见 §5.2）→ 滚动写入 `/data/logs/aadk.log`；`agentcore.service` 的 stdout/stderr 另进 systemd journal。
 
 ```bash
 # 端侧日志查看方法
 
-# 1. Android 平台 (logcat)
-adb logcat -s AADK:* | grep -E "ERROR|WARN|ModelRunner|Scheduler"
+# 1. Android 平台 (logcat)——tag 为各模块编译期 TAGNAME，默认小写 "aadk"，
+#    模块可覆盖（如 agent_runtime / ModelScheduler / system_agent / MediaCache）
+adb logcat -s aadk:* agent_runtime:* ModelScheduler:* system_agent:*
 
-# 2. Linux 平台 (systemd journal)
+# 2. Linux 平台：aadk_monitor_server 汇聚日志（滚动文件，默认单文件 25MB）
+tail -f /data/logs/aadk.log
+# 服务 stdout/stderr（journal）
 journalctl -u agentcore.service -f --no-pager
 
-# 3. 数据 dump 调试 (通过 Android 系统属性)
-# 开启输入输出 dump (model_inference.cpp 中读取此属性)
+# 3. 数据 dump 调试（输入图像/音频 + 输出文本落盘，DataDump 实现见 src/utils/data_dump.cpp）
+# Linux 形态：system_agent 启动参数
+system_agent --dump 1            # 可选 --upload 1 同时开启数据回传（§5.2）
+# Android SDK 形态：系统属性（model_inference.cpp 在 init 时读取，改属性后需重启服务生效）
 adb shell setprop persist.aadk.data_dump 1
-# dump 文件保存在 /data/local/tmp/aadk_dump/
+# dump 目录为 <data_path>/dump（data_path 即运行时数据目录，Linux 形态如 /opt/agentcore/data/dump）
+# 注意：个别分支上 dump 调用点被注释（MsgDeliverImpl::dump_data），开启无生效时先确认调用点是否启用
 
 # 4. mini-dm DSP 日志
 mini-dm  # 捕获 Hexagon DSP 实时日志
 ```
 
-### 5.2 aadk\_monitor 健康监控
+### 5.2 aadk\_monitor：日志汇聚与数据回传
 
-aadkcore 附带独立的监控服务 `aadk_monitor`（通过 systemd 管理），负责持续监控 Agent 进程的健康状态：
+`aadk_monitor` 是 aadkcore 的**日志汇聚 + 数据回传**组件（不是健康监控服务），由两部分组成：
 
-| 监控项 | 检查方式 | 告警阈值 | 自动恢复 |
-| :--- | :--- | :--- | :--- |
-| **进程存活** | 定期检查 system\_agent 进程是否存在 | 进程不存在 | 自动重启（systemd Restart=always） |
-| **内存使用** | 读取 /proc/PID/status VmRSS | VmRSS > 配置阈值的 85% | 日志告警 + 触发 KV Cache 清理 |
-| **推理延迟** | 统计最近 N 次推理的 TTFT 和 TPOT | P99 延迟 > 配置阈值 | 日志告警 + 性能数据上报 |
-| **DSP 状态** | 检查 remoteproc 状态 | 状态为 crashed 或 offline | 记录 crash 信息 + 等待 SSR 恢复 |
-| **心跳检测** | 向 system\_agent 发送 health check 请求 | 连续 3 次无响应 | 强制重启 system\_agent |
+| 组件 | 职责 | 入口 / 出口 |
+| :--- | :--- | :--- |
+| **aadk\_monitor\_server**（`monitor/src/monitor_server.cpp`，独立进程，systemd 单元 `aadk_monitor.service`，`Restart=always`） | Unix socket 日志汇聚：接收各组件 socket sink 发来的日志行，滚动写盘 | 监听 `/tmp/aadk_log.sock`（`-s` 可配）→ 写 `/data/logs/aadk.log`（`-f` 指定，单文件上限 `-m` 默认 25MB） |
+| **aadk\_monitor 库**（`monitor/src/monitor.cpp` + `api_gateway`，链接进 system\_agent 进程） | 数据回传（badcase 收集）：异步上传请求/响应 JSON 及随路图像/音频到云端网关 | `system_agent --upload 1` 开启；走网关接口 `/api/v1/chat/log` 与资源上传接口（HMAC 签名） |
+
+> [!NOTE]
+> **常见误解澄清：aadkcore 未内置健康监控**
+>
+> 进程存活、内存水位、心跳、DSP 状态等健康检查**目前不在 aadkcore 内**：进程崩溃后的自动拉起依赖 systemd `Restart=always`（`agentcore.service`，RestartSec=5s）；内存水位线是建议的扩展方向（见 §3.3），当前需外部监控脚本按 VmRSS + dma-buf 口径采样实现。把 aadk\_monitor 当"健康监控"会找错排障入口——它的价值在于**统一日志出口**（`/data/logs/aadk.log`）与**线上 badcase 数据回传**。
 
 ### 5.3 性能数据采集 (Profiling)
 
-aadkcore 通过 `registerProfilingCallback` 接口支持实时性能数据采集，便于监控和优化：
+aadkcore 的性能数据来自三个层次（早期厂商侧 `registerProfilingCallback` 上报链已在岚图分支停用删除，见 [岚图 · APK 侧集成](../lantu/apk-integration.html)，主线是否保留需核实）：
+
+1. **框架层 —— `ModelResponse`**（`aadkapi/model_response.hpp`）：每次推理返回 `ttft`（ms）、`input_tokens`、`output_tokens`、`tokens_per_second` 与 `error_code`（`SUCCESS` / `MODEL_NOT_FOUND` / `MODEL_NOT_READY` / `MODEL_SUSPENDED` / `MODEL_GEN_STOPPED` / `MODEL_FAILURE`）。QNN 路径在 `StreamGenerate` 首个流式回调处计 TTFT、按 decode 时长算 TPS（`src/models/qnn/qnn_model.cpp`）。
+2. **随响应回传的 `debug_info`**：`MsgDeliverImpl::get_debug_info` 把 `infer_start/infer_end/input_tokens/out_tokens/TTFT/TPS/AEG/VEG` 打进响应 JSON，调用端无需额外接口即可拿到单次请求性能数据。
+3. **PERF 日志**：`model_runner.cpp` 输出 `PERF: ModelRunner::inference leave tps: ..., ttft: ..., output_tokens: ...`；`qnn_model.cpp` 另有 `preprocess time` / `first_token_time` / `duration` 等行，可直接 grep 做趋势分析。
+
+> [!NOTE]
+> **厂商 SDK 层的分段 Profiling：打开 DSP 黑盒的关键**
+>
+> 端侧 LLM 延迟排障最难的是"慢在 FastRPC 通信、HTP 计算还是排队等待"分不清。genai\_sdk（`third_party/genai_sdk/.../include/components/profiler.h`）提供 `ProfileEvent` 回调，可把单次推理拆成五段：`QNN_MODEL_EXECUTE`（整次推理）、`GRAPH_EXECUTE_HOST_RPC_TIME`（host 侧 RPC）、`GRAPH_EXECUTE_HTP_RPC_TIME`（HTP RPC）、`GRAPH_EXECUTE_ACCEL_TIME`（加速器执行）、`GRAPH_EXECUTE_ACCEL_EXCL_WAIT_TIME`（加速器独占等待）。**RPC 时间占比高 → 通信/调度问题；ACCEL 占比高 → 纯算力/带宽瓶颈；EXCL\_WAIT 高 → 多负载争抢 HTP**（对应 §4.3.3 的并发排队场景）。注意：aadkcore 基于它的上层上报链在岚图分支已删除，直接使用需在集成层自行注册回调（接口可用性以所用 SDK 版本为准）。
 
 | 性能指标 | 采集方式 | 典型值（示例参数，非实测） | 异常阈值（示例） |
 | :--- | :--- | :--- | :--- |
-| **TTFT** | Prefill 开始到第一个 token 输出 | 600-800 ms (S=350) | > 1500 ms |
-| **TPOT** | 相邻 token 间隔 | 70-100 ms (~10-14 tok/s) | > 200 ms |
-| **模型加载时间** | Context Binary 加载到推理就绪 | 2-5 s (Context Binary) | > 10 s |
-| **KV Cache 使用率** | 当前使用 / 最大分配 | 变化范围 0-100% | 持续 > 80% |
-| **NPU 利用率** | HTP 忙时间 / 总时间 | 推理时 > 90% | < 50% (可能有 fallback) |
+| **TTFT** | `ModelResponse.ttft` / `debug_info.TTFT` | 600-800 ms (S=350) | > 1500 ms |
+| **TPOT** | 由 `tokens_per_second` 换算（TPOT ≈ 1000 / TPS） | 70-100 ms (~10-14 tok/s) | > 200 ms |
+| **模型加载时间** | 框架未内置指标，用日志时间戳（load 前后 INFO 行）或外部计时 | 2-5 s (Context Binary) | > 10 s |
+| **KV Cache 使用率** | 框架未暴露（由厂商 SDK 内部管理），按 §3.2 公式由序列长度估算 | 变化范围 0-100% | 持续 > 80% |
+| **NPU 利用率** | aadkcore 不采集，用 Snapdragon Profiler / qnn-profile-viewer | 推理时 > 90% | < 50% (可能有 fallback) |
 
 > [!NOTE]
 > **表中数字为示例参数**
@@ -422,4 +470,4 @@ aadkcore 通过 `registerProfilingCallback` 接口支持实时性能数据采集
 > [!TIP]
 > **调试工具选择指南**
 >
-> 快速参考：**精度问题** → qnn-net-run + AIMET 逐层分析（间歇性精度错误先看 §2.3 cache 一致性）；**性能问题** → qnn-profile-viewer + Snapdragon Profiler；**稳定性问题** → mini-dm + dmesg + aadk\_monitor 日志；**内存问题** → VmRSS + `dmabuf_dump`（标准口径见 §3.3）；**FastRPC 问题** → 排障六步法（第 1 章）。先确定问题类别，再选对应工具，避免盲目排查。
+> 快速参考：**精度问题** → qnn-net-run + AIMET 逐层分析（间歇性精度错误先看 §2.3 cache 一致性）；**性能问题** → qnn-profile-viewer + Snapdragon Profiler，框架侧单请求数据看 `debug_info` / PERF 日志（§5.3），通信 vs 计算 vs 排队分段看厂商 SDK `ProfileEvent`；**稳定性问题** → mini-dm + dmesg + `/data/logs/aadk.log`（aadk\_monitor\_server 汇聚，§5.2）；**内存问题** → VmRSS + `dmabuf_dump`（标准口径见 §3.3）；**FastRPC 问题** → 排障六步法（第 1 章）。先确定问题类别，再选对应工具，避免盲目排查。

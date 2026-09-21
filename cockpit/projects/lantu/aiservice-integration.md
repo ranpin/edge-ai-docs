@@ -22,6 +22,8 @@
 
 > [!IMPORTANT]
 > **基线口径（钉死）**：本篇描述的是 **2026-08-11 前缀缓存路径修复之后**的状态（修复提交 `786b01efd`）。注意：本地 / `origin` 上的 `lantu_aiservice_dev` 是 **07-30 的备份快照**（tag `backup/lantu_aiservice_dev-20260730`），**不含**该修复提交——若直接读该快照代码，看到的会是**修复前**的旧逻辑（三跳查表、`prefix_cache_path` 嵌在 ebnf 分支内、`info.json` 试两路径）。本文 3.2 / 3.3 / 3.4 一律按**修复后**口径描述，修复前的旧实现移入对应 CAUTION 作历史 bug 记录，勿把两者混读。
+>
+> **本地复核边界**：本篇引用的**共享基础设施**已对本地树（当前为 genai 形态）复核——`BaseLlm`/`LlmRegistry` 虚接口与注册宏、`model_runner.cpp` 的两级 lora 调度与静默失败路径、`multi_lora_runtime_config.json` 的 7 条 lora 骨架（scene/lora_name/lora_path）、genai 单一消费者 `qnn_model.cpp`。**aiservice 形态特有代码**（`aiservice.cpp` 本体、`http_client.cpp` 的 `streamAsyncRaw` 与超时参数、`prefix_cache_base`/`grammar_root_rules`/`stream`/`ebnf_path` 等 aiservice 形态配置字段）位于 `lantu_aiservice_dev` 分支，本地 checkout 不是该分支，**按 08-11 状态与既有排查记录描述、未逐行本地复核**，引用时注意此边界（各节另有行内标注）。
 
 ## 1. 背景与目标
 
@@ -56,11 +58,12 @@
 
 ### 2.1 一个抽象基类，多个后端实现
 
-aadkcore 把所有推理后端抽象成 `BaseLlm`（`include/models/model.hpp`），统一虚接口：
+aadkcore 把所有推理后端抽象成 `BaseLlm`（`include/models/model.hpp`），统一虚接口（已对本地树复核，共 12 个纯虚函数）：
 
-- `supported_models` / `initFromConfig` / `addLora`
-- `generateContentAsync` / `streamGenerate` / `generate`
-- `preprocessImage` / `preprocessAudio` / `stopGenerate`
+- 能力与配置：`supported_models` / `initFromConfig` / `addLora`
+- 推理三态：`generateContentAsync`（异步 receiver）/ `streamGenerate`（流式回调）/ `generate`(同步补全回调)
+- 多模态前处理：`preprocessImage` / `preprocessAudio`
+- 生命周期与控制：`is_ready` / `suspend` / `resume` / `stopGenerate`
 
 当前树里的后端实现：
 
@@ -79,7 +82,7 @@ aadkcore 把所有推理后端抽象成 `BaseLlm`（`include/models/model.hpp`�
 >
 > 这条「单一消费者」事实是第 4 节解耦能干净落地的前提。
 >
-> **符号计数口径（勿混）**：源码层面 `qnn_model.cpp` 里 distinct 的 `aios::llms::*` / `aios::aisa::*` 限定名共 **9 个**（`Tensor`/`RetCode`/`ModelFactory`/`Context`/`Model`/`Prompt`/`Result`/`Deepstack` 等，合计出现 **29 次**）。旧版所写「27 个符号」是**链接产物 `.so` 里 genai 相关未定义符号**的计数口径（与源码 distinct 名不是一回事）；该 27 的具体测法（如 `nm -D --undefined-only libaadkcore.so` 过滤 genai 符号）**待核补**，引用时请注明是「源码 distinct 名」还是「.so 未定义符号」。
+> **符号计数口径（勿混，已对本地树复核）**：源码层面 `qnn_model.cpp` 里 distinct 的 `aios::llms::*` / `aios::aisa::*` 限定名共 **8 个**——`aios::aisa::{Tensor, ModelFactory, Context, RetCode}` 与 `aios::llms::{Result, RetCode, Prompt, Deepstack}`（`RetCode` 在两个命名空间各一，按全限定名计为 2 个），合计出现 **27 次**。注意树里**没有**独立的 `aios::*::Model` 类型（只有 `ModelFactory::CreateModel` 方法）；`qnn_model.cpp` 另用了 `aios::components::*`（`SetLogger`/`Tensor`/`DataType`/`MemType`），属**另一个命名空间**、不计入这里的 llms/aisa 口径。这与「链接产物 `.so` 里 genai 相关**未定义符号**的计数」是**两个不同口径**：后者需 `nm -D --undefined-only libaadkcore.so` 过滤 genai 符号单独测，本地**待核**（无法构建 `.so`）。引用时请注明是「源码 distinct 名 / 出现次数」还是「.so 未定义符号」。`qnn_model.cpp` 是 genai 后端、两形态共用，上述源码计数在本地 genai 形态树核实；aiservice 分支未独立复核，但该文件不被 aiservice 后端改动，计数应一致。
 
 ### 2.2 注册与路由：model_name 前缀决定后端
 
@@ -100,6 +103,9 @@ REGISTER_LLM(AIService, "aiservice/.*");   // aiservice.cpp 顶部
 
 > [!TIP]
 > **换后端 = 改一个 model_name 前缀**，业务代码零改动。
+
+> [!NOTE]
+> **路由正确性依赖 pattern 互斥（`unordered_map` 无匹配次序）**：`LlmRegistry::factories_` 是 `std::unordered_map<std::string, ModelFactory>`，`getLlm` 遍历它、返回**第一个** `std::regex_match` 命中的工厂——而 `unordered_map` 的遍历次序是未指定的。因此「前缀决定后端」的正确性**完全依赖各 pattern 互斥**：当前 `aiservice/.*`、`qnn/.*` 等以互斥前缀区分，任一 `model_name` 至多命中一个 pattern，次序无关紧要。新增后端 pattern 时必须保持前缀互斥——若两个 pattern 能同时匹配同一个名字（如 `aiservice/.*` 与 `.*omni.*`），选中哪个将随哈希表内部次序而变，不可复现。
 
 ### 2.3 调度层：scene + lora 两级选择
 
@@ -146,6 +152,9 @@ graph TB
 ## 3. aiservice 后端实现
 
 `AIService` 继承 `BaseLlm`，把每次推理翻译成一次对 `VoyahAIService` 的 HTTP 调用，再把流式响应解析回 token 回调。下面按「初始化 → 请求构造 → 流式解析」三段拆。
+
+> [!NOTE]
+> **本节 3.1–3.7 的核实边界**：以下 `aiservice.cpp` 内部逻辑（端点/`api_host_`、`initFromConfig`、`buildRequestBody`、`resolvePrefixCachePath`、`buildOpenAIMessages`、`parseSSEFrames`、未接能力）属 **aiservice 形态特有代码**，位于 `lantu_aiservice_dev` 分支——**需核实（aiservice 分支不在本地）**：本地 checkout 为 genai 形态、无 `src/models/aiservice/aiservice.cpp`，故本节按 08-11 修复后状态与既有上机排查记录描述，未逐行本地复核。可在本地核实的只有其依赖的共享件（`BaseLlm` 接口、`HttpClient` 类名、`multi_lora_runtime_config.json` 的 7 条 lora 骨架）。3.8 的 HTTP 超时参数另有行内标注。
 
 ### 3.1 协议与端点
 
@@ -348,7 +357,7 @@ aiservice 形态比 genai 进程内直调多一跳本机 HTTP。这一跳既是�
 
 **失败面与已知处理**：
 
-| 失败 | 已知行为 | 超时/重试（`src/utils/http_client.cpp` 已核实） |
+| 失败 | 已知行为 | 超时/重试（`src/utils/http_client.cpp`，aiservice 分支口径；本地核实边界见下 WARNING） |
 | :--- | :--- | :--- |
 | 连接拒绝（服务未启动 / 重启中） | init 阶段 `loadModelInService` 只向 `/models/load` POST 一次 | `CURLOPT_CONNECTTIMEOUT=10s`；**无退避重试**（只 POST 一次，失败即抛错） |
 | 推理超时 | — | 非流式 `CURLOPT_TIMEOUT=120s`（总超时）；流式路径不设总超时，靠低速断流兜底 |
@@ -356,7 +365,9 @@ aiservice 形态比 genai 进程内直调多一跳本机 HTTP。这一跳既是�
 | 空答案（prompt 过长） | 服务端回 `finish_reason:"length"` + 0 个内容 token 且无 error；`finish_reason` 目前被 `parseSSEFrames` 丢弃（免费可得、未接的诊断信号） | — |
 
 > [!WARNING]
-> 难点 5.8 的 **50ms 超时在旧 UDS/NPU 注册通道**（`/tmp/voyah_qnn_service.sock`），**不在 HTTP 推理路径上**。HTTP 路径的超时已对 `src/utils/http_client.cpp`（`lantu_aiservice_dev`）核实：connect 10s、非流式总超时 120s、流式低速断流 1 B/s × 60s，且**两条路径均无自动重试**——连接拒绝/断流后直接失败上抛，重试与否由调用方决定。
+> 难点 5.8 的 **50ms 超时在旧 UDS/NPU 注册通道**（`/tmp/voyah_qnn_service.sock`），**不在 HTTP 推理路径上**。HTTP 路径的超时此前已对 `src/utils/http_client.cpp`（`lantu_aiservice_dev` 分支）核实：connect 10s、非流式总超时 120s、流式低速断流 1 B/s × 60s，且**两条路径均无自动重试**——连接拒绝/断流后直接失败上抛，重试与否由调用方决定。
+>
+> ⚠️ **需核实（aiservice 分支不在本地）**：上述超时参数与 `streamAsyncRaw` 接口是 `lantu_aiservice_dev` 分支的 `http_client.cpp` 形态，本地 checkout（genai 形态）的同名文件是**较旧变体**——只有 `sendAsync` / `streamAsync`（`streamAsync` 在 chunk 级粗暴剥 `data: ` 前缀、非按帧解析），且**未设任何 `CURLOPT_*TIMEOUT` / `LOW_SPEED_*` 选项**。故本表的超时数值无法在本地复现核对，以 aiservice 分支为准；下次能 checkout 该分支时应重新逐行核实。
 
 **单独量化这一跳开销的方法（loopback 空载基线）**：
 
@@ -585,7 +596,7 @@ aiservice 形态比 genai 进程内直调多一跳本机 HTTP。这一跳既是�
 >
 > - **分段斜率（不是严格线性）**：prefill 段 15→415 字斜率 ≈ `(139−79)/(415−15) ≈ 0.15 ms/字`；415→2015 字斜率 ≈ `(539−139)/(2015−415) ≈ 0.25 ms/字`——**后段斜率变陡**，故只能说「近似线性 / 分段」，不能说「线性增长」。
 > - **token 数待补**：要判断这些 prefill 时间是否合理，必须把字数换成 **tokenizer 实际 token 数**（原始测试 prompt 未在本地留存，**待补**；中文经 Qwen tokenizer 通常 <1 token/字，字数会高估 token 数）。
-> - **roofline 互核（方法，链 [LLM 推理原理 · Roofline（§2）](../../general/infer-principles.html)）**：`prefill 吞吐 = token 数 ÷ prefill 时间`，`有效算力 ≈ 2N × 吞吐`（N≈4B）。若**粗暴按「字数≈token 数」**折算，后段吞吐 ~2400–3700 tok/s、有效算力 **~20–30 TFLOPS**，已逼近通识层 FP16 峰值（常见 ~35 TFLOPS、保守 ~17，见 [原理篇 §2.2](../../general/infer-principles.html)）——对应 MFU 高达 0.5~0.9，远超 prefill 典型的 0.2~0.4。这说明**要么字/token 折算偏高、要么该段计时含非 prefill 成分**；在拿到实际 token 数与 MFU 假设前，不能据此表断言 prefill 效率，只能记录现象。
+> - **roofline 互核（方法，链 [LLM 推理原理 · Roofline（§2）](../../general/infer-principles.html)）**：`prefill 吞吐 = token 数 ÷ prefill 时间`，`有效算力 ≈ 2N × 吞吐`（N≈4B）。若**粗暴按「字数≈token 数」、取纯 prefill 时间**折算：415 字 ÷ 139ms ≈ **3000 tok/s**、2015 字 ÷ 539ms ≈ **3700 tok/s**（即 ~3000–3700 tok/s），有效算力 ≈ 2×4×10⁹×(3000~3700) ≈ **~24–30 TFLOPS**，已逼近通识层 FP16 峰值（常见 ~35 TFLOPS、保守 ~17，见 [原理篇 §2.2](../../general/infer-principles.html)）——对应 MFU 高达 **~0.7–0.9（对常见 ~35）**，对保守 ~17 则**已 >1（物理不可能）**，远超 prefill 典型的 0.2~0.4。这说明**要么字/token 折算偏高、要么该段计时含非 prefill 成分**；在拿到实际 token 数与 MFU 假设前，不能据此表断言 prefill 效率，只能记录现象。
 
 **prefix 缓存提速**（08-11 全开 vs 08-07）：Agent300 **−7.9%**、Agent200 **−10.8%**、Agent100 **−0.1%**（新增 prefix 的 step2 −2.2%）。
 
