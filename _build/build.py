@@ -167,10 +167,13 @@ def build_page(md_rel, titles):
 <nav class="top-nav"></nav>
 <script src="{navpath}" data-active="{html_rel}" data-edit="{md_rel}"></script>
 
-<!-- ===== Sidebar TOC ===== -->
+<!-- ===== TOC dock: 左上角悬浮按钮 + 悬停展开目录 ===== -->
+<div class="toc-dock">
+<button class="toc-toggle" aria-label="目录" title="目录"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
 <aside class="sidebar">
 {sidebar(toc_part, toc)}
 </aside>
+</div>
 
 <!-- ===== Main Content ===== -->
 <main class="main">
