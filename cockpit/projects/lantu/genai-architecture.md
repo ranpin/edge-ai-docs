@@ -16,8 +16,9 @@
 >
 > **代码基线**：aadkcore 与 agent_group 仓库 `lantu_sdk_dev` 分支。核心文件：
 >
-> - AgentCore：`aadkcore/src/models/qnn/qnn_model.cpp`、`src/runtime/model_runner.cpp`、`runtime/data/config/base_model.json`
+> - AgentCore：`aadkcore/src/models/qnn/qnn_model.cpp`、`src/runtime/model_runner.cpp`
 > - 模型配置：`runtime/data/config/multi_lora_runtime_config.json`（**7 条** LoRA 配置）、`config/qwen3-omni-4b_8397.json`（模型路径 + 两档 VIT）
+>   - ⚠️ 同目录的 `runtime/data/config/base_model.json` 是 **Orin / Lape 形态配置**（`model_name: lape/Qwen2.5-Omni-7B`、TensorRT engine 路径），其 `enable_prefix_caching` 只被 `lape_model.cpp` 消费，**不在 8397 genai 链路上**——本篇前缀缓存开关以设备侧 Genie `config.json` 为准（见 2.4 / 5.2）。
 > - AgentGroup：`agent_group/src/{outcar_qa,incar_item_detect,dress_detect}_agent/*_dispatcher.cpp`
 
 ## 1. 背景简介与系统全景
@@ -58,7 +59,7 @@ graph TD
     end
 
     subgraph Inference [模型制备与推理引擎链路]
-        AIMET[AIMET 量化 INT4]
+        AIMET[AIMET 量化 W4A16]
         CTX[QNN 转换 / Context Binary]
         Genie[Genie 运行时 libGenie.so]
     end
@@ -104,20 +105,20 @@ graph LR
 
 ### 2.2 AIMET 量化
 
-AIMET（AI Model Efficiency Toolkit，高通开源量化工具）把浮点权重压到 INT4，核心是「定标度 + 控误差」：
+AIMET（AI Model Efficiency Toolkit，高通开源量化工具）把浮点权重压到 **INT4**，核心是「定标度 + 控误差」。本项目 LLM 主体走 **W4A16**（权重 INT4、激活保持 FP16）——这是 HTP 上跑 LLM 的真实主战场，位宽组合的由来与机制见 [端侧模型量化与压缩 · W4A16（§3）](../../general/quantization.html)：
 
-- **校准集选择**（方法级）：量化需一小批代表性数据做校准，统计各层激活分布以定 scale。校准集应覆盖**实际业务分布**——舱内（遗留物 / 儿童 / 衣着）与舱外（车辆 / 动物 / 植物 / 交通标识 / 通识）各类场景图像；校准集与上线分布偏移是掉点的常见根因。项目具体校准集构成以模型团队交付为准。
-- **量化算法**（方法级）：AIMET 支持 TF-Enhanced / MSE / percentile 等权重量化算法，以及 **AdaRound**（自适应舍入，学习每个权重向上还是向下取整，比朴素最近舍入精度更高）。本项目 LLM 主体走 weight-only INT4，**VIT 同样压到 INT4**——这是较激进的选择，精度/时延权衡与恢复策略见 5.2 的专门讨论。
-- **per-tensor vs per-channel**（方法级）：per-tensor 整个张量一个 scale，省内存但精度差；per-channel（逐输出通道）每通道一个 scale，对 INT4 权重更友好、精度更高，是常见选择。本项目具体粒度以模型团队交付为准。
+- **校准集选择**（方法级）：量化需一小批代表性数据做校准，统计各层激活分布以定 scale。校准集应覆盖**实际业务分布**——舱内（遗留物 / 儿童 / 衣着）与舱外（车辆 / 动物 / 植物 / 交通标识 / 通识）各类场景图像；校准集与上线分布偏移是掉点的常见根因。另需**与评测集隔离**——校准集不要与评测集重叠，否则量化参数会对评测分布过拟合、线上必掉点（判据见 [量化 · 校准集选择（§1.4）](../../general/quantization.html)）。项目具体校准集构成以模型团队交付为准。
+- **量化算法**（方法级）：AIMET 支持 TF-Enhanced / MSE / percentile 等权重量化算法，以及 **AdaRound**（自适应舍入，学习每个权重向上还是向下取整，比朴素最近舍入精度更高）。本项目 LLM 主体走 weight-only **W4A16**（激活 FP16）；**VIT 同样压到 INT4 权重**——但其**激活位宽组合（是 weight-only W4A16，还是 W4A8）本篇未拿到模型团队明确口径，以模型团队交付为准**。这是较激进的选择，精度/时延权衡与恢复策略见 5.2 的专门讨论。
+- **量化粒度：per-tensor / per-channel / 分组**（方法级）：per-tensor 整个张量一个 scale，省内存但精度差；per-channel（逐输出通道）每通道一个 scale，对 INT4 权重更友好、精度更高，是常见选择。**LLM 的 W4A16 还有一层更细的分组量化（group quantization）**——每 `g` 个权重共享一个 scale，`g` 常见取 32 / 64 / 128，`g` 越小精度越好但 scale 元数据与 dequant 开销越大（取舍见 [量化 · 权重 INT4 分组打包（§3.2）](../../general/quantization.html)）。本项目 per-channel / group size 的具体取值以模型团队交付为准。
 - **精度恢复**（方法级）：量化后掉点的常用恢复手段——① AdaRound / 更优校准集；② 量化感知训练（QAT）微调；③ 对敏感层（如 VIT、首尾层）回退更高精度（INT8 / FP16）做**混合精度**。本项目 0527 build 衣着描述塌至 ~0%、植物 caption −10pp（见 7.1）疑与激进量化（尤其 VIT INT4）相关，是精度恢复策略需重点覆盖的对象。
 
 ### 2.3 QNN 转换与 Context Binary 生成
 
-- **QNN 转换**：量化后的模型经 QNN 转换器（`qnn-onnx-converter` / `qnn-pytorch-converter`）生成 QNN graph 与权重，再由 `qnn-model-lib-generator` 编成模型 `.so`。
+- **QNN 转换**：量化后的模型经 QNN 转换器（`qnn-onnx-converter` / `qnn-pytorch-converter`）生成 QNN graph 与权重，再由 `qnn-model-lib-generator` 编成模型 `.so`。**注意转换器消费的是 AIMET 已产出的量化编码（`.encodings`），不是在转换阶段重新量化**——W4A16 的分组量化与校准在 AIMET / QAIRT 侧完成，converter 只把带量化编码的图转成 QNN 表示（链路见 [量化 · AIMET 与 LLM 的 W4A16 导出（§2.5）](../../general/quantization.html)）。
 - **Context Binary 生成**：用 `qnn-context-binary-generator`，加载模型 `.so` + HTP backend（`libQnnHtp.so`）+ **HTP backend extensions**（指定 SoC 型号、DSP 架构、VTCM 大小、精度、graph 名等），在**离线**把 graph 编译 / prepare 成序列化的 **Context Binary**（`.bin`）。
 - **为什么要离线 prepare**：HTP 上首次加载 graph 需在线编译（prepare），耗时且占资源；离线生成 Context Binary 后，设备端直接反序列化加载，省去上电时的图编译时延——这是车规「上电即可用」的关键。
 - **HTP backend extensions 的版本约束**：`dsp_arch` 必须与 SA8397P 的 Hexagon 版本一致（本项目用 **V81** Skel，`libQnnHtpV81Skel.so`，见 [3. APK 集成](apk-integration.html) 的 `doNotStrip` 清单），否则 Context Binary 无法在设备加载。
-- **产物**（已核实）：设备上的 Context Binary 包括基模、各 LoRA adapter，以及两档 VIT——`veg_448_448_8397.bin`（舱内 448×448）与 `veg_1024_768_8397.bin`（舱外 1024×768），统一落在 `/AI/VLM/models/qwen3-omni-4b/`（见 2.4）。
+- **产物**（已核实）：设备上的 Context Binary 包括基模、各 LoRA adapter，以及两档 VIT——`veg_448_448_8397.bin`（小档 448×448）与 `veg_1024_768_8397.bin`（大档 1024×768），统一落在 `/AI/VLM/models/qwen3-omni-4b/`（见 2.4）。各业务实际走哪一档见 3.2（**舱内遗留物走大档、衣着走小档**，非「舱内一律小档」）。
 
 ### 2.4 Genie 配置与模型根目录
 
@@ -151,7 +152,7 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 | 定制点 | 岚图分支的具体实现 | 代码落点 |
 | :--- | :--- | :--- |
 | **多 LoRA / scene 映射** | 7 条 LoRA 配置覆盖 4 个 scene、5 个 adapter；用 `LoRA ID`(scene) + `LoRA Name` 唯一定位并动态加载（见 3.1） | `model_runner.cpp` `getModelDetailsByScene(scene_id, lora_name)` |
-| **多 VIT 两档路由** | 舱内 448×448 / 舱外 1024×768 两档 Context Binary，按输入分辨率路由（见 3.2） | `qnn_model.cpp` `veg_model_small_` / `veg_model_large_` |
+| **多 VIT 两档路由** | 小档 448×448 / 大档 1024×768 两档 Context Binary，按业务设定的分辨率精确等值路由（见 3.2） | `qnn_model.cpp` `veg_model_small_` / `veg_model_large_` |
 | **DeepStack 适配** | 适配 Qwen3-Omni 的 DeepStack 多层视觉注入，缓解深层网络遗忘图像信息 | `qnn_model.cpp` `deepstack_vit` |
 | **低功耗被动监听** | CPU 轮询改事件驱动（`poll=false`），降 SDK 进程 CPU 占用（见 5.3） | 配置 `poll=false` |
 | **稳定性兜底** | 各业务节点异常捕获 + 空 JSON 降级，避免进程直接 Crash | 各 dispatcher |
@@ -183,15 +184,32 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 > 旧版写「基模 + 4 个 LoRA」，与配置实际的 **7 条**（5 个 adapter）不符，也与 [AIService 后端集成](aiservice-integration.html) 的「`multi_lora.lora` 数组 7 条」矛盾。本篇统一改为 **7 条 LoRA 配置 / 5 个 adapter 权重**。
 >
 > 另：设备 `/proc/<pid>/maps` 里可见的 **20 个 lora `.bin`** 是 adapter 在 HTP 上的实际加载产物（一个 adapter 在设备上可能对应多个 `.bin` 文件），与配置层的「5 个 adapter / 7 条」是**不同粒度的计数口径**，二者不矛盾；具体对应关系以设备产物为准。
+>
+> ⚠️ **观测来源标注（跨形态口径）**：这「20 个 lora `.bin`」是在 **aiservice 形态**的 `VoyahAIService` 进程 `/proc/<pid>/maps` 里观测到的（见 [AIService 后端集成 · 难点 5.2](aiservice-integration.html)）。两形态用的是**不同模型包**（版本、prefix KV、LoRA 权重 md5 均不同，见 aiservice 篇难点 5.3），故该计数**不能直接当作 genai 形态的加载产物口径**；genai 形态的 `.bin` 加载清单需对该形态进程单独核实，本篇暂沿用此观测值并标注来源。
 
 ### 3.2 多 VIT 两档路由
 
-`qnn_model.cpp` 按 `veg_param` 的宽高选 VIT Context Binary：
+`qnn_model.cpp` 的 `get_vit_shape(width, height)` 按 `veg_param` 的宽高选 VIT Context Binary，**用的是精确等值匹配**（`width==1024 && height==768` / `width==448 && height==448`），不是按面积或区间归档：
 
-- `448×448` → 小 VIT（`veg_model_small_`，`veg_448_448_8397.bin`）——**舱内单档**
-- `1024×768` → 大 VIT（`veg_model_large_`，`veg_1024_768_8397.bin`）——**舱外**
+- `1024×768` → 大 VIT（`veg_model_large_`，`veg_1024_768_8397.bin`）
+- `448×448` → 小 VIT（`veg_model_small_`，`veg_448_448_8397.bin`）
+- **非两档尺寸（fallback）**：两个等值条件都不命中时，`LOG_E("unsupported image size {}x{}, fallback to veg_model_small (448x448)")` 后**回退到 448 小档**并返回 `(448,448)`——即任意非法/未登记尺寸都会被静默归到小档，排查「图像尺寸不对却仍出结果」时要留意这条 fallback。
 
 图像进 VIT 前先 Resize 到对应档位，减少冗余计算。两档 VIT 的 Context Binary 由 2.3 的链路离线生成。
+
+> [!NOTE]
+> **各业务实际走哪一档（已对 agent_group dispatcher 核实，修正旧版「舱内 448 / 舱外 1024」的粗略说法）**
+>
+> 档位由 dispatcher 在 `image_info.resized_width/height` 上写死，并非「舱内一律小档、舱外一律大档」：
+>
+> | 业务 | dispatcher 设定的 resized 尺寸 | 实际档位 |
+> | :--- | :--- | :--- |
+> | 舱内**衣着**（dress_detect） | `448×448`（`kTargetW/H=448`） | 小档 |
+> | 舱内**遗留物**（incar_item_detect） | `1024×768` | **大档** |
+> | 舱外问答 stage1（outcar_qa） | `1024×768` | 大档 |
+> | 舱外问答 stage2 | 按 `Stage2ImageMode`：`USE_FULL_1024`→`1024×768`（大档）；`USE_CROP_448`/`USE_FULL_448`→`448×448`（小档） | 视模式而定 |
+>
+> 即**舱内遗留物走的是大档（1024×768），不是小档**——这一点是 5.2 / 7.3 前缀缓存收益因场景而异的根因之一（遗留物帧的视觉 token 多，见 7.3 的预算核算 NOTE）。
 
 ## 4. AgentGroup 业务流程
 
@@ -291,11 +309,11 @@ graph LR
 
 | 优化项 | 目的及原理 | 实现方法 / 方案 | 预期效果 / 备注 |
 | :--- | :--- | :--- | :--- |
-| **模型量化** | 降显存、提升 NPU/DSP 吞吐 | VIT + LLM 均 INT4（基模 + **7 条 LoRA 配置 / 5 个 adapter**，见 3.1；制备方法见 2.2） | 0527 浮点 vs 端侧：多数场景差 0~6pp（nlg/儿童遗留/遗留物近乎无损），植物 caption 约 −10pp；衣着描述 0527 版异常塌至 ~0%（见 7.1）。**VIT INT4 是激进选择，权衡见下方专门讨论** |
+| **模型量化（W4A16）** | **降内存占用、首次加载时间与 decode TPOT**（decode memory-bound，压权重直接减每 token 读取字节）。注意：**对 compute-bound 的 prefill / TTFT 基本无收益**——W4A16 的 matmul 仍走 FP16 通路、峰值算力不变，dequant 反加开销（推导见 [解码服务化 · TTFT 优化（§5.3）](../../general/infer-serving.html)） | VIT + LLM 权重均 INT4（W4A16；基模 + **7 条 LoRA 配置 / 5 个 adapter**，见 3.1；制备方法见 2.2） | 0527 浮点 vs 端侧：多数场景差 0~6pp（nlg/儿童遗留/遗留物近乎无损），植物 caption 约 −10pp；衣着描述 0527 版异常塌至 ~0%（见 7.1）。**VIT INT4 是激进选择，权衡见下方专门讨论** |
 | **模型 SSD（经核查未启用）** | 经核查为 greedy 单模型解码，非推测性采样解码 | `config.json` sampler `greedy:true/type:basic`；源码无 speculative/draft/forecast 字段 | 原"开启 SSD"笔记存疑，既非 Single Shot Detector 也无存储 Swap 证据（见 7.2） |
-| **多 VIT 动态切换** | 按场景/阶段用不同大小 VIT 缩短时延 | 进 VIT 前 Resize，按大小选 `1024×768`（舱外）或 `448×448`（舱内）两档 Context Binary | 减少冗余计算 |
+| **多 VIT 动态切换** | 按场景/阶段用不同大小 VIT 缩短时延 | 进 VIT 前 Resize，按业务选 `1024×768`（大档）或 `448×448`（小档）两档 Context Binary（各业务实际档位见 3.2，**舱内遗留物走大档、衣着走小档**） | 减少冗余计算 |
 | **单核改多核** | 利用 SA8397 多核算力 | VIT/LLM 由单核改三核/四核（导出时配置，改 `default.json`） | 吞吐量大幅提升 |
-| **前缀缓存** | 提前算 System Prompt，加速 Prefill | 框架级 Prefix Caching（`base_model.json: enable_prefix_caching=true`） | 11 个 prefix 的 System Prompt 约 318~959 tokens、均值 ~634，每次省去这段 prefill；上下文 cl2560、max_tokens 512（见 7.3） |
+| **前缀缓存** | 提前算 System Prompt，加速 Prefill | 框架级 Prefix Caching，开关在**设备侧 Genie `config.json: enable_prefix_caching=true`**（见 2.4；`base_model.json` 里的同名字段是 Orin/Lape 配置，不在本链路） | 11 个 prefix 的 System Prompt 约 318~959 tokens、均值 ~610，每次省去这段 prefill；上下文 cl2560、max_tokens 512（见 7.3） |
 | **开启 DeepStack** | 避免深层模型遗忘图像信息（Qwen3-Omni 专属） | 将 VIT 多尺度图像特征注入 LLM Decoder 的**多个层**（DeepStack 典型为多层注入，非仅"前几层"；具体注入层位以 Qwen3-Omni 设计为准） | 提升多模态对齐 |
 
 > [!IMPORTANT]
@@ -303,7 +321,7 @@ graph LR
 >
 > 视觉编码器（VIT）通常量化到 INT8 即止，本项目把 VIT 也压到 **INT4**，是较激进的选择，代价已在评测中显现：0527 build 植物 caption 约 **−10pp**、衣着描述异常塌至 **~0%**（见 7.1），疑与 VIT INT4 掉点相关。
 >
-> - **精度 / 时延权衡**：VIT INT4 进一步降显存、提 NPU 吞吐，但视觉特征的量化误差会沿 DeepStack 注入放大到 LLM 解码，对**细粒度识别**（植物种类、衣着属性）尤其敏感；时延收益与精度损失需按场景分别评估，不能一概而论。
+> - **精度 / 时延权衡**：VIT INT4 主要**降显存 / 权重加载体积**；对 ViT 编码这类偏 compute-bound 的前向，W4A16 的时延收益有限（matmul 仍走 FP16 通路，见 [解码服务化 · TTFT 优化（§5.3）](../../general/infer-serving.html)）。但视觉特征的量化误差会沿 DeepStack 注入放大到 LLM 解码，对**细粒度识别**（植物种类、衣着属性）尤其敏感；收益与精度损失需按场景分别评估，不能一概而论。
 > - **恢复策略**（建议覆盖，而非把 INT4 当定论）：① VIT 回退 INT8 或对首尾敏感层做混合精度；② 扩充 / 对齐校准集到实际业务分布（见 2.2）；③ AdaRound / QAT 微调；④ 分场景验证——对掉点敏感的场景（植物 / 衣着）单独评估 VIT 精度档位。具体采用哪种以模型团队交付为准。
 
 ### 5.3 系统级优化亮点
@@ -318,11 +336,15 @@ graph LR
 > [!NOTE]
 > **内存泄漏排查（保稳定）**
 >
-> - **手段**：
+> - **CPU 侧进程内存**：
 >   - `ps -ef | grep android_test` 查 PID
->   - `pmap -x <pid> > /AI/mem_log.txt` 看 PSS 变化
->   - `tail /AI/mem_log.txt` 观察尾部趋势
-> - **结论**：场景切换时的内存波动属正常内存池分配/回收，PSS 峰值未单调递增，**排除内存泄漏**
+>   - `pmap -x <pid> > /AI/mem_log.txt` 看 PSS 变化，`tail /AI/mem_log.txt` 观察尾部趋势
+>   - 或 `cat /proc/<pid>/status | grep VmRSS` 看常驻内存
+> - **DSP/HTP 侧内存（必须一并看，PSS 不体现）**：Context Binary、graph 缓冲等 HTP 侧内存以 **dma-buf** 形式存在，**不计入 CPU 侧 PSS/VmRSS**——只看 `pmap` PSS 会漏掉 NPU 侧的泄漏：
+>   - `dmabuf_dump <pid>` 看该进程持有的 dma-buf 缓冲
+>   - 或遍历 `/proc/<pid>/fdinfo/` 里 dma-buf 类型的 fd 做统计
+> - **标准口径（与 1.2 架构图 `MEM[内存池 VmRSS + dma-buf]` 对齐）**：全站「推理进程占了多少内存」= **VmRSS + dma-buf 合计**；注意 **PSS ≠ VmRSS + dma-buf**，两套口径不可直接互比（见 [调试与工具链 · 内存监控与预警（§3.3）](../agent-framework/debug.html)）。
+> - **结论**：场景切换时的内存波动属正常内存池分配/回收。**排除泄漏要两套口径都不单调递增**——CPU 侧 PSS/VmRSS 峰值（实测未单调递增）与 DSP 侧 dma-buf 持有量需分别观察；若当时排查只覆盖了 `pmap` PSS、未用 `dmabuf_dump` 采样 dma-buf，则 NPU 侧口径**待补**，不能仅凭 PSS 就宣布「排除内存泄漏」。
 
 > [!IMPORTANT]
 > **系统稳定性防线（防崩溃）**
@@ -354,7 +376,7 @@ graph LR
 
 ### 7.1 量化精度与损失评估
 
-- **量化方案**：INT4（VIT + LLM，基模 + **7 条 LoRA 配置 / 5 个 adapter**，见 3.1；VIT INT4 的激进性与恢复策略见 5.2）
+- **量化方案**：**W4A16**（权重 INT4、激活 FP16；VIT + LLM，基模 + **7 条 LoRA 配置 / 5 个 adapter**，见 3.1；VIT INT4 的激进性与恢复策略见 5.2，W4A16 位宽组合的机制见 [量化 · W4A16（§3）](../../general/quantization.html)）
 - **0527 浮点 vs 端侧量化对比**：
   - 多数场景通过率差 **0~6pp**（nlg / 儿童遗留 / 遗留物近乎无损）
   - 植物 caption 约 **−10pp**
@@ -371,7 +393,10 @@ graph LR
 
 ### 7.3 前缀缓存 Token 数
 
-用 `tokenizer_qwen3.json` 对 11 个 prefix 的 system_prompt（含 `<|fim_prefix|>system…<|fim_suffix|>` sys_tags）逐条统计：**318~959 tokens、均值 ~634**。即每次推理可省去这段 prefill（上下文预算 cl2560、max_tokens 512）。11 个 prefix 与 5 个 adapter 的对应关系见 3.1。
+用 `tokenizer_qwen3.json` 对 11 个 prefix 的 system_prompt（含 `<|fim_prefix|>system…<|fim_suffix|>` sys_tags）逐条统计：**318~959 tokens、均值 ~610**（11 项之和 6709 ÷ 11 ≈ 610）。即每次推理可省去这段 prefill（上下文预算 cl2560、max_tokens 512）。11 个 prefix 与 5 个 adapter 的对应关系见 3.1。
+
+> [!NOTE]
+> **均值复算说明（修正旧版「~634」）**：旧版正文与 5.2 写「均值 ~634」，与下表 11 个值之和不符（6709 ÷ 11 ≈ 610），现已统一为 **~610**。用 `tokenizer_qwen3.json` + 最新模板（`vllm_sdk/models/template/*.yaml`）按 system sys_tags 包裹复算，**11 项中 10 项与下表逐值精确吻合**；唯一差异是 `znzs-nlg`（复算 751，下表记 770）——该 nlg prompt 在 0811 前后改过版，不同模板包复算值在 751~772 间浮动，下表沿用项目记录的 770，不影响均值量级（~608~610）。
 
 | prefix | 对应 system_prompt | tokens |
 | :--- | :--- | :--- |
@@ -386,3 +411,26 @@ graph LR
 | cnyb-left | incar_item_detect | 486 |
 | cnyb-cloth | dress_detect | 959 |
 | cnyb-child | person_desc | 414 |
+
+> [!IMPORTANT]
+> **上下文 / KV 预算核算（cl2560 够不够、前缀缓存收益为何因场景而异）**
+>
+> 单次推理的 prefill token 预算由四部分构成，必须一起核算（视觉 token 的 KV 占用推导见 [LLM 推理原理 · KV Cache（§3.2）](../../general/infer-principles.html)）：
+>
+> ```text
+> 总 prefill token ≈ 文本前缀(prefix, 可缓存) + 视觉 token(每帧, 不可被文本前缀缓存覆盖)
+>                    + 用户 query + 结构化拼接(stage2/3)
+> 上下文上限 cl2560，其中 max_tokens 512 预留给 decode 输出
+> ```
+>
+> **两档 VIT 各产生多少视觉 token**（按代码常量推导：qwen3 `patch_size=16`、`merge_size=2`，视觉 token = `(H/16/2)×(W/16/2)`；最终值以设备日志 `veg_output_tensors[0].Size()` 核实为准，**待核**）：
+>
+> | VIT 档位 | 分辨率 | 视觉 token/帧（推导） |
+> | :--- | :--- | :--- |
+> | 小档 | 448×448 | `(448/32)² = 14×14 ≈ 196` |
+> | 大档 | 1024×768 | `(1024/32)×(768/32) = 32×24 ≈ 768` |
+>
+> **关键结论**：
+> - **视觉 token 不被文本前缀缓存覆盖**——前缀缓存只省 system_prompt 那段文本 prefill，视觉 token 每帧都要重算（原理见 [解码服务化 · 前缀缓存节省比例（§1.3）](../../general/infer-serving.html)）。所以**视觉 token 占比越高，前缀缓存的相对收益越低**。
+> - 这正是前缀缓存收益因场景而异的根因，呼应 [AIService 后端集成 · 6.2](aiservice-integration.html) 的实测：舱内**遗留物走大档**（768 视觉 token/帧，见 3.2），视觉 token 多于其 prefix（cnyb-left 486），文本前缀缓存覆盖不到一半的 prefill，故 Agent100 端到端仅 **−0.1%**；而衣着走小档（196 视觉 token）、prefix（cnyb-cloth 959）占 prefill 大头，Agent200 达 **−10.8%**。
+> - **预算是否够**：以大档单帧为例，`prefix(~610) + 视觉(~768) + query + max_tokens(512)` 已接近 cl2560；多帧或长 query 场景需按此式核算是否触顶（触顶会触发 `finish_reason:"length"` 截断，见 aiservice 篇 3.8）。

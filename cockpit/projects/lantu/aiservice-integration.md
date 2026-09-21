@@ -20,6 +20,9 @@
 > - `include/models/model.hpp`（BaseLlm 抽象）、`include/models/register.hpp`（LlmRegistry）
 > - `src/runtime/model_runner.cpp`（调度）、`runtime/data/config/multi_lora_runtime_config.json`（配置）
 
+> [!IMPORTANT]
+> **基线口径（钉死）**：本篇描述的是 **2026-08-11 前缀缓存路径修复之后**的状态（修复提交 `786b01efd`）。注意：本地 / `origin` 上的 `lantu_aiservice_dev` 是 **07-30 的备份快照**（tag `backup/lantu_aiservice_dev-20260730`），**不含**该修复提交——若直接读该快照代码，看到的会是**修复前**的旧逻辑（三跳查表、`prefix_cache_path` 嵌在 ebnf 分支内、`info.json` 试两路径）。本文 3.2 / 3.3 / 3.4 一律按**修复后**口径描述，修复前的旧实现移入对应 CAUTION 作历史 bug 记录，勿把两者混读。
+
 ## 1. 背景与目标
 
 ### 1.1 为什么要换后端
@@ -71,10 +74,12 @@ aadkcore 把所有推理后端抽象成 `BaseLlm`（`include/models/model.hpp`�
 > [!NOTE]
 > **genai 在全树只有一个消费者**
 >
-> - `QnnModel`（`qnn_model.cpp`）是唯一 include genai 头、唯一调用 `aios::llms::*` / `aios::aisa::*`（27 个符号）的文件
+> - `QnnModel`（`qnn_model.cpp`）是唯一 include genai 头、唯一调用 `aios::llms::*` / `aios::aisa::*` 的文件
 > - `qnn_model.hpp` 是唯一 include genai 头的文件，且只被 `qnn_model.cpp` include
 >
 > 这条「单一消费者」事实是第 4 节解耦能干净落地的前提。
+>
+> **符号计数口径（勿混）**：源码层面 `qnn_model.cpp` 里 distinct 的 `aios::llms::*` / `aios::aisa::*` 限定名共 **9 个**（`Tensor`/`RetCode`/`ModelFactory`/`Context`/`Model`/`Prompt`/`Result`/`Deepstack` 等，合计出现 **29 次**）。旧版所写「27 个符号」是**链接产物 `.so` 里 genai 相关未定义符号**的计数口径（与源码 distinct 名不是一回事）；该 27 的具体测法（如 `nm -D --undefined-only libaadkcore.so` 过滤 genai 符号）**待核补**，引用时请注明是「源码 distinct 名」还是「.so 未定义符号」。
 
 ### 2.2 注册与路由：model_name 前缀决定后端
 
@@ -133,6 +138,11 @@ graph TB
     QNN -->|"aios::llms 符号"| GENAI["genai SDK llms.so + QNN HTP"]
 ```
 
+> [!NOTE]
+> **「场景默认基模」分支（`lora_id=-1`）在岚图形态无可达调用者，别拿它当「基模路径已覆盖」的证据**
+>
+> 上面第 1 条 `is_base_model_name(lora_name)`（空 / `__base__` / `base` / `base_model`）→ `lora_id=-1` 这条路径，在岚图 aiservice 形态**实测从未被走到**：2026-08-26 `android_test --agents 100,200,300` 共 **66 次推理，走该分支 0 次**（判总数用 `PERF: ModelRunner::inference leave`，所有路径都打）。原因是三个 dispatcher 全都在 `DataMessage` 上设了具名 `lora_name`（dress_detect=`LORA_CLOTHING`、incar_item_detect=`LORA_NAME`、outcar_qa 三处），`use BASE model`（`__base__` 强制基模）同样 0 次。因此**任何声称「上机验证覆盖了基模路径」的结论都不成立**——该分支只能靠单测 / 构造用例覆盖，不能靠现有上机链路。
+
 ## 3. aiservice 后端实现
 
 `AIService` 继承 `BaseLlm`，把每次推理翻译成一次对 `VoyahAIService` 的 HTTP 调用，再把流式响应解析回 token 回调。下面按「初始化 → 请求构造 → 流式解析」三段拆。
@@ -158,13 +168,26 @@ graph TB
 
 ### 3.2 初始化链路 initFromConfig
 
-`initFromConfig(config_path)` 做三件事：
+`initFromConfig(config_path)` 做三件事（**以下为 08-11 修复后口径**，修复前的 `info.json` 双路径试探见本节末 CAUTION）：
 
 1. **读 runtime 配置** —— 从 `config_path` 父目录找 `multi_lora_runtime_config.json`，按 `current_runtime`（=`8397`）取 `multi_lora.lora` 数组（7 条），逐条收进 `lora_extra_configs_[lora_path]`：
    - `ebnf_path` / `enable_jump_forward` / `lora_alpha`
-   - `grammar_root_rules` / `prefix_cache_paths` / `stream`
-2. **解析真实 model id** —— 读 `info.json`（依次试 `models/{name}/info.json`、`/AI/{name}/info.json`）拿 `id` 作为 `service_model_id_`（如 `qwen3_omni`）；读不到则回退用目录名并 `LOG_W`
+   - `grammar_root_rules` / `stream`
+   - （前缀缓存路径**不再**从这里解析——旧版的 per-lora `prefix_cache_paths` 已废弃，改由 8397 层的 `prefix_cache_base` 统一拼，见 3.4）
+2. **解析真实 model id** —— 读 `info.json` **只从 `model_root` 取**（`model_root` 是配置 `8397` 块里跟随的模型根目录，绝对路径；不再像旧版那样依次试 `models/{name}/info.json`、`/AI/{name}/info.json` 两条候选路径），拿 `id` 作为 `service_model_id_`（如 `qwen3_omni`）；读不到则回退用目录名并 `LOG_W`。`ebnf_path` / `prefix_cache_base` 可写**相对 `model_root` 的相对值**（随 OTA 双槽搬家只改配置），绝对值仍原样透传
 3. **装载模型** —— `loadModelInService()` 向 `/models/load` POST 一次，把模型挂进服务端
+
+**新增配置字段（08-11 修复引入）**：`8397` 层新增 **`prefix_cache_base`**——前缀缓存根目录（08-20 搬家后为相对 `model_root` 的 `prefix`）。请求侧的 `prefix_cache_path` 由 `prefix_cache_base + "/" + prefix_name` 拼出（见 3.4），不再依赖 per-lora 的 `prefix_cache_paths` 查表。
+
+> [!NOTE]
+> **`lora_extra_configs_` 按 `lora_path` 键控——同 adapter 的多条 scene 配置会合并进同一槽（跨 scene 合并语义）**
+>
+> 收集的键是 `lora_path`（adapter 名），**不是** scene_id。配置里 `cnyb` 被两条目复用——scene 1100（舱内遗留）与 scene 1200（衣着）的 `lora_path` 都是 `cnyb`——于是这两条的字段**合并进同一个 `lora_extra_configs_["cnyb"]`**：
+>
+> - `grammar_root_rules` 按 key 合并 → 合并后同时含 `cnyb-child`/`cnyb-left`（来自 1100）与 `cnyb-cloth`（来自 1200）三条规则
+> - `stream` 覆盖语义：**1200（衣着）条目没写 `stream`，会继承 1100（舱内）条目的 `stream:false`**——即 `stream_override=false` 从舱内条目「串」到了衣着场景。改任一 scene 的 `stream` 时要意识到它其实作用在整个 `cnyb` adapter 上
+>
+> 这是「按 adapter 而非按 scene 存配置」的固有语义，新增 scene / 调整 `stream` 前先想清楚合并后果。
 
 > [!WARNING]
 > **`config_path` 是承重字符串，但缺斜杠会静默失效**
@@ -175,6 +198,11 @@ graph TB
 > - 写 `config`（少斜杠）→ 退到上一层，`multi_lora_runtime_config.json` 找不到 → 只 `LOG_W` 后 **early return**
 >
 > 后者症状：lora / ebnf / prefix 全部静默失效，请求照发但约束解码与前缀缓存都不生效。
+
+> [!CAUTION]
+> **历史 bug（08-11 已修）：`info.json` 曾依次试两条候选路径**
+>
+> 修复前 `initFromConfig` 读 `info.json` 是**依次试** `config_path` 上两层的 `models/{name}/info.json` 与硬编码的 `/AI/{name}/info.json`——把模型根目录的一半写死进了 C++，与难点 5.2「绝不把绝对路径写进 C++」的原则冲突，且 OTA 双槽搬家时会指错。08-11（`786b01efd`）改为**只从配置跟随的 `model_root` 取**，搬家从此是改一行配置。
 
 ### 3.3 请求构造 buildRequestBody
 
@@ -189,7 +217,7 @@ graph TB
 | `response_format` | `{"type":"json_object"}` | **仅**无 EBNF 且 `mime=application/json` |
 | `extras.lora` | `{lora_adapter, lora_alpha}` | 有合法 `lora_id` |
 | `extras.ebnf_path` / `enable_jump_forward` / `grammar_root_rule` | 配置 | 有 `ebnf_path` **且** prefix 在 `grammar_root_rules` |
-| `extras.prefix_cache_path` | `resolvePrefixCachePath` | 上一条成立且路径非空 |
+| `extras.prefix_cache_path` | `prefix_cache_base + "/" + prefix_name`（**与 ebnf 解耦**，08-11 修复后） | prefix_name 非空**且**本地文件存在即附加——**11 个 prefix 全部附加**，不再受 ebnf/grammar 门控（见 3.4） |
 | 采样参数（`temperature`/`top_p`/`max_tokens`/`seed`/`*_penalty`） | — | **永不**（刻意注释禁用） |
 
 两处刻意设计：
@@ -209,25 +237,39 @@ graph TB
 
 ### 3.4 前缀缓存路径解析 resolvePrefixCachePath
 
-前缀缓存路径是**三跳查表**，任一跳缺失即返回空（不附加 `prefix_cache_path`）：
+**现行逻辑（08-11 修复后）**：前缀缓存路径直接由 `prefix_cache_base`（8397 层的前缀缓存根目录，见 3.2）与请求的 `prefix_name` 拼出，**与 ebnf / grammar 解耦**：
 
 ```
-lora_id → lora_extra_configs_[lora] → grammar_root_rules[prefix_name] → prefix_cache_paths[root_rule]
+prefix_cache_path = prefix_cache_base + "/" + prefix_name
 ```
 
-- 11 个 prefix 名与设备 `prefix/` 目录 1:1 对应
+- 仅当 `prefix_name` 非空**且本地存在性检查通过**才附加；否则返回空（不附加 `prefix_cache_path`）
+- 11 个 prefix 名与设备 `prefix/` 目录 1:1 对应 → **11 个 prefix 全部能拿到 `prefix_cache_path`**（08-11 终态实测 66/66 请求都带、0 条漏，见 6.1）
+- 不再走旧版的「三跳查表」、也不再受 ebnf 门控——无 grammar 的 caption / nlg 阶段同样能拿到 prefix
 
 > [!CAUTION]
-> **历史 bug：prefix 写入曾被嵌在 ebnf 分支里**
+> **历史 bug（08-11 已修）：prefix 曾是三跳查表、且写入嵌在 ebnf 分支里**
 >
-> 早期实现两处结构错误：
+> 修复前 `resolvePrefixCachePath` 是**三跳查表**，任一跳缺失即返回空（不附加 `prefix_cache_path`）：
+>
+> ```
+> lora_id → lora_extra_configs_[lora] → grammar_root_rules[prefix_name] → prefix_cache_paths[root_rule]
+> ```
+>
+> 两处结构错误：
 >
 > - `prefix_cache_path` 写入嵌在 ebnf 分支内 → 无 grammar 的 caption/nlg 阶段永远拿不到
 > - `prefix_cache_paths` 用 `grammar_root_rule` 做键 → dwsr/dwbs 都映射到 smgsr 无法区分
 >
-> 已改为 `prefix_cache_base + "/" + prefix_name`、与 ebnf 解耦、加本地存在性检查。
+> 已改为 `prefix_cache_base + "/" + prefix_name`、与 ebnf 解耦、加本地存在性检查（即上方现行逻辑）。
 >
 > 另：`ebnf_path` 的存在性检查**只告警不清空**——清空会翻转 `has_ebnf` 从而附加 `response_format`，改变请求形状。
+
+> [!WARNING]
+> **两条已知未解决项（与 prefix / grammar 文件相关）**
+>
+> 1. **`stream=false` + prefix 会坏（独立问题，未复查、未解决）**：非流式路径叠加前缀缓存时结果异常，当前上机链路靠 `cnyb` 的 `stream:false`（见 3.2 合并语义）与 prefix 同存，但该组合未被系统性复查；改 stream 行为或排查非流式结果异常时须先怀疑这条。
+> 2. **模型包升级会改名 / 删除 grammar 文件，配置旧文件名只告警、约束解码静默失效**：实测 260805 模型包相对 260625 把 `incabin_mm_sf_0420.txt` 改名为 `0527.txt`、并**移除了 `schema_nlg.txt`**。SDK 配置里若仍写旧文件名，`ebnf_path` 存在性检查**只 `LOG_E` 告警、不清空也不报错**（见上方 CAUTION），请求照发但**约束解码静默不生效**——症状是「输出格式突然不受约束」而非崩溃。换模型包后必须核对 grammar 文件名是否随之更新（与难点 5.5「grammar 是否真生效」是同一类排查）。
 
 ### 3.5 消息与多模态编码 buildOpenAIMessages
 
@@ -517,6 +559,9 @@ aiservice 形态比 genai 进程内直调多一跳本机 HTTP。这一跳既是�
 - stage2 / stage3：**各 15/16**
 - 唯一分歧 `animal_0`：stage1 输出与对方完全相同，差异出在我方 `outcar_process.hpp` 对「动物」的 `min 80×80` 门限（实测 83×68px）触发 `clear_bbox` 并跳过 stage2——**已确认以我方为准，属设计差异非回归**
 
+> [!NOTE]
+> **供应商对比的覆盖边界**：上面的 BanmaExample 对比**只覆盖 Agent300（舱外问答）链路**；**Agent100 / Agent200 从未与供应商示例做过对照**，它们只有「对我方历史基线」的对比（见下）。因此「与供应商一致」这一结论**不能外推到 Agent100/200**——这两条链路目前只有我方自洽证据。
+
 **对我方 08-07 基线**（08-11 终态）：Agent100 逐字段全同、Agent200 语义全同（仅 `*_conf` 抖动）、Agent300 16/17 全同（唯一变化「交通标志→交通标识」，且与参考实现一致）。
 
 **确定性**：同配置 Agent300 连跑两轮，stage1/2/3 **17/17 逐字节同**，仅 `confidence` 展示值抖动。
@@ -526,14 +571,21 @@ aiservice 形态比 genai 进程内直调多一跳本机 HTTP。这一跳既是�
 
 ### 6.2 性能验证
 
-**TTFT 分解**（2026-08-18 上机实测，只改 prompt 长度）：
+**TTFT 分解**（2026-08-18 上机实测，只改 prompt 长度；横轴为**字数**，非 token 数）：
 
 | 段 | 15 字 | 415 字 | 2015 字 | 行为 |
 | :--- | :--- | :--- | :--- | :--- |
 | 请求 → 开场帧（受理） | 26–36ms | 26–36ms | 26–36ms | 与 prompt 长度无关 |
-| 开场帧 → 首内容 token（prefill） | 79ms | 139ms | 539ms | 随 prompt 长度线性增长 |
+| 开场帧 → 首内容 token（prefill） | 79ms | 139ms | 539ms | 随 prompt 长度**近似线性、分段斜率**（见下 NOTE） |
 
 即 TTFT 可拆成 `受理` + `prefill` 两段；开场帧（`delta:{"role":"assistant"}`）标记「服务端已受理」而非 prefill 完成（详见难点 5.6）。
+
+> [!WARNING]
+> **此表用「字数」而非 token 数，缺 token 数与 MFU 假设无法判断合理性**
+>
+> - **分段斜率（不是严格线性）**：prefill 段 15→415 字斜率 ≈ `(139−79)/(415−15) ≈ 0.15 ms/字`；415→2015 字斜率 ≈ `(539−139)/(2015−415) ≈ 0.25 ms/字`——**后段斜率变陡**，故只能说「近似线性 / 分段」，不能说「线性增长」。
+> - **token 数待补**：要判断这些 prefill 时间是否合理，必须把字数换成 **tokenizer 实际 token 数**（原始测试 prompt 未在本地留存，**待补**；中文经 Qwen tokenizer 通常 <1 token/字，字数会高估 token 数）。
+> - **roofline 互核（方法，链 [LLM 推理原理 · Roofline（§2）](../../general/infer-principles.html)）**：`prefill 吞吐 = token 数 ÷ prefill 时间`，`有效算力 ≈ 2N × 吞吐`（N≈4B）。若**粗暴按「字数≈token 数」**折算，后段吞吐 ~2400–3700 tok/s、有效算力 **~20–30 TFLOPS**，已逼近通识层 FP16 峰值（常见 ~35 TFLOPS、保守 ~17，见 [原理篇 §2.2](../../general/infer-principles.html)）——对应 MFU 高达 0.5~0.9，远超 prefill 典型的 0.2~0.4。这说明**要么字/token 折算偏高、要么该段计时含非 prefill 成分**；在拿到实际 token 数与 MFU 假设前，不能据此表断言 prefill 效率，只能记录现象。
 
 **prefix 缓存提速**（08-11 全开 vs 08-07）：Agent300 **−7.9%**、Agent200 **−10.8%**、Agent100 **−0.1%**（新增 prefix 的 step2 −2.2%）。
 
