@@ -403,10 +403,10 @@
           "file": "ad/general/soc-platform.html",
           "badge": "Part 1",
           "status": "done",
-          "desc": "自动驾驶 SoC 全景（Orin/SA8650P/TDA4/EyeQ6）、异构计算架构、算力预算、功能安全分区",
+          "desc": "大模型级 SoC 全景（Orin/Thor/SA8650P/征程6P，低算力传统 ADAS 仅对照）、异构计算架构、算力预算、功能安全分区",
           "tags": [
             "SoC",
-            "Orin",
+            "Orin/Thor",
             "异构计算"
           ]
         },
