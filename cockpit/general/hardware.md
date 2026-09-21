@@ -572,9 +572,12 @@ echo performance > /sys/class/devfreq/<cdsp节点名>/governor
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **SA8397P** | Qualcomm | ~70 TOPS (INT8，估算) | 4nm | LPDDR5x, ~68 GB/s（估算） | ~20-25W | 高端座舱，支持端侧 LLM |
 | **SA8295P** | Qualcomm | ~30 TOPS (INT8) | 5nm | LPDDR5, ~51 GB/s | ~15-20W | 主流座舱，支持轻量模型 |
-| **Drive Orin** | NVIDIA | 275 TOPS (INT8, DLA+GPU) | 8nm (Samsung 8N) | LPDDR5, ~205 GB/s | ~45-60W | 智驾 + 座舱跨域 |
-| **Thor** | NVIDIA | ~2000 TOPS (FP8, GPU) | 4nm | LPDDR5X | ~100W+ | 下一代跨域中央计算 |
+| **Drive Orin** | NVIDIA | 254 TOPS (INT8 稀疏, DLA+GPU) | 8nm (Samsung 8N) | LPDDR5, ~205 GB/s | ~45-60W | 智驾 + 座舱跨域 |
+| **Thor** | NVIDIA | ~1000 TOPS (FP8 稀疏, GPU) | 4nm | LPDDR5X | ~100W+ | 新一代跨域中央计算（2025 起量产）|
 | **Journey 6 系列** | 地平线 | J6B ~10 / J6M ~128 / J6P ~560 TOPS (INT8) | 7nm | LPDDR5 | 因变体而异（估算） | 智驾为主，变体覆盖低中高档 |
+
+> [!NOTE]
+> **NVIDIA TOPS 口径**：表中 Drive Orin 254 TOPS 是**车规 DRIVE Orin（INT8 稀疏）**，勿与同 die 的 Jetson AGX Orin（275 TOPS）混用；Thor ~1000 TOPS 是 **FP8 稀疏、单 SoC** 口径（NVIDIA 早期宣传有「2000 TOPS」说法，含 FP4/不同配置，以官方规格书为准），且 FP8 与 Orin/HTP 的 INT8 TOPS **不可直接比大小**。详见 [自动驾驶算力平台](../../ad/general/soc-platform.html) §1。
 
 ### 8.2 端侧 LLM 可行性对比
 

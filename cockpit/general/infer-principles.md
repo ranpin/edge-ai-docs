@@ -40,6 +40,16 @@ LLM 自回归推理分为两个计算特性截然不同的阶段。理解这一�
 | **核心指标** | TTFT（Time To First Token） | TPOT（Time Per Output Token） |
 | **输出** | 首 token + 完整 KV Cache | 每步 1 个 token + 追加 KV |
 
+> [!NOTE]
+> **TTFT 与 TPOT 是两条不同的优化路径**
+>
+> 两阶段的瓶颈类型不同，决定了优化手段各归一边：
+>
+> - **TTFT（Prefill 侧，算力受限）**：靠前缀缓存、降低视觉 token 数、提升 prefill MFU、调度降排队——**权重量化对 TTFT 基本无用**（prefill 已 compute-bound，matmul 仍走 FP16 通路）。
+> - **TPOT（Decode 侧，带宽受限）**：靠减少每 token 读取字节——W4A16 权重、GQA/MLA、KV INT8、词表/LM head 优化，以及 batching 抬 AI。
+>
+> 把某个手段说成"既降 TTFT 又降 TPOT"之前，先判它作用在哪个阶段。两路径的完整归位表见 [端侧解码与服务化优化 · TTFT 优化 / 端到端优化](infer-serving.html)。
+
 ### 1.2 算术强度：别只算权重字节
 
 **算术强度**（Arithmetic Intensity, AI = FLOPs ÷ Bytes）是判断瓶颈类型的关键量。以线性层 `y = x·W` 为例：
@@ -59,6 +69,19 @@ FLOPs = 2 × batch × H_in × H_out
 > 简化式 `AI ≈ 2×batch / bytes_per_weight` 只在"权重读取占绝对主导"时成立。**长上下文 decode 时，KV Cache 的读取量会随 seq\_len 线性增长，甚至反超权重成为主导**——此时必须把 `KV_bytes(seq_len)` 算进分母，否则会高估算术强度、误判 bound 类型。权重 INT4 时：Prefill `AI ≈ 4S`，Decode（短上下文）`AI ≈ 4`。
 >
 > **把"反超点"量化**（示例参数）：权重读取约 2.5 GB/token 趟（§2.3），KV 读取 144 KB/token（FP16，§3.1），则 KV 读取追平权重读取需要 `2.5 GB ÷ 144 KB ≈ 1.7 万 token` 的上下文；INT8 KV（72 KB/token）则约 3.4 万 token。座舱典型上下文远小于此——**权重仍主导、简化式成立**；但方法上必须保留 `KV_bytes(seq_len)` 项：一旦进入长上下文场景，该项会成为主导项。
+
+> [!IMPORTANT]
+> **同一句话对 Prefill 也成立：别只算权重字节（漏掉的是激活）**
+>
+> Decode 漏的是 KV，**Prefill 漏的是激活**。`AI ≈ 4S` 只把权重放进分母，但 prefill 时 S 个 token 的中间激活（hidden、QKV、MLP intermediate 等）也要在 DDR 与片上之间往返，其字节数同样随 S 线性增长。完整写法：
+>
+> ```text
+> AI_prefill(S) = 2·N·S / (W_bytes + A·S)
+>   W_bytes : 权重，读一次，与 S 无关
+>   A       : 每 token 的激活 DDR 往返字节（示例：锚点约 MB 量级/token）
+> ```
+>
+> 关键结论：**AI_prefill 不会随 S 无限增长，而是趋于饱和值 `2N/A`**（示例参数下约数千 OPs/Byte）。饱和值仍远高于 Knee（§2.2 的 250~515），所以"prefill 在 S 较大时 compute-bound"的结论不变；但**不能拿 `4S` 外推到很大 S 去声称算力强度无限攀升**——激活项给它封了顶。§2.2 的 compute-bound 阈值用的是只含权重的简化式，量级与完整式一致（都在 S 百级），结论稳健。
 
 ## 2. Roofline 性能模型
 
@@ -99,6 +122,18 @@ Knee Point = 峰值算力 ÷ 内存带宽
 - **Prefill 在 S 较大时转 Compute-bound**：AI ≈ 4S，当 `4S > Knee` 即 **S > ~60~130**（示例，随 FP16 峰值取值：250÷4≈62，515÷4≈129）时转入算力受限。座舱典型 prompt（System + 用户输入 + 视觉 token）远超此区间，故 Prefill 通常是 Compute-bound。
 - 对比：若错误地用 INT8 峰值算出 Knee ≈ 1029，会把 Compute-bound 阈值推到 S ≈ 258——这正是量纲错配导致的偏差。
 
+> [!NOTE]
+> **执行模式的 2025-2026 演进：FP8 / FP4 与微缩放格式**
+>
+> §2.2 的核心原则——"先声明执行模式，再用该模式的峰值算力算 Knee"——在低精度快速演进的当下更要坚持。近两年的格局：
+>
+> - **数据中心 / 车规 GPU**：Hopper 起 **FP8（E4M3/E5M2）** 成为训练与推理主流；Blackwell 进一步引入 **FP4（NVFP4）** 与 OCP **微缩放格式（MXFP8/MXFP6/MXFP4，32 元素共享一个 E8M0 scale）**。NVIDIA **Thor**（Blackwell 架构，车规跨域计算）把 FP4 带到边缘 GPU 一侧（具体 TOPS 与 FP4 支持以厂商量产口径为准，**需核实**）。
+> - **端侧 Hexagon / HTP**：LLM 主链路目前仍以 **W4A16 / W8A16** 为主（HMX 数据通路 + 片上 dequant，见 [量化 · W4A16](quantization.html)）。**FP8 在 HTP 上是否可用，取决于 HTP 架构版本与所用 QAIRT 版本的算子/精度支持矩阵——不能默认有，需核实。**
+>
+> **对 roofline 的影响**：FP8/FP4 同时改变**峰值算力**（新数据通路）与**每权重量节**，所以换执行模式必须**重算 Knee**，不能沿用旧模式的阈值。
+>
+> **为什么锚点仍是 W4A16 而非 FP8**：decode 是带宽受限，INT4 每权重 0.5 字节，已压到任何 8-bit 格式（FP8 每权重 1 字节，无论 W8A8 还是 weight-only）的一半——FP8 对 decode 的权重读取没有额外收益，W8A8 形态还引入激活量化的精度风险。FP4 的吸引力在于**4-bit 下的精度**（浮点格式更抗 outlier）与**硬件原生通路**（免 dequant），而非比 INT4 更少的字节——它与 W4A16 是"同为 4-bit、不同数值格式"的关系。
+
 ### 2.3 Decode 带宽模型：速度的推导链
 
 Decode 每生成一个 token 都要读取全部权重，速度上限可精确推导：
@@ -123,6 +158,16 @@ decode 理论上限 = 有效带宽 ÷ 每 token 读取字节
 >
 > 2.5 GB 不是均匀的 INT4：transformer 权重是 INT4，**embedding / LM head 保留 FP16**（对精度敏感，见 §8.1）。其中 LM head = vocab × hidden × 2B ≈ 150K × 2560 × 2 ≈ **768 MB**（示例参数），decode 时**每个 token 都要全量读一遍**、做稠密 GEMV——单块约占每 token 带宽读取的 **30%**。这就是端侧常做 **LM head 量化、tied embedding（embedding 与 LM head 共享权重）、词表裁剪**的原因：LM head 量化与词表裁剪直接压低每 token 带宽读取，tied embedding 主要省一份权重内存（GEMV 读取本身不变）。
 
+> [!WARNING]
+> **"每 token 读 2.5 GB" 与 "总内存 2.5 GB" 不是一回事——别混用**
+>
+> 这两个口径都常被引用，但成立条件不同：
+>
+> - **每 token 带宽读取 ≈ INT4 transformer 权重 + 一份 FP16 词表（LM head）≈ 2.5 GB**——与 embedding/LM head 是否共享**无关**（输入 embedding 是 gather，decode 每 token 只取 1 行，可忽略）。§2.3 的带宽账用的是这个，恒成立。
+> - **"总权重内存 ≈ 2.5 GB"** 则**隐含 tied embedding**：embedding 与 LM head 共享同一张 FP16 表，只计一份。若两者是**独立**的两张表，总占用 ≈ INT4 transformer + 2×768 MB ≈ **3.3 GB**（示例参数），比 2.5 GB 多出近一份词表。
+>
+> 所以 §6.1 说"总内存不可能低于 2.5 GB"时，其下限对应 **tied embedding** 的锚点口径；若模型未 tied，下限要抬到 ~3.3 GB。锚点模型是否 tied 需按实际配置核实（同规模 Qwen3 稠密系默认 tied，但定制版以配置为准，**需核实**）。
+
 > [!NOTE]
 > **为什么端侧 Decode 远慢于云端？**
 >
@@ -132,7 +177,7 @@ decode 理论上限 = 有效带宽 ÷ 每 token 读取字节
 
 ### 3.1 KV Cache 内存公式
 
-KV Cache 是 LLM 推理内存的主要来源。**每 token 的 KV 字节数**由模型结构唯一决定：
+KV Cache 是**端侧长上下文的头号内存瓶颈**——权重内存是固定的，KV 却随上下文线性增长，多模态下更是按"帧"膨胀（§3.2）。**每 token 的 KV 字节数**由模型结构唯一决定：
 
 ```text
 KV_bytes/token = 2(K,V) × n_layers × n_kv_heads × head_dim × bytes_per_elem
@@ -163,6 +208,11 @@ KV_bytes/token = 2(K,V) × n_layers × n_kv_heads × head_dim × bytes_per_elem
 >
 > 上表是纯文本视角。对全模态锚点模型，**每帧画面 ≈ 576 个视觉 token**（口径见 [解码服务化 §1.3](infer-serving.html)），单帧 KV 占用 ≈ 576 × 144 KB ≈ **81 MB（FP16）/ 41 MB（INT8）**（示例参数）。换句话说，**2048 token 的上下文只装得下 ≈ 3.5 帧画面**——多模态场景做 KV 容量规划必须按"帧"数，而不是按"对话轮数"。
 
+> [!NOTE]
+> **位置外推（RoPE scaling / YaRN）解决的是"质量"，不是"内存"**
+>
+> 长上下文常提到 RoPE 外推 / YaRN（见 [训练 · 长上下文扩展](training.html)）——它们修复的是**模型在超出训练长度后注意力质量掉点**的问题，让模型"敢"用更长的上下文。但它们**不减少 KV 内存**：序列到多长，KV 就存多长，§3.1 的线性增长一个字节都不少。所以"端侧要上长上下文"是两件正交的事：① 用位置外推保住长序列的**效果**；② 用 KV 压缩（GQA/MLA、INT8、驱逐、或混合线性注意力，§3.3）把**内存**压进预算。只做 ① 不做 ②，内存先爆。
+
 ### 3.3 KV Cache 优化策略
 
 ```mermaid
@@ -176,6 +226,7 @@ graph TB
         O2["KV INT8KV 向量 FP16→INT8内存减半"]
         O3["GQA / MQA多 Query 共享 KV锚点模型已用 GQA"]
         O4["PagedAttention按页分配消除碎片"]
+        O5["架构级压缩MLA / 混合线性注意力见 §3.4"]
     end
     Standard -->|"优化"| Optimized
 ```
@@ -187,12 +238,60 @@ graph TB
 | **GQA / MQA** | 多 Query 共享 KV head | 减至 1/4~1/8 | 几乎无损 | 新一代模型原生支持 |
 | **PagedAttention** | 按页分配 KV，类似虚拟内存 | 消除碎片 | 无损 | 多并发、长序列 |
 
+> [!NOTE]
+> **服务侧的演进（与本篇的分工）**：PagedAttention 与连续批处理（Continuous Batching）在 2025 年的主流推理引擎（vLLM V1 一代）里已成为**默认路径**，并与前缀缓存、chunked prefill 深度耦合（具体默认项以引擎版本为准，**需核实**）。但那是**服务化/调度层**的话题——本篇只讲它作为 KV 内存管理手段的定位；端侧单 cDSP 上它到底做不做得起来（两套静态图、kernel 是否支持按 page table 取 KV），见 [端侧解码与服务化优化 · Continuous Batching](infer-serving.html)。
+
 > [!TIP]
 > **端侧推荐组合**
 >
 > 在 SA8397P 上部署锚点模型，推荐 **GQA（原生）+ KV INT8 + Sliding Window**。这套组合能把 KV Cache 控制在百 MB 级，为权重和运行时留出内存。
 >
 > **全模态补充**：由 §3.2，视觉 token 是 KV 大头——连续视频流下必须对视觉 token 施加更激进的策略：**驱逐最旧帧的 KV、视觉 KV 不入缓存（用完即弃）、或只对视觉 token 做滑窗**，否则几帧画面就能把 KV 预算吃光。
+
+### 3.4 架构级 KV 压缩（2024-2026 进展）
+
+§3.3 的策略都在"给定结构下省 KV"。近两年更根本的方向是**改注意力结构本身**，让每 token 要存的 KV 从源头变小——这对把 KV 当头号内存瓶颈的端侧（§3.1）尤其关键。
+
+**① MLA（Multi-head Latent Attention，DeepSeek-V2/V3 系）**
+
+标准 GQA 每 token 每层要存 `2 × n_kv_heads × head_dim`。MLA 把 K、V 联合压成一个低秩隐向量 `c_kv`（维 `d_c`），另存一个解耦的小 RoPE key `k_R`（维 `d_h^R`）保位置信息——缓存里只存 `(c_kv, k_R)`，与 KV 头数、head_dim 解耦：
+
+```text
+MLA 每 token 每层 KV = d_c + d_h^R   （vs GQA 的 2 × n_kv_heads × head_dim）
+
+示例参数（DeepSeek-V3 口径 d_c=512, d_h^R=64，需核实）:
+  MLA 风格:  (512 + 64) × 36 层 = 576 × 36 = 20736 elem/token
+    FP16 ≈ 40.5 KB/token,  INT8 ≈ 20 KB/token
+  锚点 GQA: FP16 = 144 KB/token（§3.1）
+  → MLA 风格约为锚点 GQA 的 1/3.6
+```
+
+| 结构 | 每 token KV（FP16） | 相对锚点 GQA |
+| :--- | :--- | :--- |
+| 锚点 GQA（8 KV head, head_dim 128） | 144 KB | 1× |
+| MLA 风格（d_c=512 + d_h^R=64，示例） | ~40 KB | ~1/3.6 |
+
+> [!IMPORTANT]
+> **MLA 是"用权重/算力换 KV 内存"的交易，端侧要算清两头**
+>
+> - **省的一头**：KV 缓存大幅缩小（上表 ~3.6×，公开论文报告较同规模 MHA 基线压缩约九成量级——具体比例**需核实**），且可与 KV 量化叠加（DeepSeek 把 c_kv 存 FP8）。对带宽/内存受限的端侧长上下文，这是直接红利。
+> - **花的一头**：为不在每步把 c_kv 展开成完整 K/V，实现通常把上投影权重**吸收**进 W_Q/W_O，**权重参数与 matmul FLOPs 反而变大**。decode 带宽受限场景下这笔交易通常划算（KV 省下的读取 > 多读的权重），但**权重内存会涨**，要重新核 §2.3 的账。
+> - **端侧落地前提**：QAIRT/Genie 能否把 MLA 的吸收式结构编成静态 graph、attention kernel 是否支持，**不能默认，需核实**。
+
+**② 混合线性注意力 / SSM（2025 年端侧最值得盯的方向）**
+
+线性注意力与状态空间模型（SSM）把"随序列增长的 KV"换成**固定大小的循环状态**——只有少数保留的全注意力层还存增长型 KV。2025 年的代表是**混合架构**：大多数层用线性注意力/SSM，按固定比例插入全注意力层做检索兜底，如 **Qwen3-Next**（Gated DeltaNet + Gated Attention 混合）、**Kimi Linear**（KDA）、**MiniMax-01**（lightning attention）、**Nemotron-H**、以及 **Mamba-2** 一脉（各模型层间比例与结构**需核实**）。
+
+对端侧的意义：**KV 不再是随上下文线性增长的项**，长上下文的头号内存瓶颈被结构性消除。代价是：scan/SSM 算子在 HTP 静态图上的支持、以及这类模型多为大参数量/MoE，端侧可得性**需核实**。
+
+**③ 稀疏注意力（NSA / MoBA / DeepSeek DSA，2025）**
+
+用轻量 indexer 每步只选 top-k 相关 token 参与注意力，把长上下文的注意力**算力**压到近常数（如 DeepSeek-V3.2-Exp 的稀疏注意力）。注意它**省的是注意力计算，不省 KV 存储**（KV 仍要全量留着供选择）——所以与 ①② 互补：稀疏注意力治 prefill/注意力的算力，MLA/线性注意力治 KV 内存。
+
+> [!TIP]
+> **端侧视角的一句话排序**
+>
+> 给定锚点这类 GQA 稠密模型，先吃满 §3.3 的 GQA + KV INT8 + 驱逐；结构级红利里，**MLA 与混合线性注意力对端侧长上下文的吸引力最大**（直接砍 KV 内存），但都以"运行时能在 HTP 上编出来"为前提——选型时把"结构 KV 压缩比"和"QAIRT 支持度"两栏一起看，别只看前者。
 
 ## 4. FlashAttention
 
@@ -279,13 +378,20 @@ FlashAttention kernel 通常以**针对 HVX/HMX 指令集优化的库**形式随
 | :--- | :--- | :--- |
 | **Prefill 长序列** | 高 | 序列越长收益越大 |
 | **Prefill 短序列** | 低，可能反而变慢 | 分块调度开销 > 带宽节省 |
-| **Decode** | 中 | Q 只有 1 行，分块意义有限 |
+| **Decode** | 中 | Q 只有 1 行，瓶颈是**读 KV**（带宽）而非写 N×N；分块仍避免长得分向量落 DDR，但收益远小于 prefill |
 | **多模态 Prefill** | 高 | ViT 输出大量视觉 token → 长序列 |
 
 > [!WARNING]
 > **端侧 FlashAttention 不是无条件优于标准 Attention**
 >
 > 输入序列很短时，分块调度和 Online Softmax 的开销可能超过节省的带宽。实际部署通常设一个**序列长度阈值**：短序列走标准 Attention，长序列走 FlashAttention。
+
+> [!NOTE]
+> **Decode 阶段的注意力：瓶颈换了，别套 prefill 的直觉**
+>
+> Prefill 的注意力痛点是 **N×N 得分矩阵写回 DDR**（§4.1），FlashAttention 治的就是它。Decode 时 Q 只有 1 行，得分向量只有 N 个元素、根本撑不爆 VTCM——**真正的瓶颈变成"每步把全部历史 KV 读一遍"的带宽**（正是 §1.2 里随 seq_len 增长、长上下文下反超权重的那一项）。所以 decode 的注意力优化方向不是"分块省写回"，而是**减少 KV 读取量**：GQA/MLA、KV INT8、驱逐（§3.3/§3.4）。
+>
+> GPU 上的 **Flash-Decoding**（沿 KV 维切分并行，提升 SM 占用）是另一回事——它解决的是 GPU 并行度，**在单 cDSP 的 HTP 上没有对应的并行红利**（§5.1），别把云端 decode 优化直接搬过来。
 
 ## 5. 执行与调度：单 cDSP 上的多 graph 时分复用
 
@@ -400,10 +506,13 @@ gantt
 **品牌演进**（面试时效性考点）：
 
 ```text
-SNPE (早期 DSP 推理) → QNN (统一神经网络 SDK) → QAIRT (2024 起统一品牌)
+SNPE (早期 DSP 推理) → QNN (统一神经网络 SDK) → QAIRT (统一品牌)
   Qualcomm AI Runtime (QAIRT) 统一了 SNPE 与 QNN，
   QNN 是其 SDK/API 层；Genie 是面向端侧 LLM 对话的运行时。
 ```
+
+> [!NOTE]
+> **时效口径（截至 2026-09）**：QAIRT 自 2024 年作为统一品牌推出后，到 2025-2026 已是高通端侧推理的**现行出货品牌**，按版本迭代发布；面试与文档里别再把"2024 刚统一"当作最新状态来讲——应表述为"QAIRT 是现行品牌、QNN 为其 SDK 层、Genie 为 LLM 运行时"。具体到某能力（如某算子/精度支持）落在哪个 QAIRT 版本，**以随附版本文档为准，需核实**。
 
 Genie 最初面向移动 Snapdragon 平台，**车规 SA8397P 的 QAIRT 组件集与支持范围未必与移动端完全相同**——整图（含 embedding / attention / LM head）能否全部落在 HTP 上，应以**随附 QAIRT 版本文档与实际 profile 为准**，不要默认断言"Genie 在移动端怎么做、这里就怎么做"。一般性结论仍然成立：把 embedding 或 LM head 单独切到 GPU/CPU 通常不划算——那意味着每步都要跨器件搬张量，代价大于收益（除非有明确 profiling 证据）。
 
