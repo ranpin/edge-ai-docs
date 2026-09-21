@@ -20,7 +20,7 @@
   function caret() { return '<svg class="en-caret" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'; }
 
   var CSS = [
-    '.en-cats{display:flex;align-self:stretch;align-items:stretch}',
+    '.en-cats{position:absolute;left:50%;transform:translateX(-50%);top:0;bottom:0;display:flex;align-items:center}',
     '.en-cat{position:relative;display:flex;align-items:center;margin:0 1px}',
     '.en-cat::after{content:"";position:absolute;left:0;right:0;top:100%;height:8px}',
     '.en-trigger{display:flex;align-items:center;gap:6px;padding:6px 12px;border:0;background:transparent;border-radius:8px;font:inherit;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;white-space:nowrap;transition:color .18s,background .18s}',
@@ -41,7 +41,7 @@
     '.en-logo-txt{transition:opacity .2s}',
     '.edit-btn{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:13px;color:var(--text2);text-decoration:none;margin-right:8px;white-space:nowrap;transition:color .18s,border-color .18s,background .18s}',
     '.edit-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accentL)}',
-    '@media(max-width:640px){.en-logo-txt{display:none}.top-nav .logo::before{margin-right:0}.en-trigger{padding:6px 9px}.edit-btn span{display:none}.edit-btn{padding:5px 8px}}'
+    '@media(max-width:640px){.en-cats{position:static;transform:none;align-self:stretch;align-items:stretch}.en-logo-txt{display:none}.top-nav .logo::before{margin-right:0}.en-trigger{padding:6px 9px}.edit-btn span{display:none}.edit-btn{padding:5px 8px}}'
   ].join('\n');
 
   /* Build the category dropdowns from docs.json's `categories` array.
