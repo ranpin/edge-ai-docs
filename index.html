@@ -217,13 +217,27 @@ function setupShelfMarquee(screen,scroll,track){
   }else{visible=true;layout();startLoop();}
   screen.addEventListener('mouseenter',function(){
     hovering=true;
-    if(overflows)removeClones(); // 内容超宽才去克隆便于拖拽；放得下时原地冻结，避免卡片被移出视口
-    scroll.classList.add('editing');
+    if(overflows){
+      // 内容超宽：去克隆，并把跑马灯位移 offset 等价转成 scrollLeft（transform 归零），
+      // 卡片视觉原地不动，且已滚到左侧的文档也进入可滚动范围，能用底部滚动条查看/拖拽
+      var rc=realCards();
+      var span=rc.length?(rc[rc.length-1].offsetLeft+rc[rc.length-1].offsetWidth)-rc[0].offsetLeft:0;
+      removeClones();
+      scroll.scrollLeft=Math.min(offset,Math.max(0,span-scroll.clientWidth));
+      track.style.transform='none';
+      scroll.classList.add('editing');
+    }
+    // 放得下（单卡）时原地冻结、不去克隆、不加滚动条，避免卡片被移出视口
   });
   screen.addEventListener('mouseleave',function(){
     renumberShelf(track);
-    scroll.classList.remove('editing');
-    scroll.scrollLeft=0;
+    if(overflows){
+      scroll.classList.remove('editing');
+      // 把编辑时的滚动位置转回跑马灯位移，原地恢复，不跳动
+      offset=scroll.scrollLeft;
+      scroll.scrollLeft=0;
+      track.style.transform='translateX('+(-offset)+'px)';
+    }
     hovering=false;
     layout();
     startLoop();
