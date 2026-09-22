@@ -1,4 +1,4 @@
-# 5. 场景 Agent 应用
+# 场景 Agent 应用
 
 *agent\_group 场景 Agent 插件库 · 基于 aadkcore AgentPlugin 接口 · `libagent_group.so`*
 

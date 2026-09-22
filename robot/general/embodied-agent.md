@@ -1,4 +1,4 @@
-# 4. 端侧 Embodied Agent
+# 端侧 Embodied Agent
 
 *机器人端侧 Agent 架构、LLM 推理引擎、Tool Use 与安全沙箱、多模态接地、记忆与层次化规划*
 

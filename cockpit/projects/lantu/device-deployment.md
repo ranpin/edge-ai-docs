@@ -1,4 +1,4 @@
-# 4. 设备部署与上车流程
+# 设备部署与上车流程
 
 *岚图 8397 · SDK 构建 → adb push → 设备目录 → android\_test / APK 运行 → 部署验证 · SELinux*
 

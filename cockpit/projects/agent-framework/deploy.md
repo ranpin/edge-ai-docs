@@ -1,4 +1,4 @@
-# 2. 设备部署
+# 设备部署
 
 *基于 Qualcomm SA8397P 平台  |  QNN 框架 · ISP 数据流 · 多模型调度 · Context Binary*
 

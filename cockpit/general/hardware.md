@@ -1,4 +1,4 @@
-# 1. SA8397P 硬件架构
+# SA8397P 硬件架构
 
 *Qualcomm Snapdragon Digital Chassis 系列座舱 SoC 硬件全景与 DSP 深度解析*
 

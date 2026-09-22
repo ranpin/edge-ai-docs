@@ -1,4 +1,4 @@
-# 2. 岚图 AI Service 后端集成与重构
+# 岚图 AI Service 后端集成与重构
 
 *多后端兼容架构 · AIService HTTP 后端实现 · 与 genai/QNN 形态解耦 · 上机踩坑复盘*
 

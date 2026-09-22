@@ -1,4 +1,4 @@
-# 5. LLM 推理原理与性能模型
+# LLM 推理原理与性能模型
 
 *基于 Qualcomm SA8397P 平台  |  Prefill/Decode · Roofline · KV Cache · FlashAttention · Genie/QAIRT*
 
