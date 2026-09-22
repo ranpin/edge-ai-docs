@@ -163,9 +163,9 @@ function renumberShelf(track){
   var partCards=cards.filter(function(c){var b=c.querySelector('.badge');return b&&/^Part\s*\d+$/i.test(b.textContent.trim());});
   partCards.forEach(function(c,i){c.querySelector('.badge').textContent='Part '+(i+1);});
 }
-// 屏幕跑马灯：克隆一份卡片实现无缝循环；悬停时去克隆、暂停，切成可拖拽单列
+// 屏幕跑马灯：克隆一份卡片实现无缝循环；仅进入视口时滚动，悬停时去克隆、暂停并切成可拖拽单列
 function setupShelfMarquee(screen,scroll,track){
-  var offset=0,hovering=false,setW=0,speed=0.7;
+  var offset=0,hovering=false,visible=false,setW=0,speed=0.7,rafId=null;
   function realCards(){return [].slice.call(track.querySelectorAll('.card:not(.shelf-clone)'));}
   function removeClones(){[].slice.call(track.querySelectorAll('.shelf-clone')).forEach(function(x){x.remove();});}
   function addClones(){
@@ -177,14 +177,24 @@ function setupShelfMarquee(screen,scroll,track){
     setW=(rc.length&&fc&&track.offsetParent)?(fc.offsetLeft-rc[0].offsetLeft):0;
   }
   function step(){
+    rafId=null;
     if(setW<=0)measure();
-    if(!hovering&&setW>0){
+    if(visible&&!hovering&&setW>0){
       offset+=speed;
       if(offset>=setW)offset-=setW;
       track.style.transform='translateX('+(-offset)+'px)';
     }
-    requestAnimationFrame(step);
+    if(visible)rafId=requestAnimationFrame(step);
   }
+  function startLoop(){if(rafId==null&&visible)rafId=requestAnimationFrame(step);}
+  function stopLoop(){if(rafId!=null){cancelAnimationFrame(rafId);rafId=null;}}
+  // 仅当屏幕进入视口才滚动（滚出视口暂停并停掉 rAF，避免多屏同时空转）
+  if('IntersectionObserver' in window){
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(e){visible=e.isIntersecting;if(visible)startLoop();else stopLoop();});
+    },{threshold:0});
+    io.observe(screen);
+  }else{visible=true;startLoop();}
   screen.addEventListener('mouseenter',function(){
     hovering=true;removeClones();offset=0;track.style.transform='none';scroll.classList.add('editing');
   });
@@ -193,7 +203,6 @@ function setupShelfMarquee(screen,scroll,track){
   });
   track.addEventListener('dragend',function(){renumberShelf(track);});
   addClones();
-  requestAnimationFrame(step);
 }
 
 // 兼容旧结构：老 docs.json 用扁平 groups；新结构用 categories(general + projects)
