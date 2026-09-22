@@ -195,6 +195,17 @@
         {
           "name": "岚图 8397 座舱 VLM 端侧量产",
           "period": "2026 至今",
+          "intro": {
+            "title": "项目简介 · 岚图 8397 座舱 VLM 端侧量产",
+            "file": "cockpit/projects/lantu/overview.html",
+            "badge": "简介",
+            "status": "done",
+            "desc": "摘要 · 演示视频/结果图 · 方法总览 · 实验方案总览（项目主页式简介）",
+            "tags": [
+              "摘要",
+              "方法总览"
+            ]
+          },
           "docs": [
             {
               "title": "GenAI 方案架构总览",
@@ -454,6 +465,17 @@
         {
           "name": "Alpamayo-Edge · 8B VLM 边缘量化部署",
           "period": "2026.07",
+          "intro": {
+            "title": "项目简介 · Alpamayo-Edge 8B VLM 边缘量化部署",
+            "file": "ad/projects/alpamayo-edge/overview.html",
+            "badge": "简介",
+            "status": "done",
+            "desc": "摘要 · 演示视频/结果图 · 方法总览 · 实验方案总览（项目主页式简介）",
+            "tags": [
+              "摘要",
+              "方法总览"
+            ]
+          },
           "docs": [
             {
               "title": "Cosmos-Reason2-8B · Orin 量化部署实战",
@@ -473,6 +495,17 @@
         {
           "name": "越野/非结构化场景专项",
           "period": "专项",
+          "intro": {
+            "title": "项目简介 · 越野/非结构化场景专项",
+            "file": "ad/projects/offroad/overview.html",
+            "badge": "简介",
+            "status": "done",
+            "desc": "摘要 · 演示视频/结果图 · 方法总览 · 实验方案总览（项目主页式简介）",
+            "tags": [
+              "摘要",
+              "方法总览"
+            ]
+          },
           "docs": [
             {
               "title": "越野与非结构化场景",
