@@ -125,26 +125,26 @@ function grid(docs,cid,section,project){
   return g;
 }
 
-// 项目简介入口卡（顶部独立 banner，点进简介页）
-function introCard(d){
+// 项目简介入口卡（顶部独立 banner，点进简介页）；cta 可自定义按钮文案
+function introCard(d,cta){
   var a=el('a','proj-intro');a.href=d.file;
   if(/^https?:\/\//.test(d.file)){a.target='_blank';a.rel='noopener noreferrer';}
   if(d.badge)a.appendChild(el('span','badge '+(BADGE[d.status]||'b-done'),d.badge));
   var line=el('div','pi-line');
   line.appendChild(el('span','pi-title',d.title));
-  line.appendChild(el('span','pi-cta','查看项目简介 →'));
+  line.appendChild(el('span','pi-cta',cta||'查看项目简介 →'));
   a.appendChild(line);
   if(d.desc)a.appendChild(el('p','pi-desc',d.desc));
   if(d.tags&&d.tags.length){var t=el('div','tags');d.tags.forEach(function(tag){t.appendChild(el('span','tag',tag));});a.appendChild(t);}
   return a;
 }
 // 书架：无边框屏幕（渐变发光边框），文档自动横向循环滚动；悬停暂停并切到可拖拽单列
-function shelf(docs,cid,project){
+function shelf(docs,cid,project,section){
   var wrap=el('div','shelf');
   var screen=el('div','shelf-screen');
   var scroll=el('div','shelf-scroll');
   var track=el('div','shelf-track');
-  track.dataset.sortable='1';track.dataset.cat=cid;track.dataset.section='project';track.dataset.project=project;
+  track.dataset.sortable='1';track.dataset.cat=cid;track.dataset.section=section||'project';if(project!=null)track.dataset.project=project;
   (docs||[]).forEach(function(d){
     var c=card(d);
     c.setAttribute('draggable','true');c.dataset.file=d.file;c.title='拖拽调整顺序';
@@ -300,11 +300,14 @@ function renderCategory(cat,cid){
   // 置顶导读（overview，固定不可拖）
   if(cat.overview)catalog.appendChild(grid([cat.overview]));
 
-  // 上半：通用文档（网格，可拖）
+  // 上半：通识文档 —— 面试文档做成简介式入口卡（内容不变），其余进书架
   var general=applyOrder(cat.general||[],saved.general,function(d){return d.file;});
   if(general.length){
     catalog.appendChild(el('div','subhead','通用文档 · 基础与面试'));
-    catalog.appendChild(grid(general,cid,'general'));
+    var interview=null,genOthers=[];
+    general.forEach(function(d){if(d.kind==='面试'&&!interview)interview=d;else genOthers.push(d);});
+    if(interview)catalog.appendChild(introCard(interview,'开始答题 →'));
+    if(genOthers.length)catalog.appendChild(shelf(genOthers,cid,null,'general'));
   }
   // 下半：项目（竖向时间轴，项目整体可上下拖）
   var projects=applyOrder(cat.projects||[],saved.projects,function(p){return p.name;});
