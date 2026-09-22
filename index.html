@@ -57,20 +57,24 @@ header p{color:var(--muted);font-size:15px;max-width:640px;margin:0 auto}
 .pi-cta{font-size:12px;font-weight:600;color:var(--accent);white-space:nowrap;margin-left:auto}
 .pi-desc{font-size:13px;color:var(--text2);margin:6px 0 8px}
 
-/* 书架：无边框屏幕 + 三脚架（文档横向滚动，可拖拽） */
-.shelf{margin-top:2px}
-.shelf-screen{position:relative;background:radial-gradient(140% 170% at 50% -10%,var(--accentL),var(--bg2) 60%);border-radius:14px;padding:18px 16px 12px;box-shadow:0 16px 40px rgba(0,0,0,.16),0 2px 8px rgba(0,0,0,.08);overflow:hidden}
+/* 书架：无边框屏幕（渐变发光边框），文档自动横向循环滚动；悬停暂停并切到可拖拽单列 */
+.shelf{position:relative;margin-top:2px}
+.shelf::before{content:'';position:absolute;inset:-3px;border-radius:19px;background:linear-gradient(120deg,#4361ee,#4cc9f0,#9b5de5,#4361ee);background-size:300% 300%;filter:blur(10px);opacity:.5;z-index:0;animation:shelfglow 8s linear infinite;pointer-events:none}
+.shelf-screen{position:relative;z-index:1;border:2px solid transparent;border-radius:16px;background:linear-gradient(var(--bg2),var(--bg2)) padding-box,linear-gradient(120deg,#4361ee,#4cc9f0,#9b5de5,#4361ee) border-box;background-size:auto,300% 300%;padding:18px 16px 12px;overflow:hidden;animation:shelfborder 8s linear infinite}
 .shelf-screen::after{content:'';position:absolute;top:0;left:8%;right:8%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);pointer-events:none}
-.shelf-scroll{display:flex;gap:14px;overflow-x:auto;padding:4px 2px 10px;scroll-snap-type:x proximity;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
-.shelf-scroll::-webkit-scrollbar{height:6px}
-.shelf-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
-.shelf-scroll::-webkit-scrollbar-track{background:transparent}
-.shelf-scroll .card{flex:0 0 280px;scroll-snap-align:start}
-.shelf-tripod{display:block;width:96px;height:26px;margin:-3px auto 0;stroke:var(--muted);stroke-width:2;stroke-linecap:round;fill:none;opacity:.9}
+@keyframes shelfglow{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@keyframes shelfborder{0%,100%{background-position:0 0,0% 50%}50%{background-position:0 0,100% 50%}}
+.shelf-scroll{position:relative;overflow:hidden}
+.shelf-scroll.editing{overflow-x:auto;scrollbar-width:thin}
+.shelf-scroll.editing::-webkit-scrollbar{height:6px}
+.shelf-scroll.editing::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.shelf-track{position:relative;display:flex;gap:14px;width:max-content;padding:4px 2px 10px;will-change:transform}
+.shelf-track .card{flex:0 0 280px}
+.shelf-clone{pointer-events:none}
 
 /* 拖拽排序 */
 .grid[data-sortable] .card{cursor:grab}
-.shelf-scroll[data-sortable] .card{cursor:grab}
+.shelf-track[data-sortable] .card{cursor:grab}
 .ptl-item[draggable]>.ptl-head{cursor:grab}
 .dragging{opacity:.35;cursor:grabbing!important}
 .reset-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:2px 10px;font-size:12px;color:var(--muted);cursor:pointer;margin-left:10px;transition:all .2s;vertical-align:middle}
@@ -135,30 +139,64 @@ function introCard(d){
   if(d.tags&&d.tags.length){var t=el('div','tags');d.tags.forEach(function(tag){t.appendChild(el('span','tag',tag));});a.appendChild(t);}
   return a;
 }
-// 三脚架（SVG，托住屏幕）：颈部 + 三条腿
-function tripod(){
-  var NS='http://www.w3.org/2000/svg';
-  var s=document.createElementNS(NS,'svg');
-  s.setAttribute('class','shelf-tripod');s.setAttribute('viewBox','0 0 120 30');s.setAttribute('aria-hidden','true');
-  function ln(x1,y1,x2,y2){var l=document.createElementNS(NS,'line');l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);s.appendChild(l);}
-  ln(60,0,60,8);ln(60,8,26,28);ln(60,8,94,28);ln(60,8,60,28);
-  return s;
-}
-// 书架：无边框屏幕（横向滚动、可拖拽）+ 三脚架
+// 书架：无边框屏幕（渐变发光边框），文档自动横向循环滚动；悬停暂停并切到可拖拽单列
 function shelf(docs,cid,project){
   var wrap=el('div','shelf');
   var screen=el('div','shelf-screen');
   var scroll=el('div','shelf-scroll');
-  scroll.dataset.sortable='1';scroll.dataset.cat=cid;scroll.dataset.section='project';scroll.dataset.project=project;
+  var track=el('div','shelf-track');
+  track.dataset.sortable='1';track.dataset.cat=cid;track.dataset.section='project';track.dataset.project=project;
   (docs||[]).forEach(function(d){
     var c=card(d);
     c.setAttribute('draggable','true');c.dataset.file=d.file;c.title='拖拽调整顺序';
-    scroll.appendChild(c);
+    track.appendChild(c);
   });
+  scroll.appendChild(track);
   screen.appendChild(scroll);
   wrap.appendChild(screen);
-  wrap.appendChild(tripod());
+  renumberShelf(track);
+  setupShelfMarquee(screen,scroll,track);
   return wrap;
+}
+// 按当前 DOM 顺序给 Part 徽章重新编号（保留原有编号集合，仅按位置重排）
+function renumberShelf(track){
+  var cards=[].slice.call(track.querySelectorAll('.card:not(.shelf-clone)'));
+  var partCards=cards.filter(function(c){var b=c.querySelector('.badge');return b&&/^Part\s*\d+$/i.test(b.textContent.trim());});
+  if(!partCards.length)return;
+  var nums=partCards.map(function(c){return parseInt(c.querySelector('.badge').textContent.replace(/^Part\s*/i,''),10);}).sort(function(a,b){return a-b;});
+  partCards.forEach(function(c,i){c.querySelector('.badge').textContent='Part '+nums[i];});
+}
+// 屏幕跑马灯：克隆一份卡片实现无缝循环；悬停时去克隆、暂停，切成可拖拽单列
+function setupShelfMarquee(screen,scroll,track){
+  var offset=0,hovering=false,setW=0,speed=0.7;
+  function realCards(){return [].slice.call(track.querySelectorAll('.card:not(.shelf-clone)'));}
+  function removeClones(){[].slice.call(track.querySelectorAll('.shelf-clone')).forEach(function(x){x.remove();});}
+  function addClones(){
+    removeClones();
+    realCards().forEach(function(c){var cl=c.cloneNode(true);cl.classList.add('shelf-clone');cl.removeAttribute('draggable');cl.setAttribute('aria-hidden','true');track.appendChild(cl);});
+  }
+  function measure(){
+    var rc=realCards(),fc=track.querySelector('.shelf-clone');
+    setW=(rc.length&&fc&&track.offsetParent)?(fc.offsetLeft-rc[0].offsetLeft):0;
+  }
+  function step(){
+    if(setW<=0)measure();
+    if(!hovering&&setW>0){
+      offset+=speed;
+      if(offset>=setW)offset-=setW;
+      track.style.transform='translateX('+(-offset)+'px)';
+    }
+    requestAnimationFrame(step);
+  }
+  screen.addEventListener('mouseenter',function(){
+    hovering=true;removeClones();offset=0;track.style.transform='none';scroll.classList.add('editing');
+  });
+  screen.addEventListener('mouseleave',function(){
+    renumberShelf(track);addClones();measure();scroll.classList.remove('editing');hovering=false;
+  });
+  track.addEventListener('dragend',function(){renumberShelf(track);});
+  addClones();
+  requestAnimationFrame(step);
 }
 
 // 兼容旧结构：老 docs.json 用扁平 groups；新结构用 categories(general + projects)
@@ -188,7 +226,7 @@ function saveContainerOrder(container){
   var cat=container.dataset.cat,section=container.dataset.section;
   var isProj=(section==='projects');
   var cls=isProj?'ptl-item':'card',attr=isProj?'project':'file';
-  var order=[].slice.call(container.children).filter(function(x){return x.classList&&x.classList.contains(cls);}).map(function(x){return x.dataset[attr];});
+  var order=[].slice.call(container.children).filter(function(x){return x.classList&&x.classList.contains(cls)&&!x.classList.contains('shelf-clone');}).map(function(x){return x.dataset[attr];});
   var all=loadAllOrder();
   if(!all[cat])all[cat]={};
   all[cat][isProj?'projects':(section==='general'?'general':'pdocs:'+container.dataset.project)]=order;
