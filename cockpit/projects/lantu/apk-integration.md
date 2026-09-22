@@ -1,4 +1,4 @@
-# 3. APK 集成与端侧服务化
+# APK 集成与端侧服务化
 
 *lantu\_demo 宿主 APK  |  Qwen3-Omni-4B + LoRA · JNI 桥接 · 本地 HTTP 服务 · 前台服务自愈*
 

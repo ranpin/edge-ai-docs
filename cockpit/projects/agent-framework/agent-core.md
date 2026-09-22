@@ -1,4 +1,4 @@
-# 3. aadkcore 核心框架
+# aadkcore 核心框架
 
 *自研端侧多平台 AI Agent 核心引擎 · C++17 · `libaadkcore.so`*
 

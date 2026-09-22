@@ -157,13 +157,11 @@ function shelf(docs,cid,project){
   setupShelfMarquee(screen,scroll,track);
   return wrap;
 }
-// 按当前 DOM 顺序给 Part 徽章重新编号（保留原有编号集合，仅按位置重排）
+// 按当前 DOM 顺序给 Part 徽章重新编号（从 1 开始，跟随拖拽后的位置）
 function renumberShelf(track){
   var cards=[].slice.call(track.querySelectorAll('.card:not(.shelf-clone)'));
   var partCards=cards.filter(function(c){var b=c.querySelector('.badge');return b&&/^Part\s*\d+$/i.test(b.textContent.trim());});
-  if(!partCards.length)return;
-  var nums=partCards.map(function(c){return parseInt(c.querySelector('.badge').textContent.replace(/^Part\s*/i,''),10);}).sort(function(a,b){return a-b;});
-  partCards.forEach(function(c,i){c.querySelector('.badge').textContent='Part '+nums[i];});
+  partCards.forEach(function(c,i){c.querySelector('.badge').textContent='Part '+(i+1);});
 }
 // 屏幕跑马灯：克隆一份卡片实现无缝循环；悬停时去克隆、暂停，切成可拖拽单列
 function setupShelfMarquee(screen,scroll,track){

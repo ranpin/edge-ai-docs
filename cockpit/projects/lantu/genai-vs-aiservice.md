@@ -1,4 +1,4 @@
-# 6. GenAI方案和AIService方案选型决策与端到端对比
+# GenAI方案和AIService方案选型决策与端到端对比
 
 *同设备（北京旧水冷）· 多维选型决策表 · infer_total 端到端总耗时 · 9 场景 28 用例*
 

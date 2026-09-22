@@ -1,4 +1,4 @@
-# 1. 岚图8397量产项目SDK：核心技术架构与优化总结
+# 岚图8397量产项目SDK：核心技术架构与优化总结
 
 *GenAI 方案 · Qwen3-Omni-4B 端侧部署 · AgentCore / AgentGroup 框架 · 性能优化体系*
 
