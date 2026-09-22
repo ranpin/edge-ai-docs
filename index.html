@@ -57,13 +57,12 @@ header p{color:var(--muted);font-size:15px;max-width:640px;margin:0 auto}
 .pi-cta{font-size:12px;font-weight:600;color:var(--accent);white-space:nowrap;margin-left:auto}
 .pi-desc{font-size:13px;color:var(--text2);margin:6px 0 8px}
 
-/* 书架：无边框屏幕（渐变发光边框），文档自动横向循环滚动；悬停暂停并切到可拖拽单列 */
-.shelf{position:relative;margin-top:2px}
-.shelf::before{content:'';position:absolute;inset:-3px;border-radius:19px;background:linear-gradient(120deg,#4361ee,#4cc9f0,#9b5de5,#4361ee);background-size:300% 300%;filter:blur(10px);opacity:.5;z-index:0;animation:shelfglow 8s linear infinite;pointer-events:none}
-.shelf-screen{position:relative;z-index:1;border:2px solid transparent;border-radius:16px;background:linear-gradient(var(--bg2),var(--bg2)) padding-box,linear-gradient(120deg,#4361ee,#4cc9f0,#9b5de5,#4361ee) border-box;background-size:auto,300% 300%;padding:18px 16px 12px;overflow:hidden;animation:shelfborder 8s linear infinite}
+/* 书架：无边框屏幕，边框为一道逆时针流动的渐变发光线条（从左上角出发绕一圈回到左上角）；文档自动横向循环滚动；悬停暂停可拖拽 */
+@property --shelfang{syntax:'<angle>';initial-value:0deg;inherits:false}
+.shelf{margin-top:2px}
+.shelf-screen{position:relative;--shelfang:0deg;border:2px solid transparent;border-radius:16px;background:linear-gradient(var(--bg2),var(--bg2)) padding-box,conic-gradient(from calc(var(--shelfang) + 315deg),rgba(67,97,238,.30) 0deg,rgba(67,97,238,.30) 40deg,#4cc9f0 75deg,#eaf7ff 100deg,#9b5de5 125deg,rgba(67,97,238,.30) 165deg,rgba(67,97,238,.30) 360deg) border-box;padding:18px 16px 12px;overflow:hidden;animation:shelfspin 5s linear infinite}
+@keyframes shelfspin{from{--shelfang:0deg}to{--shelfang:-360deg}}
 .shelf-screen::after{content:'';position:absolute;top:0;left:8%;right:8%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);pointer-events:none}
-@keyframes shelfglow{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
-@keyframes shelfborder{0%,100%{background-position:0 0,0% 50%}50%{background-position:0 0,100% 50%}}
 .shelf-scroll{position:relative;overflow:hidden}
 .shelf-scroll.editing{overflow-x:auto;scrollbar-width:thin}
 .shelf-scroll.editing::-webkit-scrollbar{height:6px}
