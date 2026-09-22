@@ -49,8 +49,28 @@ header p{color:var(--muted);font-size:15px;max-width:640px;margin:0 auto}
 .ptl-name{font-size:17px;font-weight:700}
 .ptl-period{font-size:11px;font-weight:600;color:var(--accent);background:var(--accentL);padding:2px 10px;border-radius:999px;white-space:nowrap}
 
+/* 项目简介入口卡（顶部独立，banner 式，点进简介页） */
+.proj-intro{display:block;position:relative;background:linear-gradient(135deg,var(--accentL),var(--bg2));border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:12px;padding:16px 20px;margin-bottom:20px;text-decoration:none;color:var(--text);transition:all .2s}
+.proj-intro:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.1);border-color:var(--accent)}
+.pi-line{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding-right:60px}
+.pi-title{font-size:16px;font-weight:700}
+.pi-cta{font-size:12px;font-weight:600;color:var(--accent);white-space:nowrap;margin-left:auto}
+.pi-desc{font-size:13px;color:var(--text2);margin:6px 0 8px}
+
+/* 书架：无边框屏幕 + 三脚架（文档横向滚动，可拖拽） */
+.shelf{margin-top:2px}
+.shelf-screen{position:relative;background:radial-gradient(140% 170% at 50% -10%,var(--accentL),var(--bg2) 60%);border-radius:14px;padding:18px 16px 12px;box-shadow:0 16px 40px rgba(0,0,0,.16),0 2px 8px rgba(0,0,0,.08);overflow:hidden}
+.shelf-screen::after{content:'';position:absolute;top:0;left:8%;right:8%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);pointer-events:none}
+.shelf-scroll{display:flex;gap:14px;overflow-x:auto;padding:4px 2px 10px;scroll-snap-type:x proximity;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.shelf-scroll::-webkit-scrollbar{height:6px}
+.shelf-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.shelf-scroll::-webkit-scrollbar-track{background:transparent}
+.shelf-scroll .card{flex:0 0 280px;scroll-snap-align:start}
+.shelf-tripod{display:block;width:96px;height:26px;margin:-3px auto 0;stroke:var(--muted);stroke-width:2;stroke-linecap:round;fill:none;opacity:.9}
+
 /* 拖拽排序 */
 .grid[data-sortable] .card{cursor:grab}
+.shelf-scroll[data-sortable] .card{cursor:grab}
 .ptl-item[draggable]>.ptl-head{cursor:grab}
 .dragging{opacity:.35;cursor:grabbing!important}
 .reset-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:2px 10px;font-size:12px;color:var(--muted);cursor:pointer;margin-left:10px;transition:all .2s;vertical-align:middle}
@@ -100,6 +120,45 @@ function grid(docs,cid,section,project){
     g.appendChild(c);
   });
   return g;
+}
+
+// 项目简介入口卡（顶部独立 banner，点进简介页）
+function introCard(d){
+  var a=el('a','proj-intro');a.href=d.file;
+  if(/^https?:\/\//.test(d.file)){a.target='_blank';a.rel='noopener noreferrer';}
+  if(d.badge)a.appendChild(el('span','badge '+(BADGE[d.status]||'b-done'),d.badge));
+  var line=el('div','pi-line');
+  line.appendChild(el('span','pi-title',d.title));
+  line.appendChild(el('span','pi-cta','查看项目简介 →'));
+  a.appendChild(line);
+  if(d.desc)a.appendChild(el('p','pi-desc',d.desc));
+  if(d.tags&&d.tags.length){var t=el('div','tags');d.tags.forEach(function(tag){t.appendChild(el('span','tag',tag));});a.appendChild(t);}
+  return a;
+}
+// 三脚架（SVG，托住屏幕）：颈部 + 三条腿
+function tripod(){
+  var NS='http://www.w3.org/2000/svg';
+  var s=document.createElementNS(NS,'svg');
+  s.setAttribute('class','shelf-tripod');s.setAttribute('viewBox','0 0 120 30');s.setAttribute('aria-hidden','true');
+  function ln(x1,y1,x2,y2){var l=document.createElementNS(NS,'line');l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);s.appendChild(l);}
+  ln(60,0,60,8);ln(60,8,26,28);ln(60,8,94,28);ln(60,8,60,28);
+  return s;
+}
+// 书架：无边框屏幕（横向滚动、可拖拽）+ 三脚架
+function shelf(docs,cid,project){
+  var wrap=el('div','shelf');
+  var screen=el('div','shelf-screen');
+  var scroll=el('div','shelf-scroll');
+  scroll.dataset.sortable='1';scroll.dataset.cat=cid;scroll.dataset.section='project';scroll.dataset.project=project;
+  (docs||[]).forEach(function(d){
+    var c=card(d);
+    c.setAttribute('draggable','true');c.dataset.file=d.file;c.title='拖拽调整顺序';
+    scroll.appendChild(c);
+  });
+  screen.appendChild(scroll);
+  wrap.appendChild(screen);
+  wrap.appendChild(tripod());
+  return wrap;
 }
 
 // 兼容旧结构：老 docs.json 用扁平 groups；新结构用 categories(general + projects)
@@ -227,14 +286,19 @@ function renderCategory(cat,cid){
       head.appendChild(el('span','ptl-name',p.name));
       if(p.period)head.appendChild(el('span','ptl-period',p.period));
       item.appendChild(head);
-      item.appendChild(grid(pdocs,cid,'project',p.name));
+      if(p.intro){
+        item.appendChild(introCard(p.intro));
+        item.appendChild(shelf(pdocs,cid,p.name));
+      }else{
+        item.appendChild(grid(pdocs,cid,'project',p.name));
+      }
       ptl.appendChild(item);
     });
     catalog.appendChild(ptl);
   }
 
-  // 绑定拖拽
-  [].slice.call(catalog.querySelectorAll('.grid[data-sortable]')).forEach(function(g){makeSortable(g,'.card',true);});
+  // 绑定拖拽（通用网格 + 项目网格 + 书架横向滚动区）
+  [].slice.call(catalog.querySelectorAll('[data-sortable][data-section="general"],[data-sortable][data-section="project"]')).forEach(function(g){makeSortable(g,'.card',true);});
   var ptlEl=catalog.querySelector('.ptl[data-sortable]');
   if(ptlEl)makeSortable(ptlEl,'.ptl-item',false);
 }
