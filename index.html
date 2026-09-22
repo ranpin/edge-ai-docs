@@ -174,27 +174,28 @@ function setupShelfMarquee(screen,scroll,track){
     removeClones();
     realCards().forEach(function(c){var cl=c.cloneNode(true);cl.classList.add('shelf-clone');cl.removeAttribute('draggable');cl.setAttribute('aria-hidden','true');track.appendChild(cl);});
   }
-  // 无缝循环：内容宽于屏幕→按一组宽度连续滚动；内容放得下→把克隆组推到「视口宽+组宽」之外，
-  // 整组循环、同屏只出现一组（单卡即始终只有这一张，不会重复）
+  // 无缝循环：内容宽于屏幕→循环距离=一组宽度(span+gap)；内容放得下→循环距离=视口宽+组宽，
+  // 把克隆组推到该距离处，整组循环、同屏只出现一组（单卡即始终只有这一张，且横穿整个书架宽度）。
+  // 注意：setW 与 marginLeft 全部直接计算，不在设置样式后读 offsetLeft（会读到重排前的旧值导致 setW 算错）。
   function layout(){
     var rc=realCards();
-    if(!rc.length||!track.offsetParent){needScroll=false;removeClones();track.style.margin='';return;}
+    if(!rc.length||!track.offsetParent){needScroll=false;removeClones();return;}
     var first=rc[0],last=rc[rc.length-1];
     var span=(last.offsetLeft+last.offsetWidth)-first.offsetLeft;
     var viewW=scroll.clientWidth;
+    var cs=getComputedStyle(track);
+    var gap=parseFloat(cs.columnGap)||parseFloat(cs.gap)||0;
     overflows=span>viewW+1;
     needScroll=true;
     if(!track.querySelector('.shelf-clone'))addClones();
     var fc=track.querySelector('.shelf-clone');
-    fc.style.marginLeft='';
-    var naturalDist=fc.offsetLeft-first.offsetLeft;
     if(overflows){
-      setW=naturalDist;
+      setW=span+gap;
+      fc.style.marginLeft='0px';
     }else{
-      fc.style.marginLeft=(viewW+span-naturalDist)+'px';
-      setW=fc.offsetLeft-first.offsetLeft;
+      setW=viewW+span;
+      fc.style.marginLeft=(viewW-gap)+'px';
     }
-    track.style.margin='';
   }
   function step(){
     rafId=null;
