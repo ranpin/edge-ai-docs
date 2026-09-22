@@ -163,46 +163,57 @@ function renumberShelf(track){
   var partCards=cards.filter(function(c){var b=c.querySelector('.badge');return b&&/^Part\s*\d+$/i.test(b.textContent.trim());});
   partCards.forEach(function(c,i){c.querySelector('.badge').textContent='Part '+(i+1);});
 }
-// 屏幕跑马灯：克隆一份卡片实现无缝循环；仅进入视口时滚动，悬停时去克隆、暂停并切成可拖拽单列
+// 屏幕跑马灯：内容宽于屏幕才克隆+无缝滚动；能放下则静态居中（修复单卡克隆出重复的 bug）。
+// 仅进入视口时滚动；悬停时去克隆、暂停并切成可拖拽单列。
 function setupShelfMarquee(screen,scroll,track){
-  var offset=0,hovering=false,visible=false,setW=0,speed=0.7,rafId=null;
+  var offset=0,hovering=false,visible=false,setW=0,speed=0.7,rafId=null,needScroll=false;
   function realCards(){return [].slice.call(track.querySelectorAll('.card:not(.shelf-clone)'));}
   function removeClones(){[].slice.call(track.querySelectorAll('.shelf-clone')).forEach(function(x){x.remove();});}
   function addClones(){
     removeClones();
     realCards().forEach(function(c){var cl=c.cloneNode(true);cl.classList.add('shelf-clone');cl.removeAttribute('draggable');cl.setAttribute('aria-hidden','true');track.appendChild(cl);});
   }
-  function measure(){
-    var rc=realCards(),fc=track.querySelector('.shelf-clone');
-    setW=(rc.length&&fc&&track.offsetParent)?(fc.offsetLeft-rc[0].offsetLeft):0;
+  // 真实卡片总宽超出视口才滚动；否则静态居中并移除克隆
+  function layout(){
+    var rc=realCards();
+    if(!rc.length||!track.offsetParent){needScroll=false;removeClones();track.style.margin='';return;}
+    var first=rc[0],last=rc[rc.length-1];
+    var span=(last.offsetLeft+last.offsetWidth)-first.offsetLeft;
+    needScroll=span>scroll.clientWidth+1;
+    if(needScroll){
+      if(!track.querySelector('.shelf-clone'))addClones();
+      var fc=track.querySelector('.shelf-clone');
+      setW=fc?(fc.offsetLeft-first.offsetLeft):0;
+      track.style.margin='';
+    }else{
+      removeClones();setW=0;offset=0;track.style.transform='none';track.style.margin='0 auto';
+    }
   }
   function step(){
     rafId=null;
-    if(setW<=0)measure();
-    if(visible&&!hovering&&setW>0){
+    if(visible&&!hovering&&needScroll&&setW>0){
       offset+=speed;
       if(offset>=setW)offset-=setW;
       track.style.transform='translateX('+(-offset)+'px)';
     }
-    if(visible)rafId=requestAnimationFrame(step);
+    if(visible&&needScroll)rafId=requestAnimationFrame(step);
   }
-  function startLoop(){if(rafId==null&&visible)rafId=requestAnimationFrame(step);}
+  function startLoop(){if(rafId==null&&visible&&needScroll)rafId=requestAnimationFrame(step);}
   function stopLoop(){if(rafId!=null){cancelAnimationFrame(rafId);rafId=null;}}
   // 仅当屏幕进入视口才滚动（滚出视口暂停并停掉 rAF，避免多屏同时空转）
   if('IntersectionObserver' in window){
     var io=new IntersectionObserver(function(entries){
-      entries.forEach(function(e){visible=e.isIntersecting;if(visible)startLoop();else stopLoop();});
+      entries.forEach(function(e){visible=e.isIntersecting;if(visible){layout();startLoop();}else{stopLoop();}});
     },{threshold:0});
     io.observe(screen);
-  }else{visible=true;startLoop();}
+  }else{visible=true;layout();startLoop();}
   screen.addEventListener('mouseenter',function(){
     hovering=true;removeClones();offset=0;track.style.transform='none';scroll.classList.add('editing');
   });
   screen.addEventListener('mouseleave',function(){
-    renumberShelf(track);addClones();measure();scroll.classList.remove('editing');hovering=false;
+    renumberShelf(track);scroll.classList.remove('editing');hovering=false;layout();startLoop();
   });
   track.addEventListener('dragend',function(){renumberShelf(track);});
-  addClones();
 }
 
 // 兼容旧结构：老 docs.json 用扁平 groups；新结构用 categories(general + projects)
