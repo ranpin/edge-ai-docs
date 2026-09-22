@@ -1,38 +1,33 @@
-# 1. 座舱端侧 Agent 总览
+# 大模型 Agent 框架 · 项目简介
 
-*端侧大模型选型、Agent 框架设计概述与场景应用概览*
+*端侧多模态大模型 Agent 框架的研发与应用 —— 摘要 · 演示 · 方法总览 · 实验方案*
 
 > [!TIP]
-> **本篇讲什么**
+> **关于本页**
 >
-> 座舱端侧 Agent 系统总览。系统由两个核心库组成：
+> 这是「大模型 Agent 框架的研发与应用」项目（2024.03 – 2025.10）的简介页，按项目主页 / 论文主页的方式组织：**摘要 → 演示视频·结果图 → 方法总览 → 实验方案总览**。各模块的工程详解见首页该项目书架，或方法总览各节中的链接。
+>
+> 系统由两个核心库组成：
 >
 > - **aadkcore**：提供统一模型接口、调度器、MCP/A2A 协议等基础设施（编译为 `libaadkcore.so`）
 > - **agent\_group**：基于 aadkcore 的插件接口实现各场景 Agent（编译为 `libagent_group.so`，运行时动态加载）
->
-> 本篇覆盖端侧大模型选型、Agent 框架设计概述与场景应用概览；aadkcore 的详解分为「运行时与模型」和「协议与运行时执行」两篇，加上场景 Agent 应用，见下方「核心模块导读」。
 
-## 1. 核心模块导读
+## 1. 摘要
 
-### 1.1 aadkcore 核心框架 · 运行时与模型
+本项目研发了一套面向智能座舱的**端侧多模态大模型 Agent 框架**，由基础设施库 **aadkcore** 与场景插件库 **agent\_group** 组成，目标是在车规级算力（SA8397P，Hexagon NPU 约 70 TOPS INT8）上离线运行多模态大模型，并驱动车控、主动视觉等场景 Agent。
 
-统一模型接口（ModelInstance）、模型调度器（ModelScheduler）、多音区对话管理（ChatHistory）、RAG 知识增强
+aadkcore 提供统一模型接口（ModelInstance）、模型调度器（ModelScheduler，LOW/NORMAL/HIGH/CRITICAL 四级优先级与抢占）、多音区对话管理（ChatHistory）、RAG 知识增强，以及 MCP 工具协议、A2A 协议、LLM Flow 与 Tool Use 运行时；通过平台适配层对接 **QNN（SA8397P）/ Lape（Jetson Orin）/ Bailian（云端 x86）** 三类推理后端。agent\_group 以插件形式实现**车辆控制（30+ 技能）、主动视觉（迎宾/送宾/行中三模式）、闲聊、GUI** 等场景 Agent。
 
-`C++17` · `ModelScheduler` · `ChatHistory` · `RAG`
+框架以 **Qwen3-Omni-4B**（INT4，原生支持文本/图像/音频/视频）为主推端侧模型，采用 **prompt 注入式**多模态数据流（车态以结构化文本注入、图像/音频走模型原生多模态输入），核心能力为 **Function Calling**（自然语言 → 意图解析 → Tool 调用 → 结果汇总）。设计强调端侧离线优先、安全分级（L1/L2/L3）与车态按技能裁剪以节省上下文预算。
 
-### 1.2 aadkcore · 协议与运行时执行
+## 2. 演示视频 / 结果图
 
-MCP 工具协议、A2A 协议、运行时与插件机制、LLM Flow 与 Tool Use、端云协同与安全沙箱（设计方向）
+> [!NOTE]
+> **待补充**：本节预留演示视频与结果图。可放置：语音车控复合指令演示、主动视觉迎宾/送宾/行中检测、GUI Agent 操作录屏、端侧推理性能（TTFT/TPS）实测截图、多音区对话效果等。
 
-`MCP` · `A2A` · `插件` · `Tool Use`
+## 3. 方法总览
 
-### 1.3 场景 Agent 应用
-
-车辆控制 Agent（30+ 技能）、主动视觉 Agent（迎宾/送宾/行中三模式，行中含危险行为/玩手机/睡觉/吃东西等多项视觉检测）、闲聊 Agent、GUI Agent、Prompt 模板工程、数据通路与 Fusion 通信
-
-`车控` · `主动视觉` · `闲聊` · `GUI Agent`
-
-## 2. 座舱大模型 Agent 架构
+### 3.1 整体架构
 
 先看框架的实际分层：应用层的场景 Agent 构建在 aadkcore 的统一 API 之上，内部实现调度、对话与 Tool 流程，最终通过平台适配层对接不同推理后端：
 
@@ -70,7 +65,7 @@ graph TD
 
 > 完整分层（代码目录结构、平台支持矩阵）见 [**aadkcore 核心框架**](agent-core.html)。
 
-### 2.1 端侧 LLM 选型对比
+### 3.2 端侧 LLM 选型
 
 在 SA8397P 级别硬件上（Hexagon NPU 约 70 TOPS INT8），可运行的端侧大模型需要兼顾推理速度、模型质量和内存占用。当前座舱场景的首选是 **Qwen3-Omni-4B**——原生支持文本、图像、音频、视频四种模态输入，非常契合座舱多模态交互需求：
 
@@ -99,7 +94,7 @@ graph TD
 >
 > 国内座舱场景首选 **Qwen3-Omni-4B**：原生支持音频输入/输出，省去独立 ASR+TTS 模块，系统架构更简洁；中文能力和 Function Calling 能力在同尺寸模型中领先。INT4 量化后内存约 2.5GB，SA8397P 可承载。如果延迟预算极紧，可用 Qwen3-1.7B 做意图识别前端 + Qwen3-Omni-4B 做复杂推理的级联架构——注意该前端只适用于**短 prompt 的纯意图分类**场景：端侧 TTFT 包含完整 prefill，随 prompt 长度增长，具体延迟预算应按带宽/roofline 模型推导，而非拍一个固定毫秒数。
 
-### 2.2 多模态输入与车态注入
+### 3.3 多模态输入与车态注入
 
 座舱 Agent 的输入是异构的：语音、图像、车辆状态、上下文。aadkcore 的做法是 **prompt 注入式**数据流——车辆状态与上下文以文本形式注入 prompt，图像/音频走模型的原生多模态输入，最终由 LLM Flow 分发到执行器：
 
@@ -149,9 +144,7 @@ graph LR
 >
 > 两个值得注意的工程取舍：① **车态按技能 mask 裁剪**——`to_carsignal_prompt` 只输出当前意图命中的技能对应的车态字段，而非把整车信号全量塞进 prompt，避免无谓拉长 prefill、挤占端侧本就紧张的上下文预算；② **CAN 边界在框架之外**——aadkcore 消费的是车控服务已经解析好的车辆状态 JSON 快照，不直接碰 CAN 总线，这样框架与具体车型的信号矩阵解耦，换车型只需上游适配。场景模板与技能体系详见 [**场景 Agent 应用**](agent-group.html)。
 
-## 3. 端侧 Agent 框架设计
-
-### 3.1 Function Calling 流程
+### 3.4 Function Calling 流程
 
 端侧 Agent 的核心能力是 Function Calling：用户发出自然语言指令，LLM 解析意图后调用注册的 Tool 完成操作，最后将结果汇总回复用户。下面以一个典型的复合指令为例：
 
@@ -177,9 +170,9 @@ sequenceDiagram
 > [!NOTE]
 > **图里的 "Tool Router" 对应到代码是什么**
 >
-> 框架里没有一个叫 "Tool Router" 的独立类，这一步实际由 Flow 引擎的 `FunctionHandler::handle_function_calls_async` 完成：LLM 返回的每个 function call 按名字在 `tools_dict` 里查表定位到 `BaseTool`，依次跑 before-tool 回调（`before_tool_callback`）→ 执行工具 → after-tool 回调（`after_tool_callback`）（回调可拦截或改写参数/结果，这是做安全校验和车控 shortcut 的挂点），最后把本轮所有工具结果**合并成一条 user 角色消息**回填给 LLM 生成最终回复。图里画成"并行分发"是为表达复合意图，但当前实现是**顺序执行后合并**——真正的并行 Tool 执行见 §3.2「并发调度」里的说明（设计方向）。
+> 框架里没有一个叫 "Tool Router" 的独立类，这一步实际由 Flow 引擎的 `FunctionHandler::handle_function_calls_async` 完成：LLM 返回的每个 function call 按名字在 `tools_dict` 里查表定位到 `BaseTool`，依次跑 before-tool 回调（`before_tool_callback`）→ 执行工具 → after-tool 回调（`after_tool_callback`）（回调可拦截或改写参数/结果，这是做安全校验和车控 shortcut 的挂点），最后把本轮所有工具结果**合并成一条 user 角色消息**回填给 LLM 生成最终回复。图里画成"并行分发"是为表达复合意图，但当前实现是**顺序执行后合并**——真正的并行 Tool 执行见 §3.5「并发调度」里的说明（设计方向）。
 
-### 3.2 Tool Use 设计要点
+### 3.5 Tool Use 设计要点
 
 端侧 Agent 的 Tool 体系需要兼顾灵活性和安全性。以下是关键设计考量：
 
@@ -192,7 +185,7 @@ sequenceDiagram
 | **错误处理** | 重试 + 降级 + 告知 | Tool 调用失败时：先重试 1 次 → 尝试降级方案 → 告知用户并建议替代操作。 |
 | **并发调度** | ModelScheduler 优先级/抢占（已实现）+ 场景 scenario_id 路由；A2A 为可选协议、未用于此链路 | 两层机制要分开看：**模型层**由 ModelScheduler 对并发推理请求做优先级/抢占调度——LOW/NORMAL/HIGH/CRITICAL 四级、`PreemptAndSubmit` 抢占低优任务、按「优先级+等待时长」加权出队、`BoostPriority` 动态提权，这是已实现的；**Agent 层**当前是 SystemAgent/SystemAgentDispatcher 按 `scenario_id` 经 Fusion/DataTransport IPC 把消息路由给 dlopen 进来的 agent_group 场景插件，属于**场景分发**而非 A2A 并行编排。aadkcore 里 A2A 协议本身是实现好的（与 a2a-protocol.org 规范对齐的 A2AClient/A2AServer，含多 agent 共服务示例），但 agent_group 目前没有任何 A2A 用法，因此「SystemAgent 经 A2A 把子任务并行分发给各场景 Agent」应视为**设计方向**而非现状。基于 DAG 依赖分析的 Tool 自动并行同为设计方向（未实现）。见 [**协议与运行时执行**](agent-protocols.html)。 |
 
-### 3.3 记忆系统
+### 3.6 记忆系统
 
 端侧 Agent 的记忆分三层，对应到 aadkcore 的实现程度并不一样：
 
@@ -202,7 +195,7 @@ sequenceDiagram
 
 实现细节与端侧/云端记忆取舍见 [**aadkcore 核心框架**](agent-core.html)。座舱场景下驾驶习惯与个人偏好属高敏感数据，端侧记忆（零上传、零网络延迟、完全离线可用）是首选方案；也正因为落在端侧，记忆容量和检索成本都受限，所以框架把「认人」做成轻量的关键人物 alias 机制，而不是在端上维护一个重量级的向量记忆库。
 
-## 4. 座舱场景 Agent 应用
+### 3.7 座舱场景 Agent 应用
 
 典型座舱场景由 agent\_group 插件库中的各 Agent 落地，涵盖语音交互、主动安全、个性化推荐和多模态融合：
 
@@ -217,3 +210,8 @@ sequenceDiagram
 > **LLM 推理优化**
 >
 > KV Cache、Roofline、推理引擎对比 → [**LLM 推理原理与性能模型**](../../general/infer-principles.html)；投机采样、约束解码、TTFT/端到端延迟优化 → [**端侧解码与服务化优化**](../../general/infer-serving.html)；量化 → [**端侧模型量化与压缩**](../../general/quantization.html)
+
+## 4. 实验方案总览
+
+> [!NOTE]
+> **待补充**：本节预留实验方案。可放置：评测集与指标（意图识别准确率、Tool 调用成功率、多音区认人准确率、TTFT/TPS/端到端延迟）、消融设计（车态裁剪、prefix 缓存、量化精度）、端侧 vs 云端对比、多车型/多平台泛化等。

@@ -135,6 +135,9 @@ def load_titles():
             for doc in cat.get('general', []):
                 titles[doc['file']] = doc['title']
             for p in cat.get('projects', []):
+                intro = p.get('intro')
+                if intro:
+                    titles[intro['file']] = intro['title']
                 for doc in p.get('docs', []):
                     titles[doc['file']] = doc['title']
     except Exception as e:
