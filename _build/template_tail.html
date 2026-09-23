@@ -1,6 +1,7 @@
 <!-- ===== Scripts at bottom ===== -->
 <script defer src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
 <script defer src="https://unpkg.com/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+<script defer src="https://unpkg.com/@highlightjs/cdn-assets@11/highlight.min.js"></script>
 <script>
 var b=document.getElementById('themeBtn');
 b.onclick=function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('theme',h.dataset.theme)}catch(e){}};
@@ -49,8 +50,16 @@ async function renderMermaidAll(){
   }catch(e){}
   setupPanZoom();
 }
+function highlightCode(){
+  if(typeof hljs==='undefined')return;
+  document.querySelectorAll('pre code').forEach(function(el){
+    if(el.getAttribute('data-highlighted'))return;
+    try{hljs.highlightElement(el);}catch(e){}
+  });
+}
 window.addEventListener('load',function(){
   renderMermaidAll();
+  highlightCode();
   pzObs=new MutationObserver(function(){clearTimeout(window._pzt);window._pzt=setTimeout(setupPanZoom,200);});
   pzObs.observe(document.body,{childList:true,subtree:true});
   setTimeout(setupPanZoom,1500);

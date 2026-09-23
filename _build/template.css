@@ -52,6 +52,18 @@ tr:nth-child(even){background:var(--bg2)}
 pre{background:var(--bg3);border-radius:7px;padding:14px;overflow-x:auto;font-size:13px;margin:10px 0}
 code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 :not(pre)>code{background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--accent)}
+/* highlight.js 代码高亮：token 颜色跟随明暗主题，背景沿用 pre 的 var(--bg3) */
+:root{--hl-text:#24292e;--hl-keyword:#d73a49;--hl-string:#0a3069;--hl-comment:#6a737d;--hl-number:#005cc5;--hl-title:#6f42c1;--hl-attr:#e36209;--hl-name:#22863a}
+[data-theme=dark]{--hl-text:#c9d1d9;--hl-keyword:#ff7b72;--hl-string:#a5d6ff;--hl-comment:#8b949e;--hl-number:#79c0ff;--hl-title:#d2a8ff;--hl-attr:#ffa657;--hl-name:#7ee787}
+.hljs{background:transparent;padding:0;color:var(--hl-text)}
+.hljs-comment,.hljs-quote{color:var(--hl-comment);font-style:italic}
+.hljs-keyword,.hljs-selector-tag,.hljs-literal,.hljs-doctag,.hljs-type,.hljs-name,.hljs-strong,.hljs-deletion{color:var(--hl-keyword)}
+.hljs-string,.hljs-regexp,.hljs-addition,.hljs-attribute{color:var(--hl-string)}
+.hljs-number,.hljs-symbol,.hljs-bullet,.hljs-link,.hljs-meta,.hljs-variable,.hljs-template-variable{color:var(--hl-number)}
+.hljs-title,.hljs-title.function_,.hljs-title.class_,.hljs-section,.hljs-built_in,.hljs-class .hljs-title{color:var(--hl-title)}
+.hljs-attr,.hljs-params,.hljs-selector-attr,.hljs-selector-pseudo{color:var(--hl-attr)}
+.hljs-tag,.hljs-selector-id,.hljs-selector-class{color:var(--hl-name)}
+.hljs-emphasis{font-style:italic}
 ol.steps{margin:10px 0 10px 20px;color:var(--text2)}
 ol.steps li{margin-bottom:6px}
 ol.steps code{font-size:12px}
