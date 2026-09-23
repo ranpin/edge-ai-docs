@@ -73,7 +73,11 @@ def convert_alerts(md_text):
             body = body[tm.end():].strip()
         body_html = md_to_html_fragment(body)
         cls = 'info-box' + ((' ' + variant) if variant else '')
-        title_html = f'<div class="title">{title}</div>' if title else ''
+        title_html = ''
+        if title:
+            # 标题也走行内 markdown：反引号→<code>、<tag> 转义，避免裸标签被浏览器吞掉
+            t = re.sub(r'^<p>|</p>$', '', md_to_html_fragment(title).strip())
+            title_html = f'<div class="title">{t}</div>'
         out.append(f'<div class="{cls}">{title_html}{body_html}</div>')
         out.append('')
     return '\n'.join(out)
