@@ -14,6 +14,9 @@ header{text-align:center;margin-bottom:32px}
 h1{font-size:32px;font-weight:800;margin-bottom:8px}
 header p{color:var(--muted);font-size:15px;max-width:640px;margin:0 auto}
 .theme-btn{position:fixed;top:16px;right:16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;font-size:16px;color:var(--text);z-index:100}
+/* 嵌入模式（被主站 iframe 内嵌，?embed=1）：隐藏页头大标题，只留标签+内容 */
+html.embed header{display:none}
+html.embed .wrap{padding-top:20px}
 
 /* 分类切换标签（三个大类各自成页） */
 .tabs{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:44px}
@@ -92,6 +95,8 @@ footer{text-align:center;margin-top:56px;padding:20px;color:var(--muted);font-si
   <footer>Edge AI Docs -- 算法训练/微调 | 部署与优化 | Agent 框架 <button class="reset-btn" id="resetOrder" style="display:none">恢复默认排序</button></footer>
 </div>
 <script>
+// 嵌入模式（?embed=1，被主站 iframe 内嵌时隐藏页头大标题）
+if(/[?&]embed=1\b/.test(location.search))document.documentElement.classList.add('embed');
 // 主题切换
 var b=document.getElementById('themeBtn');
 b.onclick=function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('theme',h.dataset.theme)}catch(e){}};
