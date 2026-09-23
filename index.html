@@ -22,8 +22,6 @@ header p{color:var(--muted);font-size:15px;max-width:640px;margin:0 auto}
 .tab.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 4px 14px rgba(67,97,238,.3)}
 
 /* 大类内容 */
-.cat-name{font-size:24px;font-weight:800;display:flex;align-items:baseline;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:24px}
-.cat-note{font-size:13px;font-weight:500;color:var(--muted)}
 .subhead{font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:2px;margin:24px 0 14px;display:flex;align-items:center;gap:8px}
 .subhead::after{content:'';flex:1;height:1px;background:var(--border)}
 
@@ -341,10 +339,6 @@ function renderCategory(cat,cid){
   var catalog=document.getElementById('catalog');
   catalog.innerHTML='';
   var saved=loadAllOrder()[cid]||{};
-  var name=el('div','cat-name');
-  name.appendChild(el('span',null,cat.name));
-  if(cat.note)name.appendChild(el('span','cat-note',cat.note));
-  catalog.appendChild(name);
 
   // 上半：通识文档 —— 面试文档做成简介式入口卡（内容不变），其余进书架
   var general=applyOrder(cat.general||[],saved.general,function(d){return d.file;});
