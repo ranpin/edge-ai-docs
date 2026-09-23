@@ -50,16 +50,58 @@ async function renderMermaidAll(){
   }catch(e){}
   setupPanZoom();
 }
-function highlightCode(){
-  if(typeof hljs==='undefined')return;
-  document.querySelectorAll('pre code').forEach(function(el){
-    if(el.getAttribute('data-highlighted'))return;
-    try{hljs.highlightElement(el);}catch(e){}
-  });
-}
+/* ===== 代码块语言切换器（解耦设计）=====
+ * CodeLang.highlight(code, lang)：纯高亮逻辑——按指定语言（lang 空则自动检测）高亮一个 <code>，与 UI 无关。
+ * CodeLang.init()：为每个 pre>code 初始高亮，并在代码框右上角挂语言选择器；选择即调 highlight 重新高亮。
+ * 语言清单直接取 hljs.listLanguages()，不硬编码——highlight.js 增删语言无需改这里。 */
+var CodeLang=(function(){
+  function highlight(code,lang){
+    if(typeof hljs==='undefined')return;
+    var text=code.textContent,r;
+    try{
+      r=lang?hljs.highlight(text,{language:lang,ignoreIllegals:true}):hljs.highlightAuto(text);
+      code.innerHTML=r.value;
+      code.className='hljs'+(r.language?' language-'+r.language:'');
+      code.setAttribute('data-highlighted','yes');
+    }catch(e){}
+  }
+  function langOf(code){
+    var m=(code.className||'').match(/language-([\w+-]+)/);
+    return m?m[1]:'';
+  }
+  function makeSelect(code,langs){
+    var sel=document.createElement('select');
+    sel.className='lang-select';
+    sel.title='切换语法高亮语言';
+    var cur=langOf(code);
+    [''].concat(langs).forEach(function(l){
+      var o=document.createElement('option');
+      o.value=l;o.textContent=l||'auto';
+      if(l===cur)o.selected=true;
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change',function(){highlight(code,sel.value);});
+    return sel;
+  }
+  function init(){
+    if(typeof hljs==='undefined')return;
+    var langs=hljs.listLanguages().sort();
+    document.querySelectorAll('pre').forEach(function(pre){
+      var code=pre.querySelector('code');
+      if(!code||pre.closest('.mermaid-wrap')||(pre.parentNode&&pre.parentNode.classList.contains('code-block')))return;
+      highlight(code,langOf(code));
+      var wrap=document.createElement('div');
+      wrap.className='code-block';
+      pre.parentNode.insertBefore(wrap,pre);
+      wrap.appendChild(pre);
+      wrap.insertBefore(makeSelect(code,langs),pre);
+    });
+  }
+  return {init:init,highlight:highlight};
+})();
 window.addEventListener('load',function(){
   renderMermaidAll();
-  highlightCode();
+  CodeLang.init();
   pzObs=new MutationObserver(function(){clearTimeout(window._pzt);window._pzt=setTimeout(setupPanZoom,200);});
   pzObs.observe(document.body,{childList:true,subtree:true});
   setTimeout(setupPanZoom,1500);

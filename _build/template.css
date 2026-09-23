@@ -64,6 +64,11 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:13px}
 .hljs-attr,.hljs-params,.hljs-selector-attr,.hljs-selector-pseudo{color:var(--hl-attr)}
 .hljs-tag,.hljs-selector-id,.hljs-selector-class{color:var(--hl-name)}
 .hljs-emphasis{font-style:italic}
+/* 代码块语言切换器：右上角下拉，选择即按该语言重新高亮（pre 右侧留白避免遮挡代码） */
+.code-block{position:relative;margin:10px 0}
+.code-block>pre{margin:0;padding-right:74px}
+.lang-select{position:absolute;top:7px;right:8px;z-index:5;font-size:11px;line-height:1.5;padding:1px 4px;border-radius:5px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);cursor:pointer;opacity:.6;transition:opacity .15s,border-color .15s,color .15s;max-width:120px;font-family:inherit}
+.lang-select:hover,.lang-select:focus{opacity:1;border-color:var(--accent);color:var(--accent)}
 ol.steps{margin:10px 0 10px 20px;color:var(--text2)}
 ol.steps li{margin-bottom:6px}
 ol.steps code{font-size:12px}
