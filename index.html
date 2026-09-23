@@ -346,9 +346,6 @@ function renderCategory(cat,cid){
   if(cat.note)name.appendChild(el('span','cat-note',cat.note));
   catalog.appendChild(name);
 
-  // 置顶导读（overview，固定不可拖）
-  if(cat.overview)catalog.appendChild(grid([cat.overview]));
-
   // 上半：通识文档 —— 面试文档做成简介式入口卡（内容不变），其余进书架
   var general=applyOrder(cat.general||[],saved.general,function(d){return d.file;});
   if(general.length){
