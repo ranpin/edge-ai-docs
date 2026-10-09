@@ -9,7 +9,7 @@
 >
 > 本篇覆盖：越野场景概述与应用、地形分类与可通行性分析、结构化道路 vs 越野的核心差异、数据稀缺与前沿方向、端侧落地考量。
 >
-> 与 [Alpamayo-Edge（8B VLM Orin 量化实战）](https://ranpin.github.io/qwen-trajectory-prediction/) 并列，本篇是**专项场景深潜**——侧重领域方法与前沿方向，不绑定具体量产实现，因此不含实测性能数字。
+> 与 [Alpamayo-Edge（8B VLM Orin 量化实战）](https://ranpin.github.io/alpamayo-edge/) 并列，本篇是**专项场景深潜**——侧重领域方法与前沿方向，不绑定具体量产实现，因此不含实测性能数字。
 
 > [!NOTE]
 > **数据口径**
