@@ -49,7 +49,7 @@ flowchart LR
 | 文档 | 讲什么 |
 | :--- | :--- |
 | [项目简介 · Alpamayo-Edge 8B VLM 边缘量化部署](../projects/alpamayo-edge/overview.html) | 摘要 · 演示 · 方法总览 · 实验方案总览（项目主页式简介） |
-| [Cosmos-Reason2-8B · Orin 量化部署实战](https://ranpin.github.io/qwen-trajectory-prediction/) | INT4/INT8 量化 → Jetson Orin 端到端跑通推理 → 延迟/吞吐/显存/功耗/能效完整权衡；定位并修复 sm_87 FMHA 崩溃（独立站点，点击直达） |
+| [Cosmos-Reason2-8B · Orin 量化部署实战](https://ranpin.github.io/alpamayo-edge/) | INT4/INT8 量化 → Jetson Orin 端到端跑通推理 → 延迟/吞吐/显存/功耗/能效完整权衡；定位并修复 sm_87 FMHA 崩溃（独立站点，点击直达） |
 | [项目简介 · 越野/非结构化场景专项](../projects/offroad/overview.html) | 摘要 · 演示 · 方法总览 · 实验方案总览（项目主页式简介） |
 | [越野与非结构化场景](../projects/offroad/offroad-scenarios.html) | 越野地形理解与可通行性分析：地形分类、几何+语义双通道、结构化 vs 越野核心差异、数据稀缺破局、端侧落地考量（专项场景深潜） |
 
