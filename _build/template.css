@@ -1,5 +1,5 @@
-:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-bg:rgba(255,255,255,.82);--nav-h:52px}
-[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e;--nav-bg:rgba(15,15,26,.82)}
+:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#5f6b7a;--accent:#4361ee;--accentL:#eef2ff;--accentD:#3a0ca3;--border:#dee2e6;--success:#2ecc71;--warning:#f39c12;--danger:#e74c3c;--info:#3498db;--sidebar-w:260px;--nav-bg:rgba(255,255,255,.82);--nav-h:52px;--measure:42em}
+[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#9aa4b2;--accent:#7b8cff;--accentL:#1a1a3e;--accentD:#a5b4fc;--border:#2a2a3e;--nav-bg:rgba(15,15,26,.82)}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px;overflow-wrap:break-word}
 .top-nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);display:flex;align-items:center;padding:0 20px;z-index:1000;background:var(--nav-bg);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
@@ -22,10 +22,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans S
 .main{margin-left:0;margin-top:var(--nav-h);padding:28px 48px 60px 68px;max-width:none}
 h1{font-size:26px;font-weight:800;margin-bottom:6px}
 .subtitle{font-size:14px;color:var(--muted);margin-bottom:28px}
-h2{font-size:20px;font-weight:700;margin:36px 0 14px;padding-bottom:6px;border-bottom:2px solid var(--accentL)}
-h3{font-size:16px;font-weight:600;margin:20px 0 10px}
-p{margin-bottom:10px;color:var(--text2)}
-.main p{text-align:justify;text-justify:inter-ideograph}
+h2{font-size:20px;font-weight:700;margin:48px 0 16px}
+h2::before{content:"";display:inline-block;width:4px;height:.95em;background:var(--accent);border-radius:2px;margin-right:10px;vertical-align:-.12em}
+h3{font-size:16px;font-weight:600;margin:28px 0 10px}
+p{margin-bottom:16px;color:var(--text2)}
+/* 正文限宽到 --measure（≈42 汉字/行）；标题/表格/代码/mermaid 保持全宽，
+   形成「窄文字列 + 宽图表」的节奏对比。不两端对齐：正文中英混排（实测汉字占比仅 0.5~0.7），
+   justify 会撑出不均词距。 */
+.main p,.main ul,.main ol,.main .info-box{max-width:var(--measure)}
 strong{color:var(--text)}
 .main ul,.main ol{padding-left:26px;margin:10px 0}
 .main li{margin:4px 0}
@@ -73,4 +77,5 @@ ol.steps{margin:10px 0 10px 20px;color:var(--text2)}
 ol.steps li{margin-bottom:6px}
 ol.steps code{font-size:12px}
 @media(max-width:900px){.toc-dock{top:calc(var(--nav-h) + 18px);left:10px}.sidebar{width:min(280px,82vw);max-height:60vh}.main{padding:64px 16px 60px}.mermaid-wrap{height:340px}}
+@media (prefers-reduced-motion:reduce){.sidebar,.toc-toggle,.theme-btn{transition:none}}
 @media print{.top-nav,.toc-dock,.theme-btn{display:none!important}.main{margin:0;padding:16px;max-width:100%}}
