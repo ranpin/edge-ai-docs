@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Edge AI Docs - 端侧 AI 学习文档</title>
 <style>
-:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#868e96;--accent:#4361ee;--accentL:#eef2ff;--border:#dee2e6}
-[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#6c757d;--accent:#7b8cff;--accentL:#1a1a3e;--border:#2a2a3e}
+:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#e9ecef;--text:#1a1a2e;--text2:#495057;--muted:#5f6b7a;--accent:#4361ee;--accentL:#eef2ff;--border:#dee2e6}
+[data-theme=dark]{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#2a2a3e;--text:#e0e0e0;--text2:#adb5bd;--muted:#9aa4b2;--accent:#7b8cff;--accentL:#1a1a3e;--border:#2a2a3e}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
 .wrap{max-width:1100px;margin:0 auto;padding:40px 24px}
@@ -81,6 +81,8 @@ html.embed .wrap{padding-top:20px}
 .reset-btn:hover{color:var(--accent);border-color:var(--accent)}
 
 footer{text-align:center;margin-top:56px;padding:20px;color:var(--muted);font-size:12px}
+/* 尊重系统「减少动态效果」：停掉书架边框旋转与卡片悬停位移；自动滚动由 JS 侧 matchMedia 兜底 */
+@media (prefers-reduced-motion:reduce){.shelf-screen{animation:none}.card,.proj-intro,.tab{transition:none}.card:hover,.proj-intro:hover{transform:none}}
 </style>
 </head>
 <body>
@@ -170,6 +172,8 @@ function renumberShelf(track){
 // 「视口宽+组宽」之外，整组循环、同屏只出现一组（单卡即始终只有这一张，不会重复）。
 // 仅进入视口时滚动；悬停时原地冻结暂停（内容超宽才去克隆以便拖拽），移开从原位继续，避免跳动。
 function setupShelfMarquee(screen,scroll,track){
+  // 系统「减少动态效果」：不自动滚动，改为可手动横向滚动（保留拖拽排序）
+  if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches){scroll.classList.add('editing');return;}
   var offset=0,hovering=false,visible=false,setW=0,speed=0.7,rafId=null,needScroll=false,overflows=false;
   function realCards(){return [].slice.call(track.querySelectorAll('.card:not(.shelf-clone)'));}
   function removeClones(){[].slice.call(track.querySelectorAll('.shelf-clone')).forEach(function(x){x.remove();});}
