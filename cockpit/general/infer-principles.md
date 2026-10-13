@@ -479,6 +479,46 @@ gantt
 > [!TIP]
 > **chunked prefill 是 TTFT 与 TPOT 抖动的权衡旋钮**：块越小，decode 越平滑；但 prefill 被切得越碎，权重就要多读几趟（每个 chunk 各读一遍全部权重），prefill 的 compute-bound 优势被稀释、TTFT 变长。语音交互优先保 TPOT 稳定（小块），纯文本批处理优先保 TTFT（大块）。
 
+### 5.6 多模型调度策略对比
+
+同一 cDSP 上跑多个模型时，可选的调度策略及其相对优劣（帧延迟与 HTP 利用率均为**示例参数**，仅示意相对优劣，非实测；SA8397P 仅 1 个 cDSP，所谓「并行」实为多 graph 时分复用与流水重叠，非多物理核心真并行）：
+
+| 调度策略 | 描述 | 帧延迟 | HTP 利用率 | 适用场景 |
+| :--- | :--- | :--- | :--- | :--- |
+| **串行执行** | 所有模型依次在同一 HTP 上运行 | 最高 (~35ms) | 低 (~40%) | 模型少、时延要求低 |
+| **流水线 (Pipeline)** | 前一帧后处理与当前帧推理重叠 | 中等 (~25ms) | 中 (~65%) | 延迟可接受 1 帧 |
+| **多 graph 时分复用** | 无依赖模型作为多个 graph 在同一 cDSP 上时分复用（仅 1 个 cDSP 时无「分配到不同 HTP 核心并行」可言） | 较低 (~20ms) | 较高 (~85%) | 多模型、低延迟要求 |
+| **Context Binary 共享** | 多个模型编译为一个 Context Binary，共享中间 Buffer | 最低 (~18ms) | 最高 (~90%) | 固定模型组合、量产部署 |
+
+### 5.7 单帧多模型调度时序示例（DMS/感知）
+
+下图是 DMS / 感知类管线的单帧多模型时序示例（总帧周期 33ms @30fps），用来说明 §5.6 各策略落到时间轴上的样子——「HTP 时段」内各模型在同一 HTP 上排队/分时执行，而非分配到不同物理核心并行：
+
+```mermaid
+gantt
+    title 单帧多模型调度时序 (33ms @30fps)
+    dateFormat X
+    axisFormat %Lms
+
+    section ISP
+    ISP 图像处理           :done, isp, 0, 3
+
+    section HTP (单 cDSP 时分复用)
+    人脸检测 (RetinaFace)  :active, fd, 3, 8
+    关键点回归 (FaceMesh)  :lm, 8, 11
+    状态分类 (疲劳/分心)   :cls, 11, 13
+    手势识别 (MoveNet)     :gest, 13, 18
+
+    section CPU
+    后处理 + 融合决策      :crit, post, 18, 21
+
+    section GPU
+    AR 渲染 + HUD 显示     :gpu, 21, 25
+```
+
+> [!NOTE]
+> 图中模型名（RetinaFace / FaceMesh / MoveNet 等）是 DMS / 感知类管线的**示意例子**。对 LLM/VLM Agent 框架，「多模型」体现为**同一基座上的多 LoRA** 与**请求级优先级调度**，而非逐帧视觉流水线；「单 cDSP 上多 graph 时分复用」这一通用约束对两者都成立。
+
 ## 6. 推理引擎与运行时选型
 
 ### 6.1 选型维度（而不是背速度表）
@@ -516,6 +556,46 @@ SNPE (早期 DSP 推理) → QNN (统一神经网络 SDK) → QAIRT (统一品�
 
 Genie 最初面向移动 Snapdragon 平台，**车规 SA8397P 的 QAIRT 组件集与支持范围未必与移动端完全相同**——整图（含 embedding / attention / LM head）能否全部落在 HTP 上，应以**随附 QAIRT 版本文档与实际 profile 为准**，不要默认断言"Genie 在移动端怎么做、这里就怎么做"。一般性结论仍然成立：把 embedding 或 LM head 单独切到 GPU/CPU 通常不划算——那意味着每步都要跨器件搬张量，代价大于收益（除非有明确 profiling 证据）。
 
+### 6.3 QNN 架构分层
+
+Qualcomm Neural Network (QNN) 是高通的统一 AI 推理框架（取代早期 SNPE），采用分层架构，上层应用通过统一 API 调用底层不同硬件加速器：
+
+```mermaid
+flowchart TB
+    A["应用层DMS / OMS / NLP App"] --> B["QNN API统一推理接口"]
+    B --> C1["CPU BackendARM Cortex-A78AE / A55"]
+    B --> C2["GPU Backend车规 Adreno"]
+    B --> C3["HTP BackendHexagon Tensor Processor"]
+    B --> C4["DSP BackendHexagon aDSP/cDSP"]
+    C1 --> D1["ARM CPU"]
+    C2 --> D2["Adreno GPU"]
+    C3 --> D3["Hexagon NPU(HVX + HMX)"]
+    C4 --> D4["Hexagon DSP"]
+
+    style A fill:#4361ee,color:#fff
+    style B fill:#7b8cff,color:#fff
+    style C1 fill:#3498db,color:#fff
+    style C2 fill:#2ecc71,color:#fff
+    style C3 fill:#e74c3c,color:#fff
+    style C4 fill:#f39c12,color:#fff
+```
+
+### 6.4 推理框架对比（QNN / SNPE / TFLite）
+
+> [!NOTE]
+> **车规 / 功能安全口径**：「车规平台适配」指框架在高通车规 SoC 上的适配与落地成熟度，**不代表框架自身持有功能安全认证**。QNN 框架本身**无独立功能安全认证**；配合高通车规平台（安全岛、ASIL 硬件基础等）可满足 ISO 26262 ASIL 相关要求，认证责任在平台 / 整机层面而非推理框架层面。
+
+| 维度 | QNN | SNPE (旧版) | TFLite |
+| :--- | :--- | :--- | :--- |
+| **HTP 加速** | 原生支持，最优性能 | 支持，但 API 已冻结 | 不支持 HTP，仅 GPU delegate |
+| **算子生态** | 丰富，支持自定义 Op | 中等，自定义 Op 受限 | 丰富，社区贡献多 |
+| **自定义算子** | QNN OpPackage 机制 | UDL (User Defined Layer) | Custom Op 注册 |
+| **离线编译** | Context Binary (推荐) | DLC 缓存 | 不支持 |
+| **易用性** | 中等，学习曲线较陡 | 高，文档完善 | 高，Python API 友好 |
+| **车规认证** | 框架本身无独立功能安全认证；配合高通车规平台可满足 ASIL 要求 | 部分支持 | 无车规认证 |
+| **维护状态** | 活跃开发中 | 维护模式，不再新增功能 | 活跃开发中 |
+| **推荐场景** | 新项目首选 | 仅限已有项目维护 | 跨平台/非高通场景 |
+
 ## 7. Genie / QAIRT 的 LLM 部署流程
 
 端侧 LLM 从训练产物到上机对话的完整链路：
@@ -548,6 +628,51 @@ flowchart LR
 > **端侧基本事实：prefill 与 decode 是两套编译图**
 >
 > prefill（固定 chunk 形状，如 128/256 token 一块，配合 §5.5 的 chunked prefill）与 decode（seq=1）的张量 shape 不同，是**两套分别编译的 graph / context binary**，由运行时按需加载与调度——不是"一张图通吃任意长度"。**KV Cache 以 graph I/O 的形式表达**：每步执行读入历史 KV、把新 token 的 KV 写到**环形缓冲（ring buffer）**的尾部，容量按上下文上限一次性划定、写满回绕。理解这一点，就能理解为什么运行时不能随意改序列长度、为什么 KV 管理是运行时（Genie）层的事而不是图内的事。
+
+### 7.1 CNN/感知模型的经典部署流水线
+
+§7 开头讲的是 LLM 的 Genie/W4A16 路径；CNN / 检测 / 分类类模型走的是经典 QNN 链路：
+
+```mermaid
+flowchart LR
+    A["PyTorch / TF/ ONNX 模型"] --> B["qnn-onnx-converter模型转换"]
+    B --> C["QNN Model(.cpp 源码)"]
+    C --> D["qnn-model-lib-generator编译模型库"]
+    D --> E["Model .so(动态库)"]
+    E --> F["qnn-context-binary-generator离线编译"]
+    F --> G["Context Binary(.bin 缓存)"]
+    G --> H["QNN Runtime端侧推理"]
+
+    style A fill:#4361ee,color:#fff
+    style C fill:#f39c12,color:#fff
+    style E fill:#3498db,color:#fff
+    style G fill:#2ecc71,color:#fff
+    style H fill:#e74c3c,color:#fff
+```
+
+> [!NOTE]
+> **工具链演进**：2024–2025 起高通把原 SNPE / QNN / Genie 整合进统一品牌 **QAIRT（Qualcomm AI Runtime）**，原 `qnn-*` 命令逐步归入 QAIRT 套件（具体命令改名随 SDK 版本变化，**升级时以随包文档为准 — 需核实**）。无论叫 QNN 还是 QAIRT，**升级工具链后必须重刷全部 Context Binary**，因为 `.bin` / `.serialized.bin` 与工具链 / HTP 架构版本强绑定（见下方 WARNING）。
+
+### 7.2 Context Binary 的冷启动收益与版本绑定
+
+> [!NOTE]
+> **为什么车载量产选择 Context Binary：冷启动**
+>
+> 汽车座舱中**冷启动时间**是硬性要求（上电到系统就绪 < 2 秒）。不同加载方式的冷启动对比（**小模型/CNN 级量级示意**，非实测）：
+>
+> | 加载方式 | 首次推理延迟（量级示意） | 原因 |
+> | --- | --- | --- |
+> | `Model .so` 动态加载 | ~5~8 秒 | 运行时才做图优化、内存分配与算子调度（图固化 / graph finalization，**非 JIT 编译**） |
+> | `Context Binary .bin` | ~200~500ms | 离线已完成编译优化，加载到系统内存（DDR），执行时按 tiling 分块调入 VTCM |
+>
+> 对 4B 级 LLM（W4A16 权重 ~2.5GB），Context Binary 加载由 **flash 读取主导**，冷启动为**秒级**（「模型加载 < 5s」才是 LLM 口径）。另注意 VTCM 典型仅 ~8MB，远小于权重体量，权重不可能整体「加载进 VTCM」，只能按 tiling 分块调入（数据口径见 [硬件平台](hardware.html) 顶部 NOTE）。
+>
+> **Context Binary 的额外优势**：确定性执行（离线编译保证执行路径一致，有助于 ASIL 确定性要求，认证在平台/整机层面）；内存预分配（Tensor Buffer 编译期定大小，运行时无动态分配）；防篡改（可加签名校验）；多模型打包（多模型编译为同一 Context Binary 共享内存池）。
+
+> [!WARNING]
+> **Context Binary 与 QNN 版本强耦合（上机高频坑）**
+>
+> Context Binary 不只是**硬件绑定**，还是**版本绑定**：`.bin` 由特定版本的 `qnn-context-binary-generator` 生成，只能被**版本匹配**的 QNN runtime 与 DSP skel 库（`libQnnHtp*.so` / `*skel*.so` / stub `.so`）加载。若升级了 QNN SDK 却未重新生成 Context Binary，或设备上 runtime 与 skel 版本不一致，典型表现为 `QnnContext_createFromBinary failed`、图 finalize 失败或加载即崩溃。**每次升级 QNN SDK / 工具链后，必须重新生成全部 Context Binary，并确保设备上部署的 runtime 与 skel 版本一致。**
 
 ## 8. 端侧 Tokenizer / Detokenizer
 
