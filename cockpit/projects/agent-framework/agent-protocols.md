@@ -190,6 +190,45 @@ flowchart LR
 >
 > 注意与**模型层**优先级区分开：这里说的是 Agent 消息投递层的线程优先级；模型推理侧的 `ModelScheduler` 有另一套真正生效的 LOW/NORMAL/HIGH/CRITICAL 四级优先级与抢占机制（见 [aadkcore 核心框架 · §4.2/§4.3](agent-core.html#sec-10)）。两者不要混为一谈。
 
+### 1.5 数据通路与 Fusion 通信
+
+§1.4 讲的是消息进了运行时之后**怎么派发**，这一节讲消息**怎么进运行时**——外部系统（语音/视觉/车信号）通过 **Fusion DataTransport** IPC 送入，由 aadkcore 的 `DataTransportServer` / `DataTransportClient` 收发、`AgentRuntime` 统一管理生命周期：
+
+| 组件 | 类 | 继承自 | 职责 |
+| :--- | :--- | :--- | :--- |
+| Transport Server | `DataTransportServer` | `BaseServer` | 接收外部消息（图像/音频/文本），通过 Fusion DataTransportService 实现 IPC |
+| Transport Client | `DataTransportClient` | `BaseClient` | 向外部系统发送消息和注册信息，通过 DataTransportProxy 实现 |
+| 运行时 | `AgentRuntime` | aadkcore | 管理 Server/Client 生命周期，连接 Server 回调与消息分发（§1.4 的 `MsgDeliverImpl`） |
+
+```mermaid
+graph TB
+    EXT["外部系统(语音/视觉/车信号)"] -->|Fusion IPC| DTS["DataTransportServer(instance_id=0xFFFA)"]
+    DTS -->|image_callback| AR["AgentRuntime"]
+    AR -->|deliver_msg| MD["消息分发(§1.4 MsgDeliverImpl)"]
+    MD -->|scenario_id 路由| AP["AgentPlugin(各 Dispatcher)"]
+    AP -->|推理请求| MR["ModelRunner(LLM/VLM)"]
+    MR -->|推理结果| AP
+    AP -->|SendResultNotification| DTS
+    DTS -->|Fusion IPC| EXT
+    AP -->|注册/注销| DTC["DataTransportClient(agent_regist)"]
+    DTC -->|Fusion IPC| REG["注册中心"]
+
+    style EXT fill:#868e96,color:#fff
+    style DTS fill:#4361ee,color:#fff
+    style MD fill:#f39c12,color:#fff
+    style MR fill:#2ecc71,color:#fff
+    style DTC fill:#3498db,color:#fff
+```
+
+消息入站流程：外部系统通过 Fusion DataTransport 协议发送 `InputData`（含 ImageInfo/AudioInfo/文本），`DataTransportServer` 的 `image_callback` 将其封装为 `ServerMessage`，经 `AgentRuntime` 转发至 `MsgDeliverImpl.deliver_msg()`（§1.4），后者根据消息中的 `scenario_id` 路由到具体 Dispatcher。
+
+消息出站流程：Dispatcher 处理完毕后，通过 `SendResultNotification()` 将结果回传给 `DataTransportServer`，再通过 Fusion IPC 返回外部系统。对于需要流式输出的场景（如 GUI Agent 和 ActiveVision），使用 `StreamProcessor` + `stream_callback_handler` 实现分段推送。
+
+> [!NOTE]
+> **两种消息路由器：插件式 `MsgDeliverImpl` vs 独立进程 `MsgDispacher`**
+>
+> 上图的消息分发在**插件形态**（android_sdk / genai）下是 §1.4 的 `MsgDeliverImpl`；而 agent_group 的**独立进程形态**（`agent_runtime_main`）用的是它自带的 `MsgDispacher`（同样继承 `BaseMsgDeliver`，但是硬编码路由、无两级优先级队列）。两者是并行的两套实现，按部署形态择一，别混着读。独立进程形态的入口与 `MsgDispacher` 细节见 [场景 Agent 应用](agent-group.html) §8。
+
 ## 2. LLM Flow 与 Tool 系统
 
 `BaseLlmFlow`（定义于 `include/flow/base_llm_flow.hpp`）实现了 LLM 推理流水线的标准模式，负责预处理、调用模型、后处理（**Tool 调用循环为设计目标，受 `USE_TOOL` 门控，默认未启用**，见 §2.1 的边界说明）。`BaseTool`（定义于 `include/tools/base_tool.hpp`）定义了工具的统一抽象接口。

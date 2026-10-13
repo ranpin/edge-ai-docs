@@ -716,9 +716,11 @@ car_skills:                     # 技能定义段
 
 ## 8. 数据通路与 Fusion 通信
 
-### 8.1 DataTransport 机制
+### 8.1 独立进程入口与消息路由
 
-`agent_runtime_main.cpp` 是 agent\_group 进程的入口，它创建 `DataTransportServer` 和 `DataTransportClient` 实例，封装到 `AgentRuntime` 中运行：
+> 框架侧的 DataTransport / Fusion IPC 机制（`DataTransportServer` / `DataTransportClient` / `AgentRuntime`）与数据流全景见 [**协议与运行时执行 · §1.5**](agent-protocols.html)。本节只讲 agent\_group **独立进程形态**特有的入口与路由。
+
+`agent_runtime_main.cpp` 是 agent\_group 独立进程形态的入口，它创建 `DataTransportServer` / `DataTransportClient` 实例、封装到 `AgentRuntime`，并挂上自带的 `MsgDispacher`：
 
 ```
 // agent_runtime_main.cpp 核心逻辑
@@ -732,38 +734,9 @@ agent_runtime->start_server();
 ProcessWait();  // 信号等待 (SIGINT/SIGTERM/SIGSEGV/SIGABRT)
 ```
 
-| 组件 | 类 | 继承自 | 职责 |
-| :--- | :--- | :--- | :--- |
-| Transport Server | `DataTransportServer` | `BaseServer` | 接收外部消息（图像/音频/文本），通过 Fusion DataTransportService 实现 IPC |
-| Transport Client | `DataTransportClient` | `BaseClient` | 向外部系统发送消息和注册信息，通过 DataTransportProxy 实现 |
-| 消息路由 | `MsgDispacher` | `BaseMsgDeliver` | 根据 scenario\_id 将消息分发到对应的 Dispatcher（**独立进程形态的硬编码路由器**，与插件式的 `MsgDeliverImpl` 是两套实现，见 §1.1 WARNING） |
-| 运行时 | `AgentRuntime` | aadkcore | 管理 Server/Client 生命周期，连接 Server 回调和 Dispatcher |
+与插件形态（android_sdk / genai）用 aadkcore 的 `MsgDeliverImpl`（[**协议与运行时执行 · §1.4**](agent-protocols.html)）不同，独立进程形态用 agent\_group **自带的 `MsgDispacher`**——同样继承 `BaseMsgDeliver`，但是硬编码路由、无两级优先级队列（见 §1.1 WARNING）。
 
-### 8.2 数据流全景
-
-```mermaid
-graph TB
-    EXT["外部系统(语音/视觉/车信号)"] -->|Fusion IPC| DTS["DataTransportServer(instance_id=0xFFFA)"]
-    DTS -->|image_callback| AR["AgentRuntime"]
-    AR -->|deliver_msg| MD["MsgDispacher(BaseMsgDeliver)"]
-    MD -->|scenario_id 路由| AP["AgentPlugin(各 Dispatcher)"]
-    AP -->|推理请求| MR["ModelRunner(LLM/VLM)"]
-    MR -->|推理结果| AP
-    AP -->|SendResultNotification| DTS
-    DTS -->|Fusion IPC| EXT
-    AP -->|注册/注销| DTC["DataTransportClient(agent_regist)"]
-    DTC -->|Fusion IPC| REG["注册中心"]
-
-    style EXT fill:#868e96,color:#fff
-    style DTS fill:#4361ee,color:#fff
-    style MD fill:#f39c12,color:#fff
-    style MR fill:#2ecc71,color:#fff
-    style DTC fill:#3498db,color:#fff
-```
-
-消息入站流程：外部系统通过 Fusion DataTransport 协议发送 `InputData`（含 ImageInfo/AudioInfo/文本），`DataTransportServer` 的 `image_callback` 将其封装为 `ServerMessage`，经 `AgentRuntime` 转发至 `MsgDispacher.deliver_msg()`，后者根据消息中的 `scenario_id` 路由到具体 Dispatcher。
-
-消息出站流程：Dispatcher 处理完毕后，通过 `SendResultNotification()` 将结果回传给 `DataTransportServer`，再通过 Fusion IPC 返回外部系统。对于需要流式输出的场景（如 GUI Agent 和 ActiveVision），使用 `StreamProcessor` + `stream_callback_handler` 实现分段推送。
+### 8.2 Dispatcher 并发与两级优先级
 
 > [!NOTE]
 > **Dispatcher 并发与线程模型（状态独立 ≠ 推理并行）**
