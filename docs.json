@@ -94,6 +94,18 @@
           ]
         },
         {
+          "title": "端侧部署与运维",
+          "file": "cockpit/general/deployment-ops.html",
+          "badge": "Part 7",
+          "status": "done",
+          "desc": "OTA 模型更新（策略分级、签名 / A-B 分区 / 回滚）、性能基准测试方法论与关键指标",
+          "tags": [
+            "OTA",
+            "性能基准",
+            "运维"
+          ]
+        },
+        {
           "title": "Android 开发 & JNI 基础",
           "file": "cockpit/general/android-jni.html",
           "badge": "基础",
