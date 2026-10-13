@@ -387,7 +387,7 @@ flowchart TD
 > | `TimeSliceLoop` | 有 | 无 |
 > | `onProcessing` 执行 | 默认**并发** | 恒**串行**（取 `generate_mutex_`） |
 >
-> 因此：[部署与运行时配置](deploy.html) §3.4 / §4.3 里"`generate_mutex_` 串行化推理""`generate_concurrent` 等字段没有任何读取点""`worker_count` 实际取 `min(配置值, 硬件并发数)`"这些说法，**对岚图分支是准确的**，但与本篇（主线）相反。这不是文档笔误，而是**真实的分支分叉**——判断某条结论适用哪一边，先确认你跑的是哪个分支。
+> 因此：[部署与运行时配置](deploy.html) §3.1 / §4.3 里"`generate_mutex_` 串行化推理""`generate_concurrent` 等字段没有任何读取点""`worker_count` 实际取 `min(配置值, 硬件并发数)`"这些说法，**对岚图分支是准确的**，但与本篇（主线）相反。这不是文档笔误，而是**真实的分支分叉**——判断某条结论适用哪一边，先确认你跑的是哪个分支。
 
 > [!CAUTION]
 > **中间态有两条路径：抢占(cancel)=丢弃重跑，时间片(pause/resume)=保留 KV 的挂起恢复（仅 Lape/Orin）**

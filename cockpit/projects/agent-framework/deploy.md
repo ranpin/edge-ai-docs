@@ -17,75 +17,12 @@
 
 ## 1. QNN 推理框架
 
-### 1.1 QNN 架构分层
-
-Qualcomm Neural Network (QNN) 是高通推出的下一代统一 AI 推理框架，取代早期的 SNPE。QNN 采用分层架构，上层应用通过统一 API 调用底层不同硬件加速器：
-
-```mermaid
-flowchart TB
-    A["应用层DMS / OMS / NLP App"] --> B["QNN API统一推理接口"]
-    B --> C1["CPU BackendARM Cortex-A78AE / A55"]
-    B --> C2["GPU Backend车规 Adreno"]
-    B --> C3["HTP BackendHexagon Tensor Processor"]
-    B --> C4["DSP BackendHexagon aDSP/cDSP"]
-    C1 --> D1["ARM CPU"]
-    C2 --> D2["Adreno GPU"]
-    C3 --> D3["Hexagon NPU(HVX + HMX)"]
-    C4 --> D4["Hexagon DSP"]
-
-    style A fill:#4361ee,color:#fff
-    style B fill:#7b8cff,color:#fff
-    style C1 fill:#3498db,color:#fff
-    style C2 fill:#2ecc71,color:#fff
-    style C3 fill:#e74c3c,color:#fff
-    style C4 fill:#f39c12,color:#fff
-```
-
-### 1.2 完整部署流水线
-
-从训练框架到端侧运行的完整部署流水线：
-
-```mermaid
-flowchart LR
-    A["PyTorch / TF/ ONNX 模型"] --> B["qnn-onnx-converter模型转换"]
-    B --> C["QNN Model(.cpp 源码)"]
-    C --> D["qnn-model-lib-generator编译模型库"]
-    D --> E["Model .so(动态库)"]
-    E --> F["qnn-context-binary-generator离线编译"]
-    F --> G["Context Binary(.bin 缓存)"]
-    G --> H["QNN Runtime端侧推理"]
-
-    style A fill:#4361ee,color:#fff
-    style C fill:#f39c12,color:#fff
-    style E fill:#3498db,color:#fff
-    style G fill:#2ecc71,color:#fff
-    style H fill:#e74c3c,color:#fff
-```
+> QNN 架构分层、QNN/SNPE/TFLite 推理框架对比、CNN 经典部署流水线、Context Binary 冷启动收益与版本绑定，属通用推理引擎知识，见 [**LLM 推理原理与性能模型**](../../general/infer-principles.html)：QNN 架构分层 §6.3、推理框架对比 §6.4、CNN 部署流水线 §7.1、Context Binary 冷启动/版本绑定 §7.2、Genie/QAIRT LLM 部署流程 §7。
 
 > [!NOTE]
-> **CNN/感知模型 vs LLM/VLM 的转换路径不同（2025+ 工具链口径）**
+> **aadkcore 锚点模型的部署口径**
 >
-> 上图的经典链路（`qnn-onnx-converter → .cpp → qnn-model-lib-generator → .so → qnn-context-binary-generator → Context Binary`）适用于 CNN / 检测 / 分类类模型。LLM/VLM（如本篇锚点 Qwen3-Omni-4B）走的是 **Genie / QAIRT** 路径：模型量化（W4A16，见 [量化](../../general/quantization.html)）后由 Genie 编译为**序列化 Context Binary**（即 §4.3 模型配置里的 `*.serialized.bin`），运行时由 Genie/QAIRT runtime 负责 KV Cache 管理与 LoRA 热插拔，而非手写 `.cpp` 模型库。
->
-> **工具链演进**：2024–2025 起高通把原 SNPE / QNN / Genie 整合进统一品牌 **QAIRT（Qualcomm AI Runtime）**，原 `qnn-*` 命令逐步归入 QAIRT 套件（具体命令改名随 SDK 版本变化，**升级时以随包文档为准 — 需核实**）。车规平台跟进该演进；无论叫 QNN 还是 QAIRT，**升级工具链后必须重刷全部 Context Binary**（§3.3 WARNING），因为 `.serialized.bin` 与工具链 / HTP 架构版本强绑定（§4.3 NOTE）。
->
-> **精度格式口径**：本篇锚点模型当前产物以 **W4A16**（LLM 权重，见 [量化](../../general/quantization.html)）与 **FP16**（视觉/音频编码器 Context Binary）为主。**FP8** 等更低位宽是 2025+ 新一代 HTP 的方向，但 SA8397P（HTP arch v81）是否支持 FP8 推理**需核实**，勿想当然地写进部署方案。
-
-### 1.3 推理框架详细对比
-
-> [!NOTE]
-> **车规 / 功能安全口径**：「车规平台适配」指框架在高通车规 SoC 上的适配与落地成熟度，**不代表框架自身持有功能安全认证**。QNN 框架本身**无独立功能安全认证**；配合高通车规平台（安全岛、ASIL 硬件基础等）可满足 ISO 26262 ASIL 相关要求，认证责任在平台 / 整机层面而非推理框架层面。
-
-| 维度 | QNN | SNPE (旧版) | TFLite |
-| :--- | :--- | :--- | :--- |
-| **HTP 加速** | 原生支持，最优性能 | 支持，但 API 已冻结 | 不支持 HTP，仅 GPU delegate |
-| **算子生态** | 丰富，支持自定义 Op | 中等，自定义 Op 受限 | 丰富，社区贡献多 |
-| **自定义算子** | QNN OpPackage 机制 | UDL (User Defined Layer) | Custom Op 注册 |
-| **离线编译** | Context Binary (推荐) | DLC 缓存 | 不支持 |
-| **易用性** | 中等，学习曲线较陡 | 高，文档完善 | 高，Python API 友好 |
-| **车规认证** | 框架本身无独立功能安全认证；配合高通车规平台可满足 ASIL 要求 | 部分支持 | 无车规认证 |
-| **维护状态** | 活跃开发中 | 维护模式，不再新增功能 | 活跃开发中 |
-| **推荐场景** | 新项目首选 | 仅限已有项目维护 | 跨平台/非高通场景 |
+> 本篇锚点模型（Qwen3-Omni-4B）当前产物以 **W4A16**（LLM 权重，见 [量化](../../general/quantization.html)）与 **FP16**（视觉/音频编码器 Context Binary）为主；LLM/VLM 走 Genie/QAIRT 路径编译为**序列化 Context Binary**（即 §4.3 模型配置里的 `*.serialized.bin`），运行时由 Genie/QAIRT runtime 负责 KV Cache 管理与 LoRA 热插拔。**FP8** 等更低位宽是 2025+ 新一代 HTP 的方向，但 SA8397P（HTP arch v81）是否支持 FP8 推理**需核实**，勿想当然写进部署方案。
 
 ## 2. ISP 与端到端数据流
 
@@ -98,79 +35,9 @@ flowchart LR
 
 ## 3. 多模型调度与优化
 
-### 3.1 单帧多模型调度时序
+> 单 cDSP 多 graph 时分复用、多模型调度策略对比、单帧多模型调度时序示例，属通用调度知识，见 [**LLM 推理原理与性能模型 · §5 执行与调度**](../../general/infer-principles.html)（§5.6 调度策略对比、§5.7 单帧多模型调度时序）。本节只记 aadkcore 的请求级调度（§3.1 ModelScheduler）。
 
-在智能座舱的一帧处理中，多个 AI 模型需要协同工作。以下甘特图展示了典型的单帧处理时序（总帧周期 33ms @30fps）。注意 SA8397P 仅 **1 个 cDSP**，HTP 计算资源在多个 graph 间**时分复用**——下图「HTP 时段」内的各模型是在同一 HTP 上排队/分时执行，而非分配到不同物理核心并行：
-
-```mermaid
-gantt
-    title 单帧多模型调度时序 (33ms @30fps)
-    dateFormat X
-    axisFormat %Lms
-
-    section ISP
-    ISP 图像处理           :done, isp, 0, 3
-
-    section HTP (单 cDSP 时分复用)
-    人脸检测 (RetinaFace)  :active, fd, 3, 8
-    关键点回归 (FaceMesh)  :lm, 8, 11
-    状态分类 (疲劳/分心)   :cls, 11, 13
-    手势识别 (MoveNet)     :gest, 13, 18
-
-    section CPU
-    后处理 + 融合决策      :crit, post, 18, 21
-
-    section GPU
-    AR 渲染 + HUD 显示     :gpu, 21, 25
-```
-
-> [!NOTE]
-> 图中模型名（RetinaFace / FaceMesh / MoveNet 等）是 DMS / 感知类管线的**示意例子**，并非 aadkcore 框架内置模型。aadkcore 是 LLM/VLM Agent 框架，它的「多模型」体现为**同一基座上的多 LoRA**（§4.3）与**请求级优先级调度**（§3.4 ModelScheduler），而非这里画的逐帧视觉流水线。本图只用来说明「单 cDSP 上多 graph 时分复用」这一通用约束；aadkcore 真实的调度粒度见 §3.4。
-
-### 3.2 调度策略对比
-
-| 调度策略 | 描述 | 帧延迟 | HTP 利用率 | 适用场景 |
-| :--- | :--- | :--- | :--- | :--- |
-| **串行执行** | 所有模型依次在同一 HTP 上运行 | 最高 (~35ms) | 低 (~40%) | 模型少、时延要求低 |
-| **流水线 (Pipeline)** | 前一帧后处理与当前帧推理重叠 | 中等 (~25ms) | 中 (~65%) | 延迟可接受 1 帧 |
-| **多 graph 时分复用** | 无依赖模型作为多个 graph 在同一 cDSP 上时分复用（本平台仅 1 个 cDSP，无「分配到不同 HTP 核心并行」可言） | 较低 (~20ms) | 较高 (~85%) | 多模型、低延迟要求 |
-| **Context Binary 共享** | 多个模型编译为一个 Context Binary，共享中间 Buffer | 最低 (~18ms) | 最高 (~90%) | 固定模型组合、量产部署 |
-
-> [!NOTE]
-> 表中帧延迟与 HTP 利用率均为**示例参数**，仅用于演示各调度策略的相对优劣，不代表本平台实测。SA8397P 仅 1 个 cDSP，所谓「并行」实为多 graph 在同一 HTP 上的时分复用与流水重叠，而非多物理核心真并行（数据口径见 [硬件平台](../../general/hardware.html) 顶部 NOTE）。
-
-### 3.3 Context Binary 与车规要求
-
-> [!NOTE]
-> **为什么车载量产始终选择 Context Binary？**
->
-> 在汽车座舱中，**冷启动时间**是一项硬性要求：从上电到 DMS 系统就绪必须 **< 2 秒**。不同加载方式的冷启动时间对比：
->
-> | 加载方式 | 首次推理延迟（量级示意） | 原因 |
-> | --- | --- | --- |
-> | `Model .so` 动态加载 | ~5~8 秒 | 运行时才做图优化、内存分配与算子调度（图固化 / graph finalization，**非 JIT 编译**） |
-> | `Context Binary .bin` | ~200~500ms | 离线已完成编译优化，加载到系统内存（DDR），执行时按 tiling 分块调入 VTCM |
->
-> 上表为**小模型（CNN 级）量级示意**：`~200~500ms` 对应数百 MB 以内的检测/分类模型。对全站锚点的 4B LLM（W4A16 权重 ~2.5GB），Context Binary 加载由 **flash 读取主导**，冷启动为**秒级**——§6.3 的「模型加载 < 5s」才是 LLM 口径。另注意 VTCM 典型仅 ~8MB，远小于权重体量，权重不可能整体「加载进 VTCM」，只能按 tiling 分块调入（数据口径见 [硬件平台](../../general/hardware.html) 顶部 NOTE）。
->
-> **Context Binary 的额外优势**：
->
-> * **确定性执行**：离线编译确保每次推理的执行路径完全一致，有助于满足功能安全 (ASIL) 的确定性执行要求（确定性只是 ASIL 的必要条件之一，认证在平台 / 整机层面完成，见 §1.3 口径说明）
-> * **内存预分配**：所有 Tensor Buffer 在编译期确定大小和位置，运行时无动态分配
-> * **防篡改**：二进制文件可加签名校验，防止模型被恶意替换
-> * **多模型打包**：多个模型可编译为同一 Context Binary，共享内存池，减少碎片
-
-> [!WARNING]
-> **Context Binary 与 QNN 版本强耦合（上机高频坑）**
->
-> Context Binary 不只是**硬件绑定**（见 §7.2），还是**版本绑定**：`.bin` 由特定版本的 `qnn-context-binary-generator` 生成，只能被**版本匹配**的 QNN runtime 与 DSP skel 库（`libQnnHtp*.so` / `*skel*.so` / stub `.so`）加载。若升级了 QNN SDK 却未重新生成 Context Binary，或设备上 runtime 与 skel 版本不一致，典型表现为 `QnnContext_createFromBinary failed`、图 finalize 失败或加载即崩溃。**每次升级 QNN SDK / 工具链后，必须重新生成全部 Context Binary，并确保设备上部署的 runtime 与 skel 版本一致。**
-
-> [!NOTE]
-> **推理优化与量化工具**
->
-> AIMET 量化工具、W4A16 机制 → [**端侧模型量化与压缩**](../../general/quantization.html)；推理引擎对比、Genie/QAIRT 运行时 → [**LLM 推理原理与性能模型**](../../general/infer-principles.html)
-
-### 3.4 aadkcore 请求级调度：ModelScheduler（优先级 / 抢占 / worker）
+### 3.1 aadkcore 请求级调度：ModelScheduler（优先级 / 抢占 / worker）
 
 §3.1–§3.2 讲的是「一帧内多个模型如何共享 HTP」的通用时序；而 aadkcore 框架自身的调度发生在**请求级**——`ModelScheduler`（`src/runtime/model_scheduler.cpp`，单例）把各场景 Agent 提交的推理请求排成一个**优先级队列**，再交给模型实例执行。它直接消费 §4.3 `runtime_config.json` 的 `worker_count` / `capacity` / `timeout_s` 三个字段。
 
@@ -191,7 +58,7 @@ score = priority × 2.0 + wait_ms × 0.1 × 0.001
 > [!WARNING]
 > **分支口径：本节描述的是岚图 `lantu_sdk_dev` 分支的调度行为**
 >
-> 本篇属框架研发层，但 §3.4/§4.3 的调度器细节是对**岚图 `lantu_sdk_dev` 分支**（当前部署形态）核实的——该分支上 `generate_mutex_` 恒串行化、`generate_concurrent`/`enable_timeslice`/`batch_count` 无读取点、`worker_count` 被钳到硬件并发数。**主线 `origin/agent_core_dev` 与此分叉**：`generate_concurrent`（默认 true）为 true 时 `SchedulerLoop` 不取 `generate_mutex_`（可并发跑 `onProcessing`）、上述字段均被读取、`worker_count` 不钳制（对应 assert 已注释）。两者是真实代码分叉而非笔误，调优前务必确认自己所在分支，分支差异对照见 [aadkcore 核心框架](agent-core.html) §4.4。
+> 本篇属框架研发层，但 §3.1/§4.3 的调度器细节是对**岚图 `lantu_sdk_dev` 分支**（当前部署形态）核实的——该分支上 `generate_mutex_` 恒串行化、`generate_concurrent`/`enable_timeslice`/`batch_count` 无读取点、`worker_count` 被钳到硬件并发数。**主线 `origin/agent_core_dev` 与此分叉**：`generate_concurrent`（默认 true）为 true 时 `SchedulerLoop` 不取 `generate_mutex_`（可并发跑 `onProcessing`）、上述字段均被读取、`worker_count` 不钳制（对应 assert 已注释）。两者是真实代码分叉而非笔误，调优前务必确认自己所在分支，分支差异对照见 [aadkcore 核心框架](agent-core.html) §4.4。
 
 > [!NOTE]
 > **端侧权衡**：请求级优先级 + 抢占保住了高优场景的 TTFT，代价是被抢占任务已生成的 token 作废、需重新排队；`generate_mutex_` 串行化避免了多请求同时压 HTP 造成 KV Cache 抖动，但也意味着**加 worker 对吞吐几乎无益**（瓶颈在单实例串行推理）。尤其要注意：`ModelScheduler` 是**单例**、`generate_mutex_` 全局只有一把——即便开 §4.3 `--dual` 建了第二个 ModelInstance，两个实例的推理仍被**同一把锁串行化**、仍时分复用同一 HTP。`--dual` 换来的是「主对话与主动视觉各持独立权重 / KV Cache、省去角色间 LoRA 切换与缓存抖动」的**隔离性**，而**不是并行度**。要在单 cDSP 上真正提吞吐，只能寄望模型引擎侧的批处理 / 时分复用（即 §4.3 那几个当前未接线的字段）；框架层加 worker 或加实例都改变不了「同一时刻只有一个任务在 HTP 上跑」这一事实。
@@ -381,7 +248,7 @@ aadkcore 的运行时配置**按平台目录组织**：`runtime/data/config/` �
 > [!WARNING]
 > **并非所有字段都被框架消费（核对代码后的口径）**
 >
-> `ModelScheduler` 构造函数实际只读取 **`worker_count` / `capacity` / `timeout_s`** 三个字段（见 §3.4）。`generate_concurrent`、`enable_timeslice` / `timeslice_ms`、`batch_count` 在当前 aadkcore 框架源码中**没有任何读取点**——它们随配置文件保留，但调度行为并不受其影响。这几项要么是为闭源推理引擎（`libllms.so`）侧的并发/时分复用预留、要么是历史遗留字段（**具体由谁消费需核实**）。调参时不要指望改这几个字段能改变框架的并发/批处理行为；真正生效的并发杠杆是 `--dual` 双实例（§4.3）与 `worker_count`（仅影响取任务并发，不影响 HTP 并行度，见 §3.4）。
+> `ModelScheduler` 构造函数实际只读取 **`worker_count` / `capacity` / `timeout_s`** 三个字段（见 §3.1）。`generate_concurrent`、`enable_timeslice` / `timeslice_ms`、`batch_count` 在当前 aadkcore 框架源码中**没有任何读取点**——它们随配置文件保留，但调度行为并不受其影响。这几项要么是为闭源推理引擎（`libllms.so`）侧的并发/时分复用预留、要么是历史遗留字段（**具体由谁消费需核实**）。调参时不要指望改这几个字段能改变框架的并发/批处理行为；真正生效的并发杠杆是 `--dual` 双实例（§4.3）与 `worker_count`（仅影响取任务并发，不影响 HTP 并行度，见 §3.1）。
 
 > [!NOTE]
 > **runtime\_config.json 只承载调度参数，模型本体加载走 multi\_lora\_runtime\_config.json**
@@ -485,7 +352,7 @@ flowchart LR
 > [!NOTE]
 > **aadkcore 的版本兼容性由「模型包 + 配置」配对保证**
 >
-> 新 LoRA 与基座的兼容性由 `model_path` + `multi_lora_runtime_config.json` 的 `lora[]` 列表 + 模型 json 的 `lora_params[].adapter_alpha` 配对保证，而**不是** `runtime_config.json` 里的某个版本号字段（该文件只承载 §3.4 的调度参数，无版本字段）。Context Binary 还受 QNN 工具链 / HTP 架构版本绑定（§3.3 WARNING、§4.3 NOTE），OTA 升级 QNN runtime 时必须连同 `*.serialized.bin` 一起重刷。换版/回滚瞬间的在途请求应借 §3.4 的 `StopTask` / 抢占机制优雅排空，而非硬切。
+> 新 LoRA 与基座的兼容性由 `model_path` + `multi_lora_runtime_config.json` 的 `lora[]` 列表 + 模型 json 的 `lora_params[].adapter_alpha` 配对保证，而**不是** `runtime_config.json` 里的某个版本号字段（该文件只承载 §3.1 的调度参数，无版本字段）。Context Binary 还受 QNN 工具链 / HTP 架构版本绑定（§3.3 WARNING、§4.3 NOTE），OTA 升级 QNN runtime 时必须连同 `*.serialized.bin` 一起重刷。换版/回滚瞬间的在途请求应借 §3.1 的 `StopTask` / 抢占机制优雅排空，而非硬切。
 
 ## 6. 性能基准测试
 
