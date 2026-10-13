@@ -708,40 +708,17 @@ struct ToolParameters {
 
 LLM 根据所有注册 Tool 的 `ToolDefinition` 生成结构化的 `FunctionCall`，Flow 引擎解析后调用对应 Tool 的 `run_async()`，结果通过 `FunctionResponse` 回传给 LLM 继续推理。（**注意**：这条"解析 → 执行 → 回灌再推理"的闭环受 `USE_TOOL` 门控，当前默认未启用——`run_async()` 的执行与再推理都不会自动发生，详见 §4.1 的边界说明。）
 
-### 4.3 端到端调用链
+### 4.3 端到端调用链：路径 A vs 路径 B
 
-下图是**路径 A（生产中实际在跑）**的端到端链路：请求经 `SystemRuntime` 路由到 `AgentPlugin`，dispatcher 直接调 `ModelRunner` 进 `ModelScheduler`，**不经过 `BaseLlmFlow`**（`BaseLlmFlow` 属于路径 B 脚手架，见本节开头的 IMPORTANT）。
+生产中实际在跑的**路径 A**（dispatcher → `ModelRunner` → `ModelScheduler` → 后端）的完整端到端链路图，已归到模型调用主线，见 [**aadkcore 核心框架**](agent-core.html) §3.6。本节 §4.1–4.2 讲的是**路径 B**（`Runner → LlmAgent → BaseLlmFlow → BaseTool`）这套 ADK 风格脚手架。两条路径的**模型调用入口是分开的**，引用时别写串：
 
-```mermaid
-sequenceDiagram
-    participant U as 用户
-    participant SR as SystemRuntime
-    participant MD as MsgDeliverImpl
-    participant AP as AgentPlugin(业务 dispatcher)
-    participant MR as ModelRunner
-    participant MS as ModelScheduler
-    participant LLM as LLM 模型
-
-    U->>SR: 语音输入 "把空调调到 24 度"
-    SR->>MD: 按 scenario_id 路由(见 §3)
-    MD->>AP: deliver_msg(DataMessage)
-    AP->>MR: schedule_run_sync(data_message, request_id,<br/>system_prompt, user_prompt, history, ...)
-    MR->>MS: SubmitTask(CommonSchedulerTask)
-    MS->>LLM: onProcessing → streamGenerate
-    LLM-->>MS: 推理输出(可能含 FunctionCall)
-    MS-->>MR: ModelResponse
-    MR-->>AP: 返回推理结果
-    AP-->>MD: 回传结果
-    MD-->>SR: 结果回传
-    SR-->>U: TTS 播报
-```
+- **路径 A（生产在跑）**：`AgentPlugin → ModelRunner::schedule_run_sync(...)` → 组 `CommonSchedulerTask` → `ModelScheduler`。这是 `SystemAgentDispatcher` / `MemoryAgent` / `intent_extractor` 与 `libagent_group.so` 各 dispatcher 的真实调法。
+- **路径 B（脚手架，大部分未接线）**：`BaseLlmFlow::_call_llm_async` → `LlmAgent::canonical_model()` → `BaseLlm::generateContentAsync(llm_request, is_streaming)`（`src/flow/base_llm_flow.cpp`），**与 `ModelRunner` 无关**（未接线证据见 §4 开头 IMPORTANT）。
 
 > [!NOTE]
-> **为什么图里没有 `BaseLlmFlow` 与 Tool 再推理**
+> **Tool 执行与再推理当前两条路径都不成立**
 >
-> - 图中 `AP → MR` 这一跳是 `ModelRunner::schedule_run_sync(...)` / `schedule_run_sync_lite(...)`（`aadkapi/model_runner.h`），它内部组好 `CommonSchedulerTask` 交给 `ModelScheduler`。这是 `SystemAgentDispatcher` / `MemoryAgent` / `intent_extractor` 与 `libagent_group.so` 各 dispatcher 的真实调法。
-> - 如果走路径 B，这一跳会变成 `BaseLlmFlow::_call_llm_async` → `LlmAgent::canonical_model()` → `BaseLlm::generateContentAsync(llm_request, is_streaming)`（`src/flow/base_llm_flow.cpp`），**与 `ModelRunner` 无关**。两条路径的模型调用入口是分开的，引用时别写串。
-> - **Tool 执行与再推理在这两条路径里当前都不成立**：路径 A 的 dispatcher 拿到模型输出后自行处理（是否解析 `FunctionCall`、是否执行，都是业务代码的事）；路径 B 的"解析 → 执行 → `FunctionResponse` 回灌再推理"闭环受 `USE_TOOL` 门控、默认未启用（§4.1）。因此"模型输出 `FunctionCall` → 自动执行工具 → 带结果再推理"这一完整 Tool Use 循环，目前是**设计目标而非现有行为**——这一点与 robot 具身智能篇里对 Tool Use / 安全沙箱的口径一致。
+> 路径 A 的 dispatcher 拿到模型输出后自行处理（是否解析 `FunctionCall`、是否执行，都是业务代码的事）；路径 B 的"解析 → 执行 → `FunctionResponse` 回灌再推理"闭环受 `USE_TOOL` 门控、默认未启用（§4.1）。因此"模型输出 `FunctionCall` → 自动执行工具 → 带结果再推理"这一完整 Tool Use 循环，目前是**设计目标而非现有行为**——这一点与 robot 具身智能篇里对 Tool Use / 安全沙箱的口径一致。
 
 > [!TIP]
 > **框架核心价值**
