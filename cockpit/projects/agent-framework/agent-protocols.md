@@ -477,7 +477,7 @@ flowchart TD
 > [!NOTE]
 > **`scenario_id` 是消息路由键，不是模型路由键**
 >
-> 本表中的 `scenario_id` 决定 `DataMessage` 投递给哪个 `AgentPlugin`。它与模型/LoRA 路由用的 `scene_id` 是两套 ID，两者在 `ModelRunner` 内部会被桥接，未对齐时会**静默回落到 `scene_model_details_` 中 `scene_id` 最小的那条配置**（并重置 `lora_id` 与 `infer_params`，而**不是**回落到"闲聊模型"）——两者的区分、对齐要求与回落的真实行为见 [aadkcore 核心框架 · §3.3 抢占机制与 ModelRunner](agent-core.html#sec-15) 中的 `scene_id` vs `scenario_id` 说明。
+> 本表中的 `scenario_id` 决定 `DataMessage` 投递给哪个 `AgentPlugin`。它与模型/LoRA 路由用的 `scene_id` 是两套 ID，两者在 `ModelRunner` 内部会被桥接，未对齐时会**静默回落到 `scene_model_details_` 中 `scene_id` 最小的那条配置**（并重置 `lora_id` 与 `infer_params`，而**不是**回落到"闲聊模型"）——两者的区分、对齐要求与回落的真实行为见 [aadkcore 核心框架 · §3 ModelRunner — API 层调度入口](agent-core.html#sec-7) 中的 `scene_id` vs `scenario_id` 说明。
 
 ### 3.2 动态加载机制
 
@@ -592,7 +592,7 @@ flowchart LR
 >
 > 因此"关键任务走独立高优线程"是**预留的脚手架**：要真正启用，既要把 `use_thread_pool_` 置为 `false`（或改造成可配置），也要实现 `is_high_priority_task` 的判定逻辑。这也解释了 §3.3 卸载流程里为何要停这两个 worker——它们被构造并 `stop()`，但在默认配置下从未承载过任务。
 >
-> 注意与**模型层**优先级区分开：这里说的是 Agent 消息投递层的线程优先级；模型推理侧的 `ModelScheduler` 有另一套真正生效的 LOW/NORMAL/HIGH/CRITICAL 四级优先级与抢占机制（见 [aadkcore 核心框架 · §3.2/§3.3](agent-core.html#sec-14)）。两者不要混为一谈。
+> 注意与**模型层**优先级区分开：这里说的是 Agent 消息投递层的线程优先级；模型推理侧的 `ModelScheduler` 有另一套真正生效的 LOW/NORMAL/HIGH/CRITICAL 四级优先级与抢占机制（见 [aadkcore 核心框架 · §4.2/§4.3](agent-core.html#sec-10)）。两者不要混为一谈。
 
 ## 4. LLM Flow 与 Tool 系统
 
@@ -710,7 +710,7 @@ LLM 根据所有注册 Tool 的 `ToolDefinition` 生成结构化的 `FunctionCal
 
 ### 4.3 端到端调用链：路径 A vs 路径 B
 
-生产中实际在跑的**路径 A**（dispatcher → `ModelRunner` → `ModelScheduler` → 后端）的完整端到端链路图，已归到模型调用主线，见 [**aadkcore 核心框架**](agent-core.html) §3.6。本节 §4.1–4.2 讲的是**路径 B**（`Runner → LlmAgent → BaseLlmFlow → BaseTool`）这套 ADK 风格脚手架。两条路径的**模型调用入口是分开的**，引用时别写串：
+生产中实际在跑的**路径 A**（dispatcher → `ModelRunner` → `ModelScheduler` → 后端）的完整端到端链路图，已归到模型调用主线，见 [**aadkcore 核心框架**](agent-core.html) §2。本节 §4.1–4.2 讲的是**路径 B**（`Runner → LlmAgent → BaseLlmFlow → BaseTool`）这套 ADK 风格脚手架。两条路径的**模型调用入口是分开的**，引用时别写串：
 
 - **路径 A（生产在跑）**：`AgentPlugin → ModelRunner::schedule_run_sync(...)` → 组 `CommonSchedulerTask` → `ModelScheduler`。这是 `SystemAgentDispatcher` / `MemoryAgent` / `intent_extractor` 与 `libagent_group.so` 各 dispatcher 的真实调法。
 - **路径 B（脚手架，大部分未接线）**：`BaseLlmFlow::_call_llm_async` → `LlmAgent::canonical_model()` → `BaseLlm::generateContentAsync(llm_request, is_streaming)`（`src/flow/base_llm_flow.cpp`），**与 `ModelRunner` 无关**（未接线证据见 §4 开头 IMPORTANT）。
@@ -736,7 +736,7 @@ LLM 根据所有注册 Tool 的 `ToolDefinition` 生成结构化的 `FunctionCal
 | **延迟预算** | < 2s 端到端（示例目标） | 预算分配示例（**非实测**）：ASR ~300ms、LLM 推理 ~800ms、Tool 执行 ~500ms、TTS ~400ms。其中 LLM 项应按平台 roofline/带宽模型推导（TTFT 看算力、decode 看带宽），不要拍固定毫秒数，方法见 [**LLM 推理原理与性能模型**](../../general/infer-principles.html) 与 [**端侧解码与服务化优化**](../../general/infer-serving.html)。 |
 | **离线能力** | 本地优先 + 云端 fallback | 核心 Tools（车控、本地音乐、导航缓存）全部本地化；联网后自动同步云端 Tools（在线搜索、实时路况）。端云分工见 §5。 |
 | **错误处理** | 重试 + 降级 + 告知 | Tool 调用失败时：先重试 1 次 → 尝试降级方案 → 告知用户并建议替代操作。 |
-| **并发调度** | ModelScheduler 优先级/抢占（已实现） | **模型层**并发由 ModelScheduler 做优先级/抢占（LOW/NORMAL/HIGH/CRITICAL、`PreemptAndSubmit`、加权出队、`BoostPriority`，见 [**aadkcore 核心框架**](agent-core.html) §3）；**Agent 层**当前是按 `scenario_id` 的场景分发（§3），A2A 并行编排为可选协议、未用于此链路（§2），DAG 依赖分析的 Tool 自动并行同为设计方向。 |
+| **并发调度** | ModelScheduler 优先级/抢占（已实现） | **模型层**并发由 ModelScheduler 做优先级/抢占（LOW/NORMAL/HIGH/CRITICAL、`PreemptAndSubmit`、加权出队、`BoostPriority`，见 [**aadkcore 核心框架**](agent-core.html) §4）；**Agent 层**当前是按 `scenario_id` 的场景分发（§3），A2A 并行编排为可选协议、未用于此链路（§2），DAG 依赖分析的 Tool 自动并行同为设计方向。 |
 
 ## 5. 端云协同架构（设计/扩展方向）
 
