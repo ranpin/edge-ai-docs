@@ -477,7 +477,7 @@ flowchart TD
 > [!NOTE]
 > **`scenario_id` 是消息路由键，不是模型路由键**
 >
-> 本表中的 `scenario_id` 决定 `DataMessage` 投递给哪个 `AgentPlugin`。它与模型/LoRA 路由用的 `scene_id` 是两套 ID，两者在 `ModelRunner` 内部会被桥接，未对齐时会**静默回落到 `scene_model_details_` 中 `scene_id` 最小的那条配置**（并重置 `lora_id` 与 `infer_params`，而**不是**回落到"闲聊模型"）——两者的区分、对齐要求与回落的真实行为见 [aadkcore 核心框架 · §3.3 抢占机制与 ModelRunner](agent-core.html#sec-14) 中的 `scene_id` vs `scenario_id` 说明。
+> 本表中的 `scenario_id` 决定 `DataMessage` 投递给哪个 `AgentPlugin`。它与模型/LoRA 路由用的 `scene_id` 是两套 ID，两者在 `ModelRunner` 内部会被桥接，未对齐时会**静默回落到 `scene_model_details_` 中 `scene_id` 最小的那条配置**（并重置 `lora_id` 与 `infer_params`，而**不是**回落到"闲聊模型"）——两者的区分、对齐要求与回落的真实行为见 [aadkcore 核心框架 · §3.3 抢占机制与 ModelRunner](agent-core.html#sec-15) 中的 `scene_id` vs `scenario_id` 说明。
 
 ### 3.2 动态加载机制
 
@@ -592,7 +592,7 @@ flowchart LR
 >
 > 因此"关键任务走独立高优线程"是**预留的脚手架**：要真正启用，既要把 `use_thread_pool_` 置为 `false`（或改造成可配置），也要实现 `is_high_priority_task` 的判定逻辑。这也解释了 §3.3 卸载流程里为何要停这两个 worker——它们被构造并 `stop()`，但在默认配置下从未承载过任务。
 >
-> 注意与**模型层**优先级区分开：这里说的是 Agent 消息投递层的线程优先级；模型推理侧的 `ModelScheduler` 有另一套真正生效的 LOW/NORMAL/HIGH/CRITICAL 四级优先级与抢占机制（见 [aadkcore 核心框架 · §3.2/§3.3](agent-core.html#sec-13)）。两者不要混为一谈。
+> 注意与**模型层**优先级区分开：这里说的是 Agent 消息投递层的线程优先级；模型推理侧的 `ModelScheduler` 有另一套真正生效的 LOW/NORMAL/HIGH/CRITICAL 四级优先级与抢占机制（见 [aadkcore 核心框架 · §3.2/§3.3](agent-core.html#sec-14)）。两者不要混为一谈。
 
 ## 4. LLM Flow 与 Tool 系统
 
@@ -747,6 +747,19 @@ sequenceDiagram
 > **框架核心价值**
 >
 > aadkcore 将 Agent 开发中的共性能力（模型调度、对话管理、Tool 调用、RAG、A2A 协作）下沉到框架层，业务 Agent 开发者只需关注：(1) 编写 `AgentPlugin` 实现业务逻辑；(2) 注册 `BaseTool` 连接外部能力；(3) 编写 `instructions` 定义 Agent 行为。框架负责调度、流水线、协议对接等基础设施工作。
+
+### 4.4 Tool Use 设计要点
+
+§4.1–4.3 讲的是 Flow/Tool 的**代码现状**，这一节汇总端侧 Agent Tool 体系的**设计考量**（灵活性 vs 安全性），与前者互补：
+
+| 设计要点 | 方案 | 说明 |
+| :--- | :--- | :--- |
+| **工具注册** | JSON Schema 描述 | 每个工具用 JSON Schema 定义函数名 / 参数类型 / 必填项 / 描述（结构见 §4.2 `ToolDefinition`），LLM 据此生成结构化调用参数，无需 Few-shot 示例。 |
+| **安全沙箱** | L1 / L2 / L3 三级分级 | 只读 / 可逆 / 不可逆分级确认，防误操作与危险操作；分级定义与安全检查流水线见 §6（设计方向）。 |
+| **延迟预算** | < 2s 端到端（示例目标） | 预算分配示例（**非实测**）：ASR ~300ms、LLM 推理 ~800ms、Tool 执行 ~500ms、TTS ~400ms。其中 LLM 项应按平台 roofline/带宽模型推导（TTFT 看算力、decode 看带宽），不要拍固定毫秒数，方法见 [**LLM 推理原理与性能模型**](../../general/infer-principles.html) 与 [**端侧解码与服务化优化**](../../general/infer-serving.html)。 |
+| **离线能力** | 本地优先 + 云端 fallback | 核心 Tools（车控、本地音乐、导航缓存）全部本地化；联网后自动同步云端 Tools（在线搜索、实时路况）。端云分工见 §5。 |
+| **错误处理** | 重试 + 降级 + 告知 | Tool 调用失败时：先重试 1 次 → 尝试降级方案 → 告知用户并建议替代操作。 |
+| **并发调度** | ModelScheduler 优先级/抢占（已实现） | **模型层**并发由 ModelScheduler 做优先级/抢占（LOW/NORMAL/HIGH/CRITICAL、`PreemptAndSubmit`、加权出队、`BoostPriority`，见 [**aadkcore 核心框架**](agent-core.html) §3）；**Agent 层**当前是按 `scenario_id` 的场景分发（§3），A2A 并行编排为可选协议、未用于此链路（§2），DAG 依赖分析的 Tool 自动并行同为设计方向。 |
 
 ## 5. 端云协同架构（设计/扩展方向）
 
