@@ -80,8 +80,8 @@ graph TD
 
 - **输入**：语音（ASR 文本或 Qwen3-Omni 原生音频）、车内/前向图像帧、车态 JSON 快照、乘客与实时上下文——异构输入统一汇入框架。
 - **应用层（agent\_group）**：车控、主动视觉、闲聊、GUI 等场景 Agent，以插件形式 dlopen 加载、按 `scenario_id` 路由；dispatcher 侧用 `PromptManager` / `CarSignalManager` 组装 prompt 并注入车态。详见 [**场景 Agent 应用**](agent-group.html)。
-- **API 层（aadkapi/）**：`ModelInstance` / `ChatHistory` / `RagInstance` / `McpServer` / `A2AServer` / `ModelRunner` 等统一接口，屏蔽后端差异。详见 [**aadkcore 核心框架**](agent-core.html)。
-- **核心实现层（include/ + src/）**：`BaseAgent`/`LlmAgent`、`BaseLlmFlow`/`SingleFlow`、`ModelScheduler`（优先级/抢占）、`AgentRuntime`/`SystemRuntime`、`BaseTool`/`BaseToolset`。协议与执行详见 [**协议与运行时执行**](agent-protocols.html)。
+- **API 层（aadkapi/）**：`ModelInstance` / `ChatHistory` / `RagInstance` / `ModelRunner` 等模型与状态接口（详见 [**aadkcore 核心框架**](agent-core.html)），以及 `McpServer` / `A2AServer` 协议服务端（详见 [**协议与运行时执行**](agent-protocols.html)）；统一接口屏蔽后端差异。
+- **核心实现层（include/ + src/）**：`ModelScheduler`（优先级/抢占，详见 [**aadkcore 核心框架**](agent-core.html)）；`BaseAgent`/`LlmAgent`、`BaseLlmFlow`/`SingleFlow`、`AgentRuntime`/`SystemRuntime`、`BaseTool`/`BaseToolset`（详见 [**协议与运行时执行**](agent-protocols.html)）。
 - **平台适配层**：一套代码对接 QNN（SA8397P）/ Lape（Jetson Orin）/ Bailian（云端 x86）三类后端。部署详见 [**设备部署**](deploy.html)。
 - **执行器**：TTS 语音、车辆控制、UI 更新、安全告警。
 
