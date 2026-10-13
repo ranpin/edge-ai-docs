@@ -51,7 +51,7 @@ graph TD
         C5["BaseTool / BaseToolset"]
     end
 
-    subgraph PLATFORM["平台适配层"]
+    subgraph PLATFORM["平台适配层（落地详见设备部署）"]
         D1["Lape — Jetson Orin"]
         D2["QNN — SA8397P"]
         D3["Bailian — Cloud x86"]
@@ -484,7 +484,7 @@ score = priority * weight_priority + wait_time_ms * weight_wait * 0.001
 | `GetTaskStatus(task_id)` | 查询单个任务状态（返回 `TaskResponse`，`status` 为 `TASK_ALREADY_EXISTS` / `TASK_NOT_FOUND`） |
 | `ListAllTasks()` | 列出所有任务及其状态（返回 `vector<TaskUpdate>`） |
 
-**ModelRunner 单例**（`aadkapi/model_runner.h`）是调度器的上层封装：
+**ModelRunner 单例**（`aadkapi/model_runner.h`）是 **API 层的调度入口**：业务 dispatcher 不直接碰 `ModelScheduler`，而是调 `ModelRunner`，由它组好 `CommonSchedulerTask` 再提交调度器（端到端调用链见 [**协议与运行时执行**](agent-protocols.html) §4.3）。作为调度器的上层封装，它的关键成员：
 
 - `getInstance()` 全局单例，所有 Agent 共享
 - `scene_model_details_`：`scene_id → ModelDetails` 映射，管理各场景的模型实例与 LoRA 配置
