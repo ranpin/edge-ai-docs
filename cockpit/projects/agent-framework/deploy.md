@@ -89,67 +89,12 @@ flowchart LR
 
 ## 2. ISP 与端到端数据流
 
-### 2.1 ISP 处理流水线
-
-图像信号处理器 (ISP) 是摄像头原始数据到可用图像的桥梁。SA8397P 内置 Spectra ISP，完整处理流水线如下：
-
-```mermaid
-flowchart LR
-    A["Camera SensorRAW Bayer"] --> B["BLC黑电平校正"]
-    B --> C["BPC坏点校正"]
-    C --> D["Demosaic去马赛克插值"]
-    D --> E["CCM色彩校正矩阵"]
-    E --> F["Gamma伽马校正"]
-    F --> G["NR降噪处理"]
-    G --> H["Sharpen锐化增强"]
-    H --> I["NV12 输出YUV 4:2:0"]
-
-    style A fill:#e74c3c,color:#fff
-    style D fill:#f39c12,color:#fff
-    style G fill:#3498db,color:#fff
-    style I fill:#2ecc71,color:#fff
-```
-
-### 2.2 端到端延迟分解
-
-从摄像头捕获到最终 GPU 渲染输出的全链路，可按阶段拆解延迟。下图为**分阶段延迟分解**示意（每段 = 该阶段在一帧内占用的耗时，各段之和 ≈ 端到端总延迟）：
-
-**Camera → AI 输出 分阶段延迟分解（示例参数）**
-
-```mermaid
-xychart-beta
-    title "Camera → AI 输出 分阶段延迟分解（示例）"
-    x-axis ["Camera→ISP", "ISP 处理", "ISP→CDSP (ION)", "HTP 推理", "后处理 (CPU)", "GPU 渲染"]
-    y-axis "各阶段延迟 (ms)" 0 --> 14
-    bar [2, 3, 0.1, 12.9, 2, 4]
-```
+> ISP 处理流水线、端到端延迟分解、Zero-Copy 数据通路（含定长 POD / 对齐 / heap 约束、ION→dma-buf 演进）属通用硬件知识，见 [**硬件架构 · ISP 与摄像头数据通路（§8）**](../../general/hardware.html)；零拷贝的 cache 一致性规则见 hardware §4.3。本节只记 aadkcore VLM 链路的特定情况。
 
 > [!NOTE]
-> **数据口径**：图中各段延迟为**示例参数**，仅用于演示「分阶段延迟分解」这一方法，不代表实测；请代入你自己平台的流水线实测替换（全站数据口径见 [硬件平台](../../general/hardware.html) 顶部 NOTE）。读图要点：把端到端链路拆成串行阶段后，**HTP 推理通常占大头**，是优化的首要靶点；ISP→CDSP 走 Zero-Copy（见 §2.3）时该段可压到亚毫秒级。若要画成累计曲线（瀑布），则末段值应等于各阶段之和（此例约 24ms），而非单段值。
-
-### 2.3 Zero-Copy 数据通路
-
-> [!TIP]
-> **Zero-Copy 路径：消除 CPU 内存拷贝瓶颈**
+> **aadkcore 的 VLM 链路并非纯 Zero-Copy**
 >
-> 在传统方案中，数据在 ISP、CPU、DSP、GPU 之间需要多次内存拷贝 (`memcpy`)，带来显著延迟和功耗开销。SA8397P 的 Zero-Copy 路径彻底消除了这一瓶颈：
->
-> * **ISP 写入共享 Buffer**：ISP 处理完成后，直接将 NV12 图像写入共享内存缓冲区（早期 ION，新内核已演进为 dma-buf heap，见下方说明）
-> * **CDSP 映射同一 Buffer**：Hexagon CDSP 通过 FastRPC 映射同一块内存，无需数据拷贝
-> * **HTP 直接读取**：HTP 从映射的 Buffer 中直接读取输入张量，执行神经网络推理
-> * **结果写入另一 Buffer**：推理结果写入新的共享 Buffer，供下游使用
-> * **GPU 读取结果**：Adreno GPU 映射结果 Buffer，直接渲染到显示层
->
-> **性能收益**：整条数据通路中 **无任何 CPU memcpy 操作**，端到端延迟与功耗均有可观下降（量级示意：延迟减少约 3~5ms、功耗降低约 15%，仅为演示收益方向的示例参数，请代入实测）。Buffer 经 **SMMU/IOMMU 映射**后供各引擎 DMA 访问——dma-buf 允许**非物理连续**的散列页经 IOMMU 拼成设备可见的连续虚拟地址，因此「Zero-Copy」依赖的是 IOMMU 映射而非物理地址连续性。
->
-> **ION → dma-buf 演进**：ION 是 Android 早期的共享内存分配器，主线内核已用 **dma-buf heap**（`/dev/dma_heap/*`）取代。二者对上层都表现为「一块可跨引擎共享、可被 FastRPC/SMMU 映射的 dma-buf」，但分配接口与节点名不同；移植到新 BSP 时注意分配器 API 与 heap 名的变化。
-
-> [!NOTE]
-> **Zero-Copy 的真实约束（不是「免费」的）**
->
-> Zero-Copy 能成立有前提：(1) **定长 POD 张量**——buffer 的形状/字节数在生产端（ISP）与消费端（HTP graph 输入）必须事先约定，变长数据（如文本 token、动态分辨率图）走不了这条通路；(2) **对齐与 stride**——NV12 的行 stride / scanline 对齐、以及 dma-buf 的页对齐要满足各引擎 DMA 要求，生产/消费双方必须用同一套 layout，否则「同一块内存」读出来是错位的；(3) **同一可映射 heap**——buffer 必须从所有引擎都能映射的 heap（system heap 经 SMMU/FastRPC）分配，secure/专用 heap 会破坏共享。
->
-> **对 aadkcore 的 VLM 链路尤其如此**：平台级 Zero-Copy（ISP→HTP dma-buf）覆盖的是「摄像头→原始帧」这一段；而 aadkcore 收到的是经 Fusion IPC 传来的**图像字节**，先在 **CPU 做预处理**（resize / patchify / normalize 成 float 张量），再 `memcpy` 进 AISA 张量喂给 HTP 上的视觉编码器。也就是说 VLM Agent 的端到端链路**并非纯 Zero-Copy**——预处理这一段存在 CPU 拷贝。真正端到端 Zero-Copy（ISP 输出直灌视觉编码器）属于定长管线的 DMS/感知范式，与通用 VLM-Agent 的「任意分辨率 + 预处理」模式不同，做延迟预算时要分开算。
+> 平台级 Zero-Copy（ISP→HTP dma-buf，见 [硬件架构 §8.3](../../general/hardware.html)）覆盖的是「摄像头→原始帧」这一段；而 aadkcore 收到的是经 Fusion IPC 传来的**图像字节**，先在 **CPU 做预处理**（resize / patchify / normalize 成 float 张量），再 `memcpy` 进 AISA 张量喂给 HTP 上的视觉编码器。也就是说 VLM Agent 的端到端链路**并非纯 Zero-Copy**——预处理这一段存在 CPU 拷贝。真正端到端 Zero-Copy（ISP 输出直灌视觉编码器）属于定长管线的 DMS/感知范式，与通用 VLM-Agent 的「任意分辨率 + 预处理」模式不同，做延迟预算时要分开算。
 
 ## 3. 多模型调度与优化
 
