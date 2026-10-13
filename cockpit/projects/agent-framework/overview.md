@@ -14,7 +14,7 @@
 
 ## 1. 摘要
 
-本项目研发了一套面向智能座舱的**端侧多模态大模型 Agent 框架**，由基础设施库 **aadkcore** 与场景插件库 **agent\_group** 组成，目标是在车规级算力（SA8397P，Hexagon NPU 约 70 TOPS INT8）上离线运行多模态大模型，并驱动车控、主动视觉等场景 Agent。
+本项目研发了一套面向智能座舱的**端侧多模态大模型 Agent 框架**，由基础设施库 **aadkcore** 与场景插件库 **agent\_group** 组成，目标是在车规级算力（SA8397P，Hexagon NPU 约 70 TOPS INT8）上离线运行多模态大模型，并驱动车控、主动视觉等场景 Agent。**需界定的是：框架本身不训练、不量化模型**——端侧模型（如 Qwen3-Omni-4B INT4）取自上游已量化产物，aadkcore 本质是一个 **harness（推理后端适配 + Agent 运行时）**，向下屏蔽 QNN / Lape / Bailian 后端差异、向上把既有模型在各业务场景跑起来；工程价值集中在集成、适配与编排，而非模型压缩。
 
 aadkcore 提供统一模型接口（ModelInstance）、模型调度器（ModelScheduler，LOW/NORMAL/HIGH/CRITICAL 四级优先级与抢占）、多音区对话管理（ChatHistory）、RAG 知识增强，以及 MCP 工具协议、A2A 协议、LLM Flow 与 Tool Use 运行时；通过平台适配层对接 **QNN（SA8397P）/ Lape（Jetson Orin）/ Bailian（云端 x86）** 三类推理后端。agent\_group 以插件形式实现**车辆控制（30+ 技能）、主动视觉（迎宾/送宾/行中三模式）、闲聊、GUI** 等场景 Agent。
 
@@ -76,7 +76,7 @@ graph TD
 | **Qwen3-1.7B** | 1.7B | INT4 | ~28 | ~1.2 GB | 良好 | 轻量级意图识别、低延迟场景 |
 | **Llama3.2-3B** | 3B | INT4 | ~15 | ~2.0 GB | 中等 | 多语言场景、海外车型 |
 
-表中生成速度与内存占用为 INT4 量化下的量级示例，实际取决于具体平台带宽与算力，请按自己的平台代入推导（方法见 [**LLM 推理原理与性能模型**](../../general/infer-principles.html)）。
+表中生成速度与内存占用为 INT4 量化下的量级示例，实际取决于具体平台带宽与算力，请按自己的平台代入推导（方法见 [**LLM 推理原理与性能模型**](../../general/infer-principles.html)）。**「量化精度」一列是上游已量化产物的规格——本节是框架的*选型*依据（挑哪个已量化模型来集成），量化本身不在本项目范围内**（原理见 [**端侧模型量化与压缩**](../../general/quantization.html)）。
 
 > [!NOTE]
 > **哪些模型是框架真正接好的，哪些只是选型候选**
