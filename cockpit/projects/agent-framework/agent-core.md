@@ -29,9 +29,9 @@
 graph TD
     subgraph APP["应用层 (agent_group / examples)"]
         A1["车控 Agent"]
-        A2["闲聊 Agent"]
-        A3["主动语音 Agent"]
-        A4["视觉问答 Agent"]
+        A2["主动视觉 Agent"]
+        A3["闲聊 Agent"]
+        A4["GUI Agent"]
     end
 
     subgraph API["API 层 (aadkapi/)"]
@@ -66,6 +66,8 @@ graph TD
     style CORE fill:#f39c12,color:#fff
     style PLATFORM fill:#2ecc71,color:#fff
 ```
+
+> 本图是**代码级**分层——四层对应下方 §1.2 的 `aadkapi/` 与 `include/`+`src/` 目录；含输入/执行器上下文的**项目级**架构总览见 [**项目简介 · 方法总览**](overview.html)。各组件的详解分属两篇：**模型调用主线**（ModelInstance / ModelScheduler / ChatHistory / RAG）在本篇，**协议与执行主线**（MCP / A2A / 运行时与插件 / LLM Flow 与 Tool）在 [**协议与运行时执行**](agent-protocols.html)。
 
 ### 1.2 代码目录结构
 
