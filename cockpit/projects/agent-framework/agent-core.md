@@ -164,12 +164,12 @@ sequenceDiagram
     SR-->>U: TTS 播报
 ```
 
-逐跳对应本篇构件：`AP → MR` 是 §3 的 `ModelRunner`（API 层调度入口），`MR → MS` 是 §4.1–4.5 的 `ModelScheduler`（`SubmitTask` 进优先级队列、worker 执行、回调返回），`MS → MI → BE` 是 worker 经 §5 的 `ModelInstance.streamGenerate` 落到平台后端推理。`scenario_id` 路由与插件加载属运行时主线，见 [**协议与运行时执行**](agent-protocols.html) §3；dispatcher 侧的请求准备（prompt 组装、车态注入、RAG 检索）见 [**场景 Agent 应用**](agent-group.html) §2.1。
+逐跳对应本篇构件：`AP → MR` 是 §3 的 `ModelRunner`（API 层调度入口），`MR → MS` 是 §4.1–4.5 的 `ModelScheduler`（`SubmitTask` 进优先级队列、worker 执行、回调返回），`MS → MI → BE` 是 worker 经 §5 的 `ModelInstance.streamGenerate` 落到平台后端推理。`scenario_id` 路由与插件加载属运行时主线，见 [**协议与运行时执行**](agent-protocols.html) §1；dispatcher 侧的请求准备（prompt 组装、车态注入、RAG 检索）见 [**场景 Agent 应用**](agent-group.html) §2.1。
 
 > [!NOTE]
 > **这是「路径 A」；还有一条未接线的「路径 B」**
 >
-> 上图是生产中实际在跑的路径 A（dispatcher 直接经 `ModelRunner` 进调度器）。aadkcore 里还预留了一条 ADK 风格的**路径 B**（`Runner → LlmAgent → BaseLlmFlow → BaseTool`），但**大部分未接线**：`SystemAgent` 的 `flow_` 是死成员、`Runner` 从未被实例化、Tool 闭环受 `USE_TOOL` 门控默认未启用。路径 B 的代码现状、以及「为什么生产链路里没有 `BaseLlmFlow` 与 Tool 再推理」见 [**协议与运行时执行**](agent-protocols.html) §4。
+> 上图是生产中实际在跑的路径 A（dispatcher 直接经 `ModelRunner` 进调度器）。aadkcore 里还预留了一条 ADK 风格的**路径 B**（`Runner → LlmAgent → BaseLlmFlow → BaseTool`），但**大部分未接线**：`SystemAgent` 的 `flow_` 是死成员、`Runner` 从未被实例化、Tool 闭环受 `USE_TOOL` 门控默认未启用。路径 B 的代码现状、以及「为什么生产链路里没有 `BaseLlmFlow` 与 Tool 再推理」见 [**协议与运行时执行**](agent-protocols.html) §2。
 
 ## 3. ModelRunner — API 层调度入口
 
@@ -195,7 +195,7 @@ sequenceDiagram
 > - 命中 → 使用该 `scene_id` 对应的模型 / LoRA；
 > - **未命中 → `getModelDetailsByScene()` 回落到 `scene_model_details_.begin()->second`**——即 `std::map` 中 **`scene_id` 最小**的那条 `ModelDetails`（与 `CHITCHAT` 无关，纯粹取决于配置里谁的 `scene_id` 最小），而不是报错。
 >
-> 回落时还会**同时重置两项**：`lora_id = -1`（退回 base model）、`infer_params = InferParams()`（把该场景配置的温度 / `ebnf_path` / 采样参数**一并静默丢掉**）。所以新增 Agent 时，`constant_ids.h` 里的 `scenario_id` 与模型配置里的 `scene_id` **必须对齐**，否则会出现"消息路由正确、但模型/LoRA/采样参数悄悄走了最小 `scene_id` 的默认配置"的问题——现象是回答风格/能力不对，日志里却没有明显错误。（`constant_ids.h` 的完整 `scenario_id` 常量表见 [协议与运行时执行 · §3.1 AgentPlugin 插件接口](agent-protocols.html#sec-14)。）
+> 回落时还会**同时重置两项**：`lora_id = -1`（退回 base model）、`infer_params = InferParams()`（把该场景配置的温度 / `ebnf_path` / 采样参数**一并静默丢掉**）。所以新增 Agent 时，`constant_ids.h` 里的 `scenario_id` 与模型配置里的 `scene_id` **必须对齐**，否则会出现"消息路由正确、但模型/LoRA/采样参数悄悄走了最小 `scene_id` 的默认配置"的问题——现象是回答风格/能力不对，日志里却没有明显错误。（`constant_ids.h` 的完整 `scenario_id` 常量表见 [协议与运行时执行 · §1.1 AgentPlugin 插件接口](agent-protocols.html#sec-2)。）
 >
 > 两个重载的实际行为还有三处与直觉相反，务必注意：
 >
@@ -572,7 +572,7 @@ CPROBE_END_SPAN(model_infer_span);
 > `CompletionCallback = function<void(const string& content, void* user_data)>` — 非流式回调，生成完成后一次性返回。
 > `CompletionCallbackResponse = function<void(const string& content, void* user_data, const ModelResponse& response)>` — 非流式回调的**三参变体**，额外回传 `ModelResponse`（含 ttft / token 统计等），需要性能指标时用它。
 >
-> **关于 `tools` 参数**：`streamGenerate` / `generate` 末尾的 `tools` 只负责把工具**声明**下发给后端（Lape 会以 `<tools>` XML 注入 system prompt，让模型"看到"函数签名）。但"解析模型输出的 `FunctionCall` → 执行工具 → 回灌再推理"这条闭环**不是自动的**，受 `USE_TOOL` 门控且默认未启用，详见 [协议与运行时执行 · §4.1](agent-protocols.html#sec-19)。
+> **关于 `tools` 参数**：`streamGenerate` / `generate` 末尾的 `tools` 只负责把工具**声明**下发给后端（Lape 会以 `<tools>` XML 注入 system prompt，让模型"看到"函数签名）。但"解析模型输出的 `FunctionCall` → 执行工具 → 回灌再推理"这条闭环**不是自动的**，受 `USE_TOOL` 门控且默认未启用，详见 [协议与运行时执行 · §2.1](agent-protocols.html#sec-7)。
 
 ### 5.2 多模态消息类型系统
 
