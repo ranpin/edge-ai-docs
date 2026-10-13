@@ -102,6 +102,35 @@ graph TD
 >
 > "屏蔽后端差异"在大多数接口上成立，但 `pauseGenerate/resumeGenerate`（时间片挂起/恢复，保留 KV）是例外——只有 Lape/Orin 实现了它们，SA8397P / 云端开启 `enable_timeslice` 会因基类抛 `Not implemented` 且无人捕获而**崩进程**。详见 §3.4 的平台陷阱。
 
+### 1.4 端侧模型选型与支持矩阵
+
+§1.3 列的是平台与后端，这一节列**框架实际接好的端侧模型**与选型依据。在 SA8397P 级别硬件上（Hexagon NPU 约 70 TOPS INT8），可运行的端侧大模型需兼顾推理速度、质量与内存，座舱场景首选 **Qwen3-Omni-4B**（原生支持文本/图像/音频/视频）：
+
+| 模型 | 参数量 | 量化精度 | 生成速度 (tok/s) | 内存占用 | 中文能力 | 适用场景 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Qwen3-Omni-4B** | 4B | INT4 | ~10 | ~2.5 GB | 优秀 | 多模态座舱 Agent (语音+视觉+车控) |
+| **Qwen3-4B** | 4B | INT4 | ~12 | ~2.5 GB | 优秀 | 纯文本 Function Calling、对话 |
+| **Qwen3-1.7B** | 1.7B | INT4 | ~28 | ~1.2 GB | 良好 | 轻量级意图识别、低延迟场景 |
+| **Llama3.2-3B** | 3B | INT4 | ~15 | ~2.0 GB | 中等 | 多语言场景、海外车型 |
+
+表中生成速度与内存为 INT4 量化下的量级示例，实际取决于平台带宽与算力，请按自己的平台代入推导（方法见 [**LLM 推理原理与性能模型**](../../general/infer-principles.html)）。**「量化精度」是上游已量化产物的规格——框架做的是选型与集成，量化本身不在本项目范围内**（原理见 [**端侧模型量化与压缩**](../../general/quantization.html)）。
+
+> [!NOTE]
+> **哪些模型是框架真正接好的，哪些只是选型候选**
+>
+> 上表是「选型对比」，不代表每一行都已在 aadkcore 里接好后端。按代码核实，框架当前**已注册并带配置**的端侧模型是：
+>
+> - **Qwen3-Omni-4B**：QNN（`qnn/qwen3-omni-4b`，SA8397）与 Lape（`lape/Qwen3-Omni-4B`，Orin）双后端均有，是当前主推的多模态座舱模型；
+> - **Qwen2.5-Omni-7B**：Lape 后端（`lape/Qwen2.5-Omni-7B`），Orin 上以 GPTQ-Int4 权重部署；
+> - **Qwen2.5-VL-3B**：Lape 后端（`lape/Qwen2.5-VL-3B`），纯视觉场景。
+>
+> 表中 **Qwen3-4B / Qwen3-1.7B / Llama3.2-3B 属于选型候选**，用于说明「按延迟/内存预算挑模型」的方法，框架里暂无对应的注册后端与量产配置，落地前需自行接入并实测。另外，Qwen3-Omni 模型族原生支持文本/图像/音频/视频，但 aadkcore 目前接好的预处理器是**图像（ViT）+ 音频**两路（`qwen2_vl_processor` / `qwen25_audio_processor`），视频输入尚未在框架内打通。
+
+> [!TIP]
+> **选型建议**
+>
+> 国内座舱场景首选 **Qwen3-Omni-4B**：原生支持音频输入/输出，省去独立 ASR+TTS 模块，系统架构更简洁；中文能力和 Function Calling 能力在同尺寸模型中领先。INT4 量化后内存约 2.5GB，SA8397P 可承载。如果延迟预算极紧，可用 Qwen3-1.7B 做意图识别前端 + Qwen3-Omni-4B 做复杂推理的级联架构——注意该前端只适用于**短 prompt 的纯意图分类**场景：端侧 TTFT 包含完整 prefill，随 prompt 长度增长，具体延迟预算应按带宽/roofline 模型推导，而非拍一个固定毫秒数。
+
 ## 2. 统一模型接口 — ModelInstance
 
 `ModelInstance`（定义于 `aadkapi/model_instance.hpp`）是面向 Agent 开发者的核心模型交互类。它封装了单个 LLM 模型实例，提供流式/非流式生成、多模态输入、LoRA 热加载等能力，屏蔽 Lape / QNN / Bailian 后端差异。
@@ -660,6 +689,17 @@ CPROBE_END_SPAN(model_infer_span);
 ## 4. 多音区对话管理 — ChatHistory
 
 车载座舱场景下，不同座位的乘员可能同时与 AI 助手对话。`ChatHistory`（定义于 `aadkapi/chat_history.hpp`）实现了按音区隔离的对话历史管理，支持关键人物识别与指代消歧。
+
+> [!NOTE]
+> **记忆系统分三层，ChatHistory 承载其中的短期 / 长期部分**
+>
+> 端侧 Agent 的记忆可分三层，对应到 aadkcore 的实现程度不同：
+>
+> - **短期记忆（对话窗口，已实现）**：即本节 `ChatHistory`——多音区对话历史，支持按轮数 / 时间段 / token 预算 / 音区裁剪取用（§4.3）。注意 KV/prefix cache 属于**推理层的复用加速**（省 system prompt 重复 prefill），不是记忆存储，别混为一谈。
+> - **长期记忆（用户画像，部分实现）**：`ChatHistory` 的关键人物识别（§4.2）+ `UserInfoExtractor` 从对话抽取姓名/品牌等信息；持久化由 `SQLiteDataService` 落库（对话历史、带位置/时间戳的图片，按 app/user 隔离）。
+> - **情景记忆（按事件检索，偏设计方向）**：`BaseMemoryService` 定义了 `add_session_to_memory`/`search_memory` 的会话级检索接口，但当前 `InMemoryMemoryService` 实现基本是占位，真正的「行程/事件按需检索」尚未落地。
+>
+> 座舱场景下驾驶习惯与个人偏好属高敏感数据，**端侧记忆**（零上传、零网络延迟、完全离线可用）是首选；也正因为落在端侧、容量与检索成本受限，框架把「认人」做成轻量的关键人物 alias 机制（§4.2），而不是在端上维护一个重量级向量记忆库。
 
 ### 4.1 音区枚举 AudioZone
 

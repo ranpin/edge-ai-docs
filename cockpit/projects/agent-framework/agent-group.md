@@ -629,6 +629,11 @@ agent\_group 是**多项目共用**的场景 Agent 插件库：除框架通用 A
 
 ## 7. Prompt 模板工程
 
+> [!NOTE]
+> **为什么是 prompt 注入，而不是 token 级 embedding 融合**
+>
+> 文献中常见的"理想化多模态融合架构"是用独立的多模态编码器把各模态对齐到统一 embedding 空间、车态也编码为结构化 token。aadkcore **没有**采用这种方式，而是 **prompt 注入**：LLM 只看到"文本 prompt + 原生多模态内容"，车态就是 prompt 里的结构化文本（`[CAR_STATE]`）。这样无需定制融合编码器、不增加训练成本，新增车态信号只需扩展 prompt 模板。两个配套取舍：**车态按技能 mask 裁剪**（`to_carsignal_prompt` 只输出当前意图命中的技能对应字段，避免全量信号挤占端侧上下文，见 §2.4），以及 **CAN 边界在框架之外**（aadkcore 消费的是车控服务已解析好的车辆状态 JSON 快照、不直接碰 CAN 总线，见 §8）——这让框架与具体车型的信号矩阵解耦，换车型只需上游适配。
+
 ### 7.1 YAML 模板结构
 
 所有 Agent 的 Prompt 模板存放在 `agent_group/data/template/` 目录下，采用 YAML 格式。典型的模板文件结构如下：
