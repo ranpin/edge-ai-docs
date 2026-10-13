@@ -102,7 +102,7 @@ graph TD
 > [!NOTE]
 > **统一接口并非处处等价：时间片挂起/恢复仅 Orin 可用**
 >
-> "屏蔽后端差异"在大多数接口上成立，但 `pauseGenerate/resumeGenerate`（时间片挂起/恢复，保留 KV）是例外——只有 Lape/Orin 实现了它们，SA8397P / 云端开启 `enable_timeslice` 会因基类抛 `Not implemented` 且无人捕获而**崩进程**。详见 §3.4 的平台陷阱。
+> "屏蔽后端差异"在大多数接口上成立，但 `pauseGenerate/resumeGenerate`（时间片挂起/恢复，保留 KV）是例外——只有 Lape/Orin 实现了它们，SA8397P / 云端开启 `enable_timeslice` 会因基类抛 `Not implemented` 且无人捕获而**崩进程**。详见 §4.4 的平台陷阱。
 
 ### 1.4 端侧模型选型与支持矩阵
 
@@ -133,225 +133,81 @@ graph TD
 >
 > 国内座舱场景首选 **Qwen3-Omni-4B**：原生支持音频输入/输出，省去独立 ASR+TTS 模块，系统架构更简洁；中文能力和 Function Calling 能力在同尺寸模型中领先。INT4 量化后内存约 2.5GB，SA8397P 可承载。如果延迟预算极紧，可用 Qwen3-1.7B 做意图识别前端 + Qwen3-Omni-4B 做复杂推理的级联架构——注意该前端只适用于**短 prompt 的纯意图分类**场景：端侧 TTFT 包含完整 prefill，随 prompt 长度增长，具体延迟预算应按带宽/roofline 模型推导，而非拍一个固定毫秒数。
 
-## 2. 统一模型接口 — ModelInstance
+## 2. 端到端调用链（路径 A）
 
-`ModelInstance`（定义于 `aadkapi/model_instance.hpp`）是面向 Agent 开发者的核心模型交互类。它封装了单个 LLM 模型实例，提供流式/非流式生成、多模态输入、LoRA 热加载等能力，屏蔽 Lape / QNN / Bailian 后端差异。
-
-### 2.1 核心 API
-
-| API | 返回类型 | 说明 |
-| :--- | :--- | :--- |
-| `streamGenerate(messages, history, callback, user_data, lora_id, infer_params, stream, tools)` | `ModelResponse` | 流式生成，通过 `StreamCallback` 逐 token 回调；末尾 `tools`（`vector<shared_ptr<BaseTool>>`，默认空）把工具声明随请求下发（见下方 NOTE） |
-| `generate(messages, callback, user_data, lora_id, infer_params, tools)` | `ModelResponse` | 非流式一次性生成，通过 `CompletionCallback` 返回完整结果；同样接受末尾 `tools` 参数 |
-| `preprocessImage(image)` | `vector<shared_ptr<vector<float>>>` | 图像预处理为 embedding **列表**（一张图可能产出多个 embedding），支持 ImageBlob 和 ImageUrlContent 两种输入 |
-| `preprocessAudio(audio)` | `optional<shared_ptr<vector<float>>>` | 音频预处理为 embedding，输入 AudioBlob |
-| `addLora(lora_paths)` | `vector<int>` | 热加载 LoRA 适配器，返回 lora\_id 列表，后续推理可指定 lora\_id |
-| `suspend(deinit) / resume()` | `void` | 暂停/恢复模型推理；suspend 时可选择是否卸载底层资源释放内存 |
-| `stopGenerate(req_id)` | `bool` | 中断指定 `req_id` 的生成任务（**带参**，签名是 `stopGenerate(const string& req_id)`，不是无参）。但 `req_id` **只有 Lape/Orin 真正生效**，其余后端会静默忽略（见下方能力矩阵） |
-| `pauseGenerate(req_id) / resumeGenerate(req_id)` | `bool` | 挂起/恢复指定请求的生成，**保留 KV Cache**；仅 Lape/Orin 后端实现，其余后端默认抛异常（见 §3.4 平台陷阱） |
-| `getModelName()` | `const string&` | 返回模型名称 |
-| `setConfig(config) / getConfig()` | `void / optional<ModelConfig>` | 设置/获取模型配置参数 |
-| `is_ready()` | `bool` | 查询模型是否已就绪 |
-
-> [!WARNING]
-> **后端能力矩阵：同一个 `ModelInstance` 接口，三个后端的实现完整度差很多**
->
-> `ModelInstance` 是 pimpl 封装，真正干活的是 `BaseLlm` 的三个子类。它们在 `include/models/` 下覆写的方法并不一致：
->
-> | 能力 | `LapeModel`（Orin） | `QnnModel`（SA8397P） | `Bailian`（云端 x86） |
-> | :--- | :--- | :--- | :--- |
-> | `stopGenerate()` 无参 | 实现 | 实现 | 实现，但恒 `return false` |
-> | `stopGenerate(req_id)` 带参 | **覆写**：按 `req_id` 精确停止（`req_id` 为空则停全部） | 未覆写 → 基类转发到无参版，**`req_id` 被静默忽略** | 未覆写 → 转发到无参版 → 恒 `false` |
-> | `pauseGenerate` / `resumeGenerate` | **覆写** → `PauseRequest` / `ResumeRequest`，保留 KV | 未覆写 → 基类 `throw runtime_error("Not implemented")` | 同左，`throw` |
-> | `addLora` | 实现 | 实现 | 实现，但恒 `return {}`（不支持 LoRA） |
-> | `suspend(deinit)` / `resume` | 实现 | 实现 | **空实现 `{}`**（云端无常驻资源可卸载） |
-> | `preprocessImage` | 实现 | 实现 | 恒 `return {}`（不做本地预处理） |
-> | `preprocessAudio` | 实现 | 实现 | 恒 `return nullopt` |
-> | `is_ready()` | 实现 | 实现 | 恒 `return true` |
-> | EAGLE3 投机解码 | 支持（仅纯文本请求） | 不支持 | 不支持 |
->
-> **抽象漏点的根源是 `BaseLlm` 混用了三种降级策略**（`include/models/model.hpp`）：
->
-> - `stopGenerate()` 无参是**纯虚**——每个后端必须实现；
-> - `stopGenerate(req_id)` 带**默认实现** `{ return stopGenerate(); }`——后端可选覆写，不覆写就**静默降级**成"忽略 req_id 的全局停止"；
-> - `pauseGenerate` / `resumeGenerate` 带**默认实现** `throw`——不覆写就**运行时抛异常**。
->
-> 于是"接口存在"完全不代表"能力可用"，而且失败方式还分三档：**静默忽略参数**（QNN 的 `req_id`）、**返回空值**（Bailian 的 `addLora` / `preprocessImage` / `stopGenerate`）、**抛异常**（非 Lape 的 pause/resume）。其中前两档最危险，因为不报错：
->
-> - 在 QNN 上调 `stopGenerate(req_id)` 想只停某一个请求，实际会走到无参版本，**停掉的范围由后端自己决定**，不是你以为的那一个；
-> - 在云端用 `is_ready()` 做门禁会**永远通过**，用 `preprocessImage()` 的结果做多模态输入会拿到**空 vector**——上层若不判空就把空 embedding 拼进消息，问题会推迟到推理阶段才暴露。
-> - 即便在 Lape 上，`stopGenerate(req_id)` 的返回值也**不能用来判断"是否真的停掉了某个请求"**：`req_id` 在 `running_tasks_` 里查不到时只打一条 `LOG_W(... not found)`，函数**仍然 `return true`**（只有模型未就绪才返回 false）。所以"停止成功"的返回值与"目标请求存在并被停止"并不等价，排查"调了 stop 但任务还在跑"时不要只看返回值。
->
-> 因此跨平台代码应当**按后端能力做显式分支或启动期自检**（例如启动时探测 pause/resume 是否可用再决定 `enable_timeslice`），不要假设"接口在 = 能力在"。这也是 §3.4 平台陷阱的根因。
-
-> [!NOTE]
-> **回调函数类型**
->
-> `StreamCallback = function<void(const string& content, bool is_finished, void* user_data)>` — 流式回调，每生成一个 token 调用一次，`is_finished` 为 true 表示生成结束。
-> `CompletionCallback = function<void(const string& content, void* user_data)>` — 非流式回调，生成完成后一次性返回。
-> `CompletionCallbackResponse = function<void(const string& content, void* user_data, const ModelResponse& response)>` — 非流式回调的**三参变体**，额外回传 `ModelResponse`（含 ttft / token 统计等），需要性能指标时用它。
->
-> **关于 `tools` 参数**：`streamGenerate` / `generate` 末尾的 `tools` 只负责把工具**声明**下发给后端（Lape 会以 `<tools>` XML 注入 system prompt，让模型"看到"函数签名）。但"解析模型输出的 `FunctionCall` → 执行工具 → 回灌再推理"这条闭环**不是自动的**，受 `USE_TOOL` 门控且默认未启用，详见 [协议与运行时执行 · §4.1](agent-protocols.html#sec-19)。
-
-### 2.2 多模态消息类型系统
-
-消息类型定义于 `aadkapi/content.hpp`，采用 `std::variant` 实现多模态内容的类型安全表示。
+把前面的构件串起来——生产中一次模型调用的完整链路（**路径 A**）：请求经 `SystemRuntime` 按 `scenario_id` 路由到 `AgentPlugin`（业务 dispatcher），dispatcher 调 `ModelRunner::schedule_run_sync` 组好 `CommonSchedulerTask` 提交 `ModelScheduler`，调度后由 `ModelInstance` 进后端推理，结果沿原路回传：
 
 ```mermaid
-classDiagram
-    class Message {
-        +Role role
-        +vector~ContentType~ content
-        +createSystemMessage(text)
-        +createUserMessage(text)
-        +addTextContent(text)
-        +addImageUrlContent(url)
-        +addImageBlob(blob)
-        +addAudioBlob(blob)
-        +addImageEmbedding(emb)
-        +addAudioEmbedding(emb)
-    }
+sequenceDiagram
+    participant U as 用户
+    participant SR as SystemRuntime
+    participant MD as MsgDeliverImpl
+    participant AP as AgentPlugin(业务 dispatcher)
+    participant MR as ModelRunner
+    participant MS as ModelScheduler
+    participant MI as ModelInstance
+    participant BE as 平台后端(QNN/Lape/Bailian)
 
-    class Role {
-        <<enumeration>>
-        SYSTEM
-        USER
-        ASSISTANT
-    }
-
-    class ContentType {
-        <<variant>>
-        TextContent
-        ImageUrlContent
-        ImageBlob
-        AudioBlob
-        ImageEmbedding
-        AudioEmbedding
-        FunctionCall
-        FunctionResponse
-    }
-
-    Message --> Role
-    Message --> ContentType
+    U->>SR: 语音输入 "把空调调到 24 度"
+    SR->>MD: 按 scenario_id 路由
+    MD->>AP: deliver_msg(DataMessage)
+    AP->>MR: schedule_run_sync(data_message, request_id,<br/>system_prompt, user_prompt, history, ...)
+    MR->>MS: SubmitTask(CommonSchedulerTask)
+    MS->>MI: worker 执行 onProcessing → streamGenerate
+    MI->>BE: 提交推理
+    BE-->>MI: 推理输出(可能含 FunctionCall)
+    MI-->>MS: ModelResponse
+    MS-->>MR: ModelResponse
+    MR-->>AP: 返回推理结果
+    AP-->>MD: 回传结果
+    MD-->>SR: 结果回传
+    SR-->>U: TTS 播报
 ```
 
-| ContentType | 字段 | 说明 |
-| :--- | :--- | :--- |
-| `TextContent` | `text: string` | 文本内容 |
-| `ImageUrlContent` | `url: ImageSource` | 图像 URL 或 Base64 Data URI |
-| `ImageBlob` | `data, width, height, channels, mimetype` | 图像原始二进制数据 |
-| `AudioBlob` | `data: vector<int16_t>, size, mimetype` | 音频原始二进制数据 |
-| `ImageEmbedding` | `data: shared_ptr<vector<float>>, shape` | 图像 embedding（preprocessImage 输出） |
-| `AudioEmbedding` | `data: shared_ptr<vector<float>>, shape` | 音频 embedding（preprocessAudio 输出） |
-| `FunctionCall` | `name, arguments, index, id, type` | LLM 发起的函数调用 |
-| `FunctionResponse` | `tool_call_id, name, content` | 工具调用返回结果 |
-
-### 2.3 ModelConfig 参数
-
-模型推理参数定义于 `aadkapi/model_config.hpp`，包含 `ModelConfig`（全局配置）和 `InferParams`（单次推理覆写）两个层级。
-
-| 参数 | 类型 | 默认值 | 说明 |
-| :--- | :--- | :--- | :--- |
-| `temperature` | `double` | 0.0 | 生成温度，越高越随机 |
-| `top_p` | `double` | 1.0 | 核采样概率 |
-| `top_k` | `int` | 1 | Top-K 采样 |
-| `max_output_tokens` | `int` | 1024 | 最大输出 token 数 |
-| `seed` | `int` | 42 | 随机种子 |
-| `greedy` | `bool` | true | 是否贪心解码 |
-| `repetition_penalty` | `int` | 1 | 重复惩罚因子（见下方 NOTE） |
-| `stop_sequences` | `vector<int>` | 空 | 停止序列（token id 列表） |
-| `ebnf_path` | `string` | "" | EBNF 语法文件路径，用于约束解码 |
-| `pruned_vocabulary` | `string` | "" | 裁剪词表，减少解码搜索空间 |
-| `enable_jump_forward` | `bool` | false | 约束解码跳跃前进优化 |
-| `eagle3_model_path` | `string` | "" | **EAGLE3 投机解码**草稿模型路径；非空即启用（见下方 NOTE） |
-| `draft_token_num` | `int` | 3 | 投机解码每轮草稿 token 数 |
-| `config_file_path` | `string` | "" | 模型特定配置文件路径 |
+逐跳对应本篇构件：`AP → MR` 是 §3 的 `ModelRunner`（API 层调度入口），`MR → MS` 是 §4.1–4.5 的 `ModelScheduler`（`SubmitTask` 进优先级队列、worker 执行、回调返回），`MS → MI → BE` 是 worker 经 §5 的 `ModelInstance.streamGenerate` 落到平台后端推理。`scenario_id` 路由与插件加载属运行时主线，见 [**协议与运行时执行**](agent-protocols.html) §3；dispatcher 侧的请求准备（prompt 组装、车态注入、RAG 检索）见 [**场景 Agent 应用**](agent-group.html) §2.1。
 
 > [!NOTE]
-> **EAGLE3 投机解码：端侧解码加速，但仅 Lape/Orin 且仅纯文本请求生效**
+> **这是「路径 A」；还有一条未接线的「路径 B」**
 >
-> `eagle3_model_path` + `draft_token_num` 是框架的**投机解码（speculative decoding）**开关：用一个小的 EAGLE3 草稿模型一次猜 `draft_token_num`（默认 3）个 token，再由主模型批量校验，从而在**不改变输出分布**的前提下提高端侧解码吞吐。这是端侧 LLM 落地里性价比很高的一类加速手段。
->
-> 但生效条件有两条硬限制（`src/models/lape/lape_model.cpp`）：
->
-> 1. **只有 Lape/Orin 后端实现**。判断逻辑写在 `lape_model.cpp` 里，命中时把 `sampling_params->decode_method` 设为 `{"eagle3_decode_process"}` 并填入 `eagle3_config`。QNN（SA8397P）与 Bailian（云端）路径不读这两个字段，配了也**静默无效**。
-> 2. **多模态请求会被跳过**。启用条件是 `!eagle3_model_path.empty() && llm_inputs.audio_paths.empty() && llm_inputs.image_paths.empty()`——即**只要本轮带图像或音频输入，就不走投机解码**，回退普通解码。
->
-> 实践含义：视觉问答、语音输入这类多模态轮次拿不到 EAGLE3 收益，做端侧延迟预算时**不要按"全程投机解码"估算**；收益主要体现在纯文本长输出轮次（闲聊、长回复、约束解码后的文本生成）。`draft_token_num` 调大能提高接受率上限，但草稿模型自身开销与显存占用也随之上升，需按实测取舍（本篇不给具体数值）。
+> 上图是生产中实际在跑的路径 A（dispatcher 直接经 `ModelRunner` 进调度器）。aadkcore 里还预留了一条 ADK 风格的**路径 B**（`Runner → LlmAgent → BaseLlmFlow → BaseTool`），但**大部分未接线**：`SystemAgent` 的 `flow_` 是死成员、`Runner` 从未被实例化、Tool 闭环受 `USE_TOOL` 门控默认未启用。路径 B 的代码现状、以及「为什么生产链路里没有 `BaseLlmFlow` 与 Tool 再推理」见 [**协议与运行时执行**](agent-protocols.html) §4。
+
+## 3. ModelRunner — API 层调度入口
+
+**ModelRunner 单例**（`aadkapi/model_runner.h`）是 **API 层的调度入口**：业务 dispatcher 不直接碰 `ModelScheduler`，而是调 `ModelRunner`，由它组好 `CommonSchedulerTask` 再提交调度器（完整端到端调用链见 §2）。作为调度器的上层封装，它的关键成员：
+
+- `getInstance()` 全局单例，所有 Agent 共享
+- `scene_model_details_`：`scene_id → ModelDetails` 映射，管理各场景的模型实例与 LoRA 配置
+- `schedule_run_sync()`：提交调度任务并同步等待结果，支持指定 LoRA 名称路由到不同适配器
+- `preprocessImage() / preprocessAudio()`：多模态预处理，基于 `DataMessage` 中的媒体数据
 
 > [!NOTE]
-> **`InferParams` 的覆写语义：`optional` + `merge()`，另有两个非 optional 字段**
+> **`scene_id` 与 `scenario_id` 是两套 ID，不要混用**
 >
-> `InferParams` 把上述每个参数都包成 `std::optional`，**只有 `has_value()` 的字段才会在 `merge()` 时覆盖 `ModelConfig` 的全局值**，未设置的保持全局配置。这就是"单次推理覆写"的实现机制——想只改本轮温度，就只设 `temperature`，其余留空。
+> 框架里有两个长得很像但职责不同的整型 ID：
 >
-> 但有两个字段**不是 optional**，属于每次请求的元信息而非采样参数：
+> | ID | 职责 | 出现位置 |
+> | :--- | :--- | :--- |
+> | **`scene_id`** | **模型 / LoRA 路由键**——决定某个场景用哪个基座模型、哪个 LoRA 适配器 | `ModelRunner::scene_model_details_`、`scene_named_lora_details_`、`BaseTask::scene_id`、模型配置里的 `multi_lora` 条目 |
+> | **`scenario_id`** | **Agent 消息路由键**——决定 `DataMessage` 投递给哪个业务插件 | `AgentPlugin::scenario_id()`、`constant_ids.h`（`CAR_CONTROL_SCENARIO_ID` 等）、`SystemRuntime` / `msg_deliver` 分发 |
 >
-> - `request_id`（`string`）：请求标识，贯穿日志与 `ModelResponse::request_id`，是排查"哪一轮慢/哪一轮被抢占"的主键。
-> - `request_priority`（`int`，默认 **1**）：请求级优先级。注意它与 §3 调度器的 `PriorityBase`（10/20/30/40）是**两套独立的优先级**，不要混用——`PriorityBase` 决定任务在调度队列里的出队顺序，`request_priority` 是随请求下发给后端的字段。
+> 两者在 `ModelRunner` 内部会被**桥接**：推理时把 `data_message.scenario_id` 当作 `scene_id` 去查 `scene_model_details_`。由此产生一个容易踩的静默失败：
 >
-> 另：`InferParams::empty()` 用于判断"是否完全没设覆写"，它检查全部 optional 采样字段，但**不检查** `request_id` / `request_priority`。所以一个只设了 `request_id` 的 `InferParams` 仍会被判为 `empty()`。
-
-> [!NOTE]
-> **`repetition_penalty` 在本框架中是 `int`，不是惯例的 `float`**
+> - 命中 → 使用该 `scene_id` 对应的模型 / LoRA；
+> - **未命中 → `getModelDetailsByScene()` 回落到 `scene_model_details_.begin()->second`**——即 `std::map` 中 **`scene_id` 最小**的那条 `ModelDetails`（与 `CHITCHAT` 无关，纯粹取决于配置里谁的 `scene_id` 最小），而不是报错。
 >
-> `model_config.hpp` 中的声明是 `int repetition_penalty = 1;`（`InferParams` 中为 `std::optional<int>`）。**默认值 1 表示"不惩罚"**，与主流推理引擎（vLLM / llama.cpp / transformers）的语义一致。
+> 回落时还会**同时重置两项**：`lora_id = -1`（退回 base model）、`infer_params = InferParams()`（把该场景配置的温度 / `ebnf_path` / 采样参数**一并静默丢掉**）。所以新增 Agent 时，`constant_ids.h` 里的 `scenario_id` 与模型配置里的 `scene_id` **必须对齐**，否则会出现"消息路由正确、但模型/LoRA/采样参数悄悄走了最小 `scene_id` 的默认配置"的问题——现象是回答风格/能力不对，日志里却没有明显错误。（`constant_ids.h` 的完整 `scenario_id` 常量表见 [协议与运行时执行 · §3.1 AgentPlugin 插件接口](agent-protocols.html#sec-14)。）
 >
-> 但需要注意口径差异：业界惯例把该参数定义为 `float`，常用取值是 **1.05 ~ 1.2** 这类略大于 1 的小数。`int` 类型**无法表达这一档位的微调**——可取值只有 1（不惩罚）、2（强惩罚）等整数。因此：
+> 两个重载的实际行为还有三处与直觉相反，务必注意：
 >
-> - 从其他引擎迁移 prompt/采样配置时，**不要把 `1.05` 直接抄过来**，它会被截断为 `1`（等价于关闭惩罚）。
-> - 若确实需要小数级重复惩罚，应在后端适配层（Lape / QNN / Bailian）扩展该字段类型，而不是在业务侧调这个 `int`。
-> - 端侧约束解码场景下，重复问题更多依靠 `ebnf_path` / `pruned_vocabulary` 收敛输出空间，而非依赖重复惩罚。
+> - **带 LoRA 名的重载同样回落，而非返回 `nullopt`**：`getModelDetailsByScene(scene_id, lora_name)` 查不到指定名字的 LoRA 时，打一条 `LOG_E("... use base model")` 后**也回落到 `begin()->second` 的 base model**（同样 `lora_id = -1` + 重置 `infer_params`），**从不返回 `nullopt`**。
+> - **两个重载实际永不返回 `nullopt`**：未命中分支总是构造一个 `ModelDetails` 返回，因此调用方的 `if (!model_details)` 判空是**死代码**，不要依赖它来发现"场景没配模型"。
+> - **空 map → UB**：若 `scene_model_details_` 为空，`begin()` 等于 `end()`，`begin()->second` 是对尾后迭代器解引用，属**未定义行为**（通常直接崩溃）。框架没有对"一个模型都没注册"做任何保护。
 
-### 2.4 流式多模态推理代码示例
-
-```
-// 1. 创建模型实例
-ModelInstance model("qwen-vl-max");
-
-// 2. 设置配置
-ModelConfig config;
-config.temperature = 0.7;
-config.max_output_tokens = 512;
-model.setConfig(config);
-
-// 3. 构造多模态消息
-auto user_msg = message::Message::createUserMessage();
-user_msg.addTextContent("描述这张图片中的内容");
-user_msg.addImageUrlContent(
-    message::ImageUrlContent::createFromBase64(base64_data, "jpeg"));
-
-message::MessageList messages = {
-    message::Message::createSystemMessage("你是一个车载智能助手。"),
-    user_msg
-};
-message::MessageList history; // 历史对话
-
-// 4. 流式生成
-model.streamGenerate(
-    messages, history,
-    [](const std::string& token, bool is_finished, void* ud) {
-        std::cout << token << std::flush;
-        if (is_finished) std::cout << std::endl;
-    },
-    nullptr  // user_data
-);
-```
-
-### 2.5 2025–2026 演进
-
-`ModelInstance` 这一层近一年变化较快，以下几项是主线 `origin/agent_core_dev` 的近期能力，阅读旧代码时注意口径：
-
-- **`tools` 参数（2026-07，提交 `119c6818`）**：`streamGenerate` / `generate` 末尾新增 `vector<shared_ptr<BaseTool>> tools`，把工具声明随请求下发（见 §2.1 NOTE）。在此之前接口没有这个参数，旧代码的调用签名更短。
-- **`preprocessImage` 返回类型从 `optional` 改为 `vector`（2026-05，提交 `df54f75f`）**：提交说明是 "Support deepstack"。**一张图返回多个 embedding** 正是为了支持 **DeepStack** 这类需要多层/多尺度视觉特征注入的模型结构——旧口径"一张图一个 embedding"已不成立。`ModelRunner::preprocessImage` 与 `BaseLlm::preprocessImage` 的签名也随之同步。
-- **EAGLE3 投机解码**（见 §2.3 NOTE）：`eagle3_model_path` / `draft_token_num` 进入 `ModelConfig` 与 `InferParams`，Lape 后端接入 `eagle3_decode_process`。
-- **LoRA 名未命中回落 base model（2026-07，提交 `5ef57580`）**：`getModelDetailsByScene(scene_id, lora_name)` 查不到指定 LoRA 时不再报错，而是打日志后回落到 base model（见 §3.3 NOTE）。这条行为是**近期才定下来的**，依赖"查不到就报错"的旧假设已经失效。
-- **调度器接入 cprobe 链路追踪（2026-06，提交 `a8e9f993`）**：见 §3.5。
-
-## 3. 模型调度器 — ModelScheduler
+## 4. 模型调度器 — ModelScheduler
 
 端侧场景下，多个 Agent（车控、闲聊、主动语音等）可能并发请求同一个 LLM 模型。`ModelScheduler`（定义于 `include/runtime/model_scheduler.h`）提供基于优先级的任务队列和抢占调度，确保高优先级任务及时响应。
 
-### 3.1 调度架构
+### 4.1 调度架构
 
 ```mermaid
 flowchart LR
@@ -368,7 +224,7 @@ flowchart LR
     style M fill:#2ecc71,color:#fff
 ```
 
-### 3.2 任务类型与优先级
+### 4.2 任务类型与优先级
 
 **四种任务类型**（`TaskType` 枚举）：
 
@@ -455,10 +311,10 @@ score = priority * weight_priority + wait_time_ms * weight_wait * 0.001
 | :--- | :--- | :--- |
 | `capacity` | 10 | 等待队列容量；满时 `SubmitTask` 阻塞等待（**最多等 `timeout_s`**，超时返回 `TASK_TIMEOUT`，不是无限阻塞）、`PreemptAndSubmit` 触发挤占 |
 | `worker_count` | 8 | `SchedulerLoop` 工作线程数；`generate_concurrent` 为 true 时这些线程可**并发**跑 `onProcessing`（未被钳到 `hardware_concurrency()`，对应 `assert` 已注释） |
-| `batch_count` | 8 | 时间片轮转每轮允许并发执行的任务数（仅 `enable_timeslice` 为 true 时生效）。**注意它是"非 CRITICAL 任务"的额度**，CRITICAL 任务会额外扣减它（见 §3.4） |
+| `batch_count` | 8 | 时间片轮转每轮允许并发执行的任务数（仅 `enable_timeslice` 为 true 时生效）。**注意它是"非 CRITICAL 任务"的额度**，CRITICAL 任务会额外扣减它（见 §4.4） |
 | `timeout_s` | 100 | `SubmitTask` 同步等待超时；超时触发 `BoostPriority(+10)`，再超时则 `StopTask` |
-| `generate_concurrent` | true | 是否允许并发执行；true 时 `SchedulerLoop` **不取** `generate_mutex_`（见 §3.4） |
-| `enable_timeslice` | false | 是否启动 `TimeSliceLoop` 做 pause/resume 时间片轮转（**仅 Orin/Lape 可安全开启**，见 §3.4 平台陷阱） |
+| `generate_concurrent` | true | 是否允许并发执行；true 时 `SchedulerLoop` **不取** `generate_mutex_`（见 §4.4） |
+| `enable_timeslice` | false | 是否启动 `TimeSliceLoop` 做 pause/resume 时间片轮转（**仅 Orin/Lape 可安全开启**，见 §4.4 平台陷阱） |
 | `timeslice_ms` | 200 | 时间片轮转周期（ms） |
 
 > [!WARNING]
@@ -471,50 +327,20 @@ score = priority * weight_priority + wait_time_ms * weight_wait * 0.001
 >
 > 另外 `worker_count` 的默认值有两处且不一致：头文件成员初始化是 `int worker_count{4}`，但构造函数里 `j.value("worker_count", 8)` 会覆盖成 **8**。由于构造函数总会执行，**实际默认是 8**（`batch_count` 同理，头文件 `{4}`、实际默认 8；`timeslice_ms` 头文件 `500`、实际默认 200）。读头文件推默认值会得出错误结论，以 `model_scheduler.cpp` 的 `j.value(...)` 为准。
 
-### 3.3 抢占机制与 ModelRunner
+### 4.3 调度操作与抢占机制
 
 | 调度操作 | 说明 |
 | :--- | :--- |
 | `Gethandle(config, runner)` (static) | 获取 `ModelScheduler` 单例（首次调用时按 `config` JSON 构造） |
 | `Start() / Stop()` | 启动 / 停止调度器；`Start` 拉起 `worker_count` 个 `SchedulerLoop`，`enable_timeslice` 为 true 时再拉起一个 `TimeSliceLoop`；`Stop` 置位 `stop_all`、取消 RUNNING 任务并清空队列 |
-| `SubmitTask(task)` | 提交任务到优先级队列，**同步阻塞**等待结果（超时触发提权/停止，见 §3.2） |
+| `SubmitTask(task)` | 提交任务到优先级队列，**同步阻塞**等待结果（超时触发提权/停止，见 §4.2） |
 | `PreemptAndSubmit(task)` | 挤占式提交：队列满时把最低优任务移出队列，再按 `break_tag` 决定是否打断在跑任务；**末尾 `result_future.get()` 同步阻塞**直到新任务完成，并非"提交后立即返回" |
 | `BoostPriority(task_id, delta)` | 动态提升指定任务的优先级（上限 30，仅作用于等待队列） |
 | `StopTask(task_id, scenario_id)` | 停止指定任务；对 RUNNING 任务还会调 `runner_->stopGenerate(scenario_id, task_id)` |
 | `GetTaskStatus(task_id)` | 查询单个任务状态（返回 `TaskResponse`，`status` 为 `TASK_ALREADY_EXISTS` / `TASK_NOT_FOUND`） |
 | `ListAllTasks()` | 列出所有任务及其状态（返回 `vector<TaskUpdate>`） |
 
-**ModelRunner 单例**（`aadkapi/model_runner.h`）是 **API 层的调度入口**：业务 dispatcher 不直接碰 `ModelScheduler`，而是调 `ModelRunner`，由它组好 `CommonSchedulerTask` 再提交调度器（完整端到端调用链见 §3.6）。作为调度器的上层封装，它的关键成员：
-
-- `getInstance()` 全局单例，所有 Agent 共享
-- `scene_model_details_`：`scene_id → ModelDetails` 映射，管理各场景的模型实例与 LoRA 配置
-- `schedule_run_sync()`：提交调度任务并同步等待结果，支持指定 LoRA 名称路由到不同适配器
-- `preprocessImage() / preprocessAudio()`：多模态预处理，基于 `DataMessage` 中的媒体数据
-
-> [!NOTE]
-> **`scene_id` 与 `scenario_id` 是两套 ID，不要混用**
->
-> 框架里有两个长得很像但职责不同的整型 ID：
->
-> | ID | 职责 | 出现位置 |
-> | :--- | :--- | :--- |
-> | **`scene_id`** | **模型 / LoRA 路由键**——决定某个场景用哪个基座模型、哪个 LoRA 适配器 | `ModelRunner::scene_model_details_`、`scene_named_lora_details_`、`BaseTask::scene_id`、模型配置里的 `multi_lora` 条目 |
-> | **`scenario_id`** | **Agent 消息路由键**——决定 `DataMessage` 投递给哪个业务插件 | `AgentPlugin::scenario_id()`、`constant_ids.h`（`CAR_CONTROL_SCENARIO_ID` 等）、`SystemRuntime` / `msg_deliver` 分发 |
->
-> 两者在 `ModelRunner` 内部会被**桥接**：推理时把 `data_message.scenario_id` 当作 `scene_id` 去查 `scene_model_details_`。由此产生一个容易踩的静默失败：
->
-> - 命中 → 使用该 `scene_id` 对应的模型 / LoRA；
-> - **未命中 → `getModelDetailsByScene()` 回落到 `scene_model_details_.begin()->second`**——即 `std::map` 中 **`scene_id` 最小**的那条 `ModelDetails`（与 `CHITCHAT` 无关，纯粹取决于配置里谁的 `scene_id` 最小），而不是报错。
->
-> 回落时还会**同时重置两项**：`lora_id = -1`（退回 base model）、`infer_params = InferParams()`（把该场景配置的温度 / `ebnf_path` / 采样参数**一并静默丢掉**）。所以新增 Agent 时，`constant_ids.h` 里的 `scenario_id` 与模型配置里的 `scene_id` **必须对齐**，否则会出现"消息路由正确、但模型/LoRA/采样参数悄悄走了最小 `scene_id` 的默认配置"的问题——现象是回答风格/能力不对，日志里却没有明显错误。（`constant_ids.h` 的完整 `scenario_id` 常量表见 [协议与运行时执行 · §3.1 AgentPlugin 插件接口](agent-protocols.html#sec-14)。）
->
-> 两个重载的实际行为还有三处与直觉相反，务必注意：
->
-> - **带 LoRA 名的重载同样回落，而非返回 `nullopt`**：`getModelDetailsByScene(scene_id, lora_name)` 查不到指定名字的 LoRA 时，打一条 `LOG_E("... use base model")` 后**也回落到 `begin()->second` 的 base model**（同样 `lora_id = -1` + 重置 `infer_params`），**从不返回 `nullopt`**。
-> - **两个重载实际永不返回 `nullopt`**：未命中分支总是构造一个 `ModelDetails` 返回，因此调用方的 `if (!model_details)` 判空是**死代码**，不要依赖它来发现"场景没配模型"。
-> - **空 map → UB**：若 `scene_model_details_` 为空，`begin()` 等于 `end()`，`begin()->second` 是对尾后迭代器解引用，属**未定义行为**（通常直接崩溃）。框架没有对"一个模型都没注册"做任何保护。
-
-### 3.4 抢占时的任务状态与中间态处理
+### 4.4 抢占时的任务状态与中间态处理
 
 抢占是端侧调度里最容易误解的一环：**它不是强制 kill**；取消（cancel）路径不支持断点续算，但框架另有一条**保留 KV 的时间片挂起/恢复**路径（仅 Orin/Lape 可用，见下方 CAUTION）。
 
@@ -623,7 +449,7 @@ flowchart TD
 >
 > `error_code` 中与调度相关的取值：`SUCCESS(0)`、`TASK_CANCELED(1)`、`TASK_NOT_FOUND(2)`、`TASK_STOP(3)`、`TASK_ALREADY_EXISTS(4)`、`TASK_PREEMPT_FAILED(5)`、`TASK_PREEMPTED(6)`、`TASK_TIMEOUT(7)`、`TASK_UNKNOWN_ERROR(8)`，以及模型侧的 `MODEL_NOT_FOUND(-1)`、`MODEL_NOT_READY(-2)`、`MODEL_SUSPENDED(-3)`、`MODEL_GEN_STOPPED(-4)`。**调用方必须区分 `TASK_PREEMPTED` 与 `TASK_CANCELED`**：前者意味着"被更高优任务挤掉、可考虑重提"，后者意味着"被显式停止、通常不应重提"。
 
-### 3.5 状态码映射、并发正确性与可观测性
+### 4.5 状态码映射、并发正确性与可观测性
 
 **`error_code` 的实际来源比枚举名更容易误读**。同一个码会被多条路径复用，排查时必须结合 `info` 字符串与 `TaskStatus` 一起看：
 
@@ -644,7 +470,7 @@ flowchart TD
 > - `TASK_STOP` 同时被"调度器关闭""runner 为空"复用，**光看返回码无法区分"我的任务抛异常了"和"调度器在关停"**，必须读 `info`（异常路径是 `e.what()`）或看 `TaskStatus` 是否为 `FAILED`；
 > - 枚举里的 `TASK_UNKNOWN_ERROR(8)` 在整个框架中**只有声明、没有任何产生点**（全仓库仅 `model_scheduler.h` 的枚举定义处出现一次），不要指望靠它识别"未知异常"。
 >
-> 另外 `catch` 只接 `std::exception`。若任务抛出非 `std::exception` 派生的异常（或后端在 `noexcept` 上下文里出错），仍会逃出 `SchedulerLoop` 线程函数 → `std::terminate`。这与 §3.4 的 pause/resume 崩进程是同一类风险：**worker 线程里没有兜底的 `catch(...)`**。
+> 另外 `catch` 只接 `std::exception`。若任务抛出非 `std::exception` 派生的异常（或后端在 `noexcept` 上下文里出错），仍会逃出 `SchedulerLoop` 线程函数 → `std::terminate`。这与 §4.4 的 pause/resume 崩进程是同一类风险：**worker 线程里没有兜底的 `catch(...)`**。
 
 > [!CAUTION]
 > **`active_tasks` 的锁口径不一致，`PreemptAndSubmit` 的打断遍历存在数据竞争**
@@ -682,48 +508,227 @@ CPROBE_END_SPAN(model_infer_span);
 >
 > 把前面几节的机制串起来看，这套调度器的取舍是清晰的，也解释了它为什么长成这样：
 >
-> - **优先级压过公平**。评分公式里 `weight_priority = 2` 对 `weight_wait = 0.1`，优先级项的量级远高于等待项（§3.2 推出饥饿窗口约 10 分钟）。这是**车规场景的合理选择**——车控/安全指令的响应确定性比后台任务的吞吐更重要。但代价是框架**没有真正的公平性保证**，`LOW` 档任务不能承载有时效要求的业务。
+> - **优先级压过公平**。评分公式里 `weight_priority = 2` 对 `weight_wait = 0.1`，优先级项的量级远高于等待项（§4.2 推出饥饿窗口约 10 分钟）。这是**车规场景的合理选择**——车控/安全指令的响应确定性比后台任务的吞吐更重要。但代价是框架**没有真正的公平性保证**，`LOW` 档任务不能承载有时效要求的业务。
 > - **抢占是协作式的，因此"抢占能力"取决于任务实现**。调度器只能置 `cancel_flag`，真正退出要靠 `onProcessing` 主动轮询。这意味着**一个不轮询的任务实现会让抢占完全失效**，而调度器无法强制。评估某个 Agent 能否被安全打断，要看它的 `onProcessing` 实现，不能只看调度器配置。
-> - **打断的代价被刻意做高，以抑制滥用**。取消即丢弃 KV、需从 prefill 完整重跑（§3.4 路径一），所以 `break_tag` 默认关闭。框架把"是否值得打断"这个判断交给业务，而不是自己猜——这是对的，因为只有业务知道 prompt 有多长、已播报了多少内容。
-> - **多音区并发靠"共享队列 + 优先级"，不靠"音区配额"**。所有音区的请求进同一个队列竞争同一批 worker（§4.2 NOTE）。好处是实现简单、资源利用率高；代价是**没有按音区的隔离或配额**，一个音区的长任务会挤占其他音区。若产品要求"每个座位都有保底响应能力"，需要在业务层按音区映射到不同 `PriorityBase`，或自行做准入控制——框架不提供。
-> - **并发执行是默认（`generate_concurrent = true`）**，这与"端侧算力有限、串行更省内存"的直觉相反。默认并发的收益是多个短任务不必互相等待，但**它同时让"抢执行权"这条抢占语义失效**（§3.4），只剩 `cancel_flag` 一条打断路径。调这个开关等于在"吞吐"和"抢占可控性"之间做选择，改动前要想清楚业务依赖的是哪一种。
+> - **打断的代价被刻意做高，以抑制滥用**。取消即丢弃 KV、需从 prefill 完整重跑（§4.4 路径一），所以 `break_tag` 默认关闭。框架把"是否值得打断"这个判断交给业务，而不是自己猜——这是对的，因为只有业务知道 prompt 有多长、已播报了多少内容。
+> - **多音区并发靠"共享队列 + 优先级"，不靠"音区配额"**。所有音区的请求进同一个队列竞争同一批 worker（§6.2 NOTE）。好处是实现简单、资源利用率高；代价是**没有按音区的隔离或配额**，一个音区的长任务会挤占其他音区。若产品要求"每个座位都有保底响应能力"，需要在业务层按音区映射到不同 `PriorityBase`，或自行做准入控制——框架不提供。
+> - **并发执行是默认（`generate_concurrent = true`）**，这与"端侧算力有限、串行更省内存"的直觉相反。默认并发的收益是多个短任务不必互相等待，但**它同时让"抢执行权"这条抢占语义失效**（§4.4），只剩 `cancel_flag` 一条打断路径。调这个开关等于在"吞吐"和"抢占可控性"之间做选择，改动前要想清楚业务依赖的是哪一种。
 
-### 3.6 端到端调用链（路径 A）
+## 5. 统一模型接口 — ModelInstance
 
-把前面的构件串起来——生产中一次模型调用的完整链路（**路径 A**）：请求经 `SystemRuntime` 按 `scenario_id` 路由到 `AgentPlugin`（业务 dispatcher），dispatcher 调 `ModelRunner::schedule_run_sync` 组好 `CommonSchedulerTask` 提交 `ModelScheduler`，调度后由 `ModelInstance` 进后端推理，结果沿原路回传：
+`ModelInstance`（定义于 `aadkapi/model_instance.hpp`）是面向 Agent 开发者的核心模型交互类。它封装了单个 LLM 模型实例，提供流式/非流式生成、多模态输入、LoRA 热加载等能力，屏蔽 Lape / QNN / Bailian 后端差异。
 
-```mermaid
-sequenceDiagram
-    participant U as 用户
-    participant SR as SystemRuntime
-    participant MD as MsgDeliverImpl
-    participant AP as AgentPlugin(业务 dispatcher)
-    participant MR as ModelRunner
-    participant MS as ModelScheduler
-    participant LLM as LLM 模型
+### 5.1 核心 API
 
-    U->>SR: 语音输入 "把空调调到 24 度"
-    SR->>MD: 按 scenario_id 路由
-    MD->>AP: deliver_msg(DataMessage)
-    AP->>MR: schedule_run_sync(data_message, request_id,<br/>system_prompt, user_prompt, history, ...)
-    MR->>MS: SubmitTask(CommonSchedulerTask)
-    MS->>LLM: onProcessing → streamGenerate
-    LLM-->>MS: 推理输出(可能含 FunctionCall)
-    MS-->>MR: ModelResponse
-    MR-->>AP: 返回推理结果
-    AP-->>MD: 回传结果
-    MD-->>SR: 结果回传
-    SR-->>U: TTS 播报
-```
+| API | 返回类型 | 说明 |
+| :--- | :--- | :--- |
+| `streamGenerate(messages, history, callback, user_data, lora_id, infer_params, stream, tools)` | `ModelResponse` | 流式生成，通过 `StreamCallback` 逐 token 回调；末尾 `tools`（`vector<shared_ptr<BaseTool>>`，默认空）把工具声明随请求下发（见下方 NOTE） |
+| `generate(messages, callback, user_data, lora_id, infer_params, tools)` | `ModelResponse` | 非流式一次性生成，通过 `CompletionCallback` 返回完整结果；同样接受末尾 `tools` 参数 |
+| `preprocessImage(image)` | `vector<shared_ptr<vector<float>>>` | 图像预处理为 embedding **列表**（一张图可能产出多个 embedding），支持 ImageBlob 和 ImageUrlContent 两种输入 |
+| `preprocessAudio(audio)` | `optional<shared_ptr<vector<float>>>` | 音频预处理为 embedding，输入 AudioBlob |
+| `addLora(lora_paths)` | `vector<int>` | 热加载 LoRA 适配器，返回 lora\_id 列表，后续推理可指定 lora\_id |
+| `suspend(deinit) / resume()` | `void` | 暂停/恢复模型推理；suspend 时可选择是否卸载底层资源释放内存 |
+| `stopGenerate(req_id)` | `bool` | 中断指定 `req_id` 的生成任务（**带参**，签名是 `stopGenerate(const string& req_id)`，不是无参）。但 `req_id` **只有 Lape/Orin 真正生效**，其余后端会静默忽略（见下方能力矩阵） |
+| `pauseGenerate(req_id) / resumeGenerate(req_id)` | `bool` | 挂起/恢复指定请求的生成，**保留 KV Cache**；仅 Lape/Orin 后端实现，其余后端默认抛异常（见 §4.4 平台陷阱） |
+| `getModelName()` | `const string&` | 返回模型名称 |
+| `setConfig(config) / getConfig()` | `void / optional<ModelConfig>` | 设置/获取模型配置参数 |
+| `is_ready()` | `bool` | 查询模型是否已就绪 |
 
-逐跳对应本篇构件：`AP → MR` 是 §3.3 的 `ModelRunner`（API 层调度入口），`MR → MS` 是 §3.1–3.5 的 `ModelScheduler`（`SubmitTask` 进优先级队列、worker 执行、回调返回），`MS → LLM` 经 §2 的 `ModelInstance` 落到平台后端。`scenario_id` 路由与插件加载属运行时主线，见 [**协议与运行时执行**](agent-protocols.html) §3；dispatcher 侧的请求准备（prompt 组装、车态注入、RAG 检索）见 [**场景 Agent 应用**](agent-group.html) §2.1。
+> [!WARNING]
+> **后端能力矩阵：同一个 `ModelInstance` 接口，三个后端的实现完整度差很多**
+>
+> `ModelInstance` 是 pimpl 封装，真正干活的是 `BaseLlm` 的三个子类。它们在 `include/models/` 下覆写的方法并不一致：
+>
+> | 能力 | `LapeModel`（Orin） | `QnnModel`（SA8397P） | `Bailian`（云端 x86） |
+> | :--- | :--- | :--- | :--- |
+> | `stopGenerate()` 无参 | 实现 | 实现 | 实现，但恒 `return false` |
+> | `stopGenerate(req_id)` 带参 | **覆写**：按 `req_id` 精确停止（`req_id` 为空则停全部） | 未覆写 → 基类转发到无参版，**`req_id` 被静默忽略** | 未覆写 → 转发到无参版 → 恒 `false` |
+> | `pauseGenerate` / `resumeGenerate` | **覆写** → `PauseRequest` / `ResumeRequest`，保留 KV | 未覆写 → 基类 `throw runtime_error("Not implemented")` | 同左，`throw` |
+> | `addLora` | 实现 | 实现 | 实现，但恒 `return {}`（不支持 LoRA） |
+> | `suspend(deinit)` / `resume` | 实现 | 实现 | **空实现 `{}`**（云端无常驻资源可卸载） |
+> | `preprocessImage` | 实现 | 实现 | 恒 `return {}`（不做本地预处理） |
+> | `preprocessAudio` | 实现 | 实现 | 恒 `return nullopt` |
+> | `is_ready()` | 实现 | 实现 | 恒 `return true` |
+> | EAGLE3 投机解码 | 支持（仅纯文本请求） | 不支持 | 不支持 |
+>
+> **抽象漏点的根源是 `BaseLlm` 混用了三种降级策略**（`include/models/model.hpp`）：
+>
+> - `stopGenerate()` 无参是**纯虚**——每个后端必须实现；
+> - `stopGenerate(req_id)` 带**默认实现** `{ return stopGenerate(); }`——后端可选覆写，不覆写就**静默降级**成"忽略 req_id 的全局停止"；
+> - `pauseGenerate` / `resumeGenerate` 带**默认实现** `throw`——不覆写就**运行时抛异常**。
+>
+> 于是"接口存在"完全不代表"能力可用"，而且失败方式还分三档：**静默忽略参数**（QNN 的 `req_id`）、**返回空值**（Bailian 的 `addLora` / `preprocessImage` / `stopGenerate`）、**抛异常**（非 Lape 的 pause/resume）。其中前两档最危险，因为不报错：
+>
+> - 在 QNN 上调 `stopGenerate(req_id)` 想只停某一个请求，实际会走到无参版本，**停掉的范围由后端自己决定**，不是你以为的那一个；
+> - 在云端用 `is_ready()` 做门禁会**永远通过**，用 `preprocessImage()` 的结果做多模态输入会拿到**空 vector**——上层若不判空就把空 embedding 拼进消息，问题会推迟到推理阶段才暴露。
+> - 即便在 Lape 上，`stopGenerate(req_id)` 的返回值也**不能用来判断"是否真的停掉了某个请求"**：`req_id` 在 `running_tasks_` 里查不到时只打一条 `LOG_W(... not found)`，函数**仍然 `return true`**（只有模型未就绪才返回 false）。所以"停止成功"的返回值与"目标请求存在并被停止"并不等价，排查"调了 stop 但任务还在跑"时不要只看返回值。
+>
+> 因此跨平台代码应当**按后端能力做显式分支或启动期自检**（例如启动时探测 pause/resume 是否可用再决定 `enable_timeslice`），不要假设"接口在 = 能力在"。这也是 §4.4 平台陷阱的根因。
 
 > [!NOTE]
-> **这是「路径 A」；还有一条未接线的「路径 B」**
+> **回调函数类型**
 >
-> 上图是生产中实际在跑的路径 A（dispatcher 直接经 `ModelRunner` 进调度器）。aadkcore 里还预留了一条 ADK 风格的**路径 B**（`Runner → LlmAgent → BaseLlmFlow → BaseTool`），但**大部分未接线**：`SystemAgent` 的 `flow_` 是死成员、`Runner` 从未被实例化、Tool 闭环受 `USE_TOOL` 门控默认未启用。路径 B 的代码现状、以及「为什么生产链路里没有 `BaseLlmFlow` 与 Tool 再推理」见 [**协议与运行时执行**](agent-protocols.html) §4。
+> `StreamCallback = function<void(const string& content, bool is_finished, void* user_data)>` — 流式回调，每生成一个 token 调用一次，`is_finished` 为 true 表示生成结束。
+> `CompletionCallback = function<void(const string& content, void* user_data)>` — 非流式回调，生成完成后一次性返回。
+> `CompletionCallbackResponse = function<void(const string& content, void* user_data, const ModelResponse& response)>` — 非流式回调的**三参变体**，额外回传 `ModelResponse`（含 ttft / token 统计等），需要性能指标时用它。
+>
+> **关于 `tools` 参数**：`streamGenerate` / `generate` 末尾的 `tools` 只负责把工具**声明**下发给后端（Lape 会以 `<tools>` XML 注入 system prompt，让模型"看到"函数签名）。但"解析模型输出的 `FunctionCall` → 执行工具 → 回灌再推理"这条闭环**不是自动的**，受 `USE_TOOL` 门控且默认未启用，详见 [协议与运行时执行 · §4.1](agent-protocols.html#sec-19)。
 
-## 4. 多音区对话管理 — ChatHistory
+### 5.2 多模态消息类型系统
+
+消息类型定义于 `aadkapi/content.hpp`，采用 `std::variant` 实现多模态内容的类型安全表示。
+
+```mermaid
+classDiagram
+    class Message {
+        +Role role
+        +vector~ContentType~ content
+        +createSystemMessage(text)
+        +createUserMessage(text)
+        +addTextContent(text)
+        +addImageUrlContent(url)
+        +addImageBlob(blob)
+        +addAudioBlob(blob)
+        +addImageEmbedding(emb)
+        +addAudioEmbedding(emb)
+    }
+
+    class Role {
+        <<enumeration>>
+        SYSTEM
+        USER
+        ASSISTANT
+    }
+
+    class ContentType {
+        <<variant>>
+        TextContent
+        ImageUrlContent
+        ImageBlob
+        AudioBlob
+        ImageEmbedding
+        AudioEmbedding
+        FunctionCall
+        FunctionResponse
+    }
+
+    Message --> Role
+    Message --> ContentType
+```
+
+| ContentType | 字段 | 说明 |
+| :--- | :--- | :--- |
+| `TextContent` | `text: string` | 文本内容 |
+| `ImageUrlContent` | `url: ImageSource` | 图像 URL 或 Base64 Data URI |
+| `ImageBlob` | `data, width, height, channels, mimetype` | 图像原始二进制数据 |
+| `AudioBlob` | `data: vector<int16_t>, size, mimetype` | 音频原始二进制数据 |
+| `ImageEmbedding` | `data: shared_ptr<vector<float>>, shape` | 图像 embedding（preprocessImage 输出） |
+| `AudioEmbedding` | `data: shared_ptr<vector<float>>, shape` | 音频 embedding（preprocessAudio 输出） |
+| `FunctionCall` | `name, arguments, index, id, type` | LLM 发起的函数调用 |
+| `FunctionResponse` | `tool_call_id, name, content` | 工具调用返回结果 |
+
+### 5.3 ModelConfig 参数
+
+模型推理参数定义于 `aadkapi/model_config.hpp`，包含 `ModelConfig`（全局配置）和 `InferParams`（单次推理覆写）两个层级。
+
+| 参数 | 类型 | 默认值 | 说明 |
+| :--- | :--- | :--- | :--- |
+| `temperature` | `double` | 0.0 | 生成温度，越高越随机 |
+| `top_p` | `double` | 1.0 | 核采样概率 |
+| `top_k` | `int` | 1 | Top-K 采样 |
+| `max_output_tokens` | `int` | 1024 | 最大输出 token 数 |
+| `seed` | `int` | 42 | 随机种子 |
+| `greedy` | `bool` | true | 是否贪心解码 |
+| `repetition_penalty` | `int` | 1 | 重复惩罚因子（见下方 NOTE） |
+| `stop_sequences` | `vector<int>` | 空 | 停止序列（token id 列表） |
+| `ebnf_path` | `string` | "" | EBNF 语法文件路径，用于约束解码 |
+| `pruned_vocabulary` | `string` | "" | 裁剪词表，减少解码搜索空间 |
+| `enable_jump_forward` | `bool` | false | 约束解码跳跃前进优化 |
+| `eagle3_model_path` | `string` | "" | **EAGLE3 投机解码**草稿模型路径；非空即启用（见下方 NOTE） |
+| `draft_token_num` | `int` | 3 | 投机解码每轮草稿 token 数 |
+| `config_file_path` | `string` | "" | 模型特定配置文件路径 |
+
+> [!NOTE]
+> **EAGLE3 投机解码：端侧解码加速，但仅 Lape/Orin 且仅纯文本请求生效**
+>
+> `eagle3_model_path` + `draft_token_num` 是框架的**投机解码（speculative decoding）**开关：用一个小的 EAGLE3 草稿模型一次猜 `draft_token_num`（默认 3）个 token，再由主模型批量校验，从而在**不改变输出分布**的前提下提高端侧解码吞吐。这是端侧 LLM 落地里性价比很高的一类加速手段。
+>
+> 但生效条件有两条硬限制（`src/models/lape/lape_model.cpp`）：
+>
+> 1. **只有 Lape/Orin 后端实现**。判断逻辑写在 `lape_model.cpp` 里，命中时把 `sampling_params->decode_method` 设为 `{"eagle3_decode_process"}` 并填入 `eagle3_config`。QNN（SA8397P）与 Bailian（云端）路径不读这两个字段，配了也**静默无效**。
+> 2. **多模态请求会被跳过**。启用条件是 `!eagle3_model_path.empty() && llm_inputs.audio_paths.empty() && llm_inputs.image_paths.empty()`——即**只要本轮带图像或音频输入，就不走投机解码**，回退普通解码。
+>
+> 实践含义：视觉问答、语音输入这类多模态轮次拿不到 EAGLE3 收益，做端侧延迟预算时**不要按"全程投机解码"估算**；收益主要体现在纯文本长输出轮次（闲聊、长回复、约束解码后的文本生成）。`draft_token_num` 调大能提高接受率上限，但草稿模型自身开销与显存占用也随之上升，需按实测取舍（本篇不给具体数值）。
+
+> [!NOTE]
+> **`InferParams` 的覆写语义：`optional` + `merge()`，另有两个非 optional 字段**
+>
+> `InferParams` 把上述每个参数都包成 `std::optional`，**只有 `has_value()` 的字段才会在 `merge()` 时覆盖 `ModelConfig` 的全局值**，未设置的保持全局配置。这就是"单次推理覆写"的实现机制——想只改本轮温度，就只设 `temperature`，其余留空。
+>
+> 但有两个字段**不是 optional**，属于每次请求的元信息而非采样参数：
+>
+> - `request_id`（`string`）：请求标识，贯穿日志与 `ModelResponse::request_id`，是排查"哪一轮慢/哪一轮被抢占"的主键。
+> - `request_priority`（`int`，默认 **1**）：请求级优先级。注意它与 §4 调度器的 `PriorityBase`（10/20/30/40）是**两套独立的优先级**，不要混用——`PriorityBase` 决定任务在调度队列里的出队顺序，`request_priority` 是随请求下发给后端的字段。
+>
+> 另：`InferParams::empty()` 用于判断"是否完全没设覆写"，它检查全部 optional 采样字段，但**不检查** `request_id` / `request_priority`。所以一个只设了 `request_id` 的 `InferParams` 仍会被判为 `empty()`。
+
+> [!NOTE]
+> **`repetition_penalty` 在本框架中是 `int`，不是惯例的 `float`**
+>
+> `model_config.hpp` 中的声明是 `int repetition_penalty = 1;`（`InferParams` 中为 `std::optional<int>`）。**默认值 1 表示"不惩罚"**，与主流推理引擎（vLLM / llama.cpp / transformers）的语义一致。
+>
+> 但需要注意口径差异：业界惯例把该参数定义为 `float`，常用取值是 **1.05 ~ 1.2** 这类略大于 1 的小数。`int` 类型**无法表达这一档位的微调**——可取值只有 1（不惩罚）、2（强惩罚）等整数。因此：
+>
+> - 从其他引擎迁移 prompt/采样配置时，**不要把 `1.05` 直接抄过来**，它会被截断为 `1`（等价于关闭惩罚）。
+> - 若确实需要小数级重复惩罚，应在后端适配层（Lape / QNN / Bailian）扩展该字段类型，而不是在业务侧调这个 `int`。
+> - 端侧约束解码场景下，重复问题更多依靠 `ebnf_path` / `pruned_vocabulary` 收敛输出空间，而非依赖重复惩罚。
+
+### 5.4 流式多模态推理代码示例
+
+```
+// 1. 创建模型实例
+ModelInstance model("qwen-vl-max");
+
+// 2. 设置配置
+ModelConfig config;
+config.temperature = 0.7;
+config.max_output_tokens = 512;
+model.setConfig(config);
+
+// 3. 构造多模态消息
+auto user_msg = message::Message::createUserMessage();
+user_msg.addTextContent("描述这张图片中的内容");
+user_msg.addImageUrlContent(
+    message::ImageUrlContent::createFromBase64(base64_data, "jpeg"));
+
+message::MessageList messages = {
+    message::Message::createSystemMessage("你是一个车载智能助手。"),
+    user_msg
+};
+message::MessageList history; // 历史对话
+
+// 4. 流式生成
+model.streamGenerate(
+    messages, history,
+    [](const std::string& token, bool is_finished, void* ud) {
+        std::cout << token << std::flush;
+        if (is_finished) std::cout << std::endl;
+    },
+    nullptr  // user_data
+);
+```
+
+### 5.5 2025–2026 演进
+
+`ModelInstance` 这一层近一年变化较快，以下几项是主线 `origin/agent_core_dev` 的近期能力，阅读旧代码时注意口径：
+
+- **`tools` 参数（2026-07，提交 `119c6818`）**：`streamGenerate` / `generate` 末尾新增 `vector<shared_ptr<BaseTool>> tools`，把工具声明随请求下发（见 §5.1 NOTE）。在此之前接口没有这个参数，旧代码的调用签名更短。
+- **`preprocessImage` 返回类型从 `optional` 改为 `vector`（2026-05，提交 `df54f75f`）**：提交说明是 "Support deepstack"。**一张图返回多个 embedding** 正是为了支持 **DeepStack** 这类需要多层/多尺度视觉特征注入的模型结构——旧口径"一张图一个 embedding"已不成立。`ModelRunner::preprocessImage` 与 `BaseLlm::preprocessImage` 的签名也随之同步。
+- **EAGLE3 投机解码**（见 §5.3 NOTE）：`eagle3_model_path` / `draft_token_num` 进入 `ModelConfig` 与 `InferParams`，Lape 后端接入 `eagle3_decode_process`。
+- **LoRA 名未命中回落 base model（2026-07，提交 `5ef57580`）**：`getModelDetailsByScene(scene_id, lora_name)` 查不到指定 LoRA 时不再报错，而是打日志后回落到 base model（见 §3 NOTE）。这条行为是**近期才定下来的**，依赖"查不到就报错"的旧假设已经失效。
+- **调度器接入 cprobe 链路追踪（2026-06，提交 `a8e9f993`）**：见 §4.5。
+
+## 6. 多音区对话管理 — ChatHistory
 
 车载座舱场景下，不同座位的乘员可能同时与 AI 助手对话。`ChatHistory`（定义于 `aadkapi/chat_history.hpp`）实现了按音区隔离的对话历史管理，支持关键人物识别与指代消歧。
 
@@ -732,13 +737,13 @@ sequenceDiagram
 >
 > 端侧 Agent 的记忆可分三层，对应到 aadkcore 的实现程度不同：
 >
-> - **短期记忆（对话窗口，已实现）**：即本节 `ChatHistory`——多音区对话历史，支持按轮数 / 时间段 / token 预算 / 音区裁剪取用（§4.3）。注意 KV/prefix cache 属于**推理层的复用加速**（省 system prompt 重复 prefill），不是记忆存储，别混为一谈。
-> - **长期记忆（用户画像，部分实现）**：`ChatHistory` 的关键人物识别（§4.2）+ `UserInfoExtractor` 从对话抽取姓名/品牌等信息；持久化由 `SQLiteDataService` 落库（对话历史、带位置/时间戳的图片，按 app/user 隔离）。
+> - **短期记忆（对话窗口，已实现）**：即本节 `ChatHistory`——多音区对话历史，支持按轮数 / 时间段 / token 预算 / 音区裁剪取用（§6.3）。注意 KV/prefix cache 属于**推理层的复用加速**（省 system prompt 重复 prefill），不是记忆存储，别混为一谈。
+> - **长期记忆（用户画像，部分实现）**：`ChatHistory` 的关键人物识别（§6.2）+ `UserInfoExtractor` 从对话抽取姓名/品牌等信息；持久化由 `SQLiteDataService` 落库（对话历史、带位置/时间戳的图片，按 app/user 隔离）。
 > - **情景记忆（按事件检索，偏设计方向）**：`BaseMemoryService` 定义了 `add_session_to_memory`/`search_memory` 的会话级检索接口，但当前 `InMemoryMemoryService` 实现基本是占位，真正的「行程/事件按需检索」尚未落地。
 >
-> 座舱场景下驾驶习惯与个人偏好属高敏感数据，**端侧记忆**（零上传、零网络延迟、完全离线可用）是首选；也正因为落在端侧、容量与检索成本受限，框架把「认人」做成轻量的关键人物 alias 机制（§4.2），而不是在端上维护一个重量级向量记忆库。
+> 座舱场景下驾驶习惯与个人偏好属高敏感数据，**端侧记忆**（零上传、零网络延迟、完全离线可用）是首选；也正因为落在端侧、容量与检索成本受限，框架把「认人」做成轻量的关键人物 alias 机制（§6.2），而不是在端上维护一个重量级向量记忆库。
 
-### 4.1 音区枚举 AudioZone
+### 6.1 音区枚举 AudioZone
 
 | 枚举值 | zone\_id | 说明 |
 | :--- | :--- | :--- |
@@ -768,7 +773,7 @@ sequenceDiagram
 | `response` | `response(content, audio_zone, call_id="", timestamp=0, intent="")` | 模型回复；可带本轮意图 |
 | `info` | `info(content, call_id="", timestamp=0, audio_zone=InvalidZone, intent="")` | Agent 执行过程中需要加入上下文的系统信息 |
 | `system` | `system(content, call_id="", timestamp=0)` | Agent **主动发起**的消息；音区固定为 `InvalidZone`，不可指定 |
-| `rag` | `rag(content, audio_zone, call_id="", timestamp=0)` | RAG 注入的知识片段（见 §5） |
+| `rag` | `rag(content, audio_zone, call_id="", timestamp=0)` | RAG 注入的知识片段（见 §7） |
 
 > [!WARNING]
 > **工厂方法的参数顺序不一致，且 `audio_zone` 存的是字符串**
@@ -780,7 +785,7 @@ sequenceDiagram
 >
 > 另：`ChatMessage` 还有一个 `intent` 字段（该轮对话对应的意图），供导航等下游 Agent 拼接 history 时使用，可为空。
 
-### 4.2 关键人物系统 — UserInfo
+### 6.2 关键人物系统 — UserInfo
 
 ```mermaid
 flowchart LR
@@ -827,21 +832,21 @@ addQuery(ChatMessage message, bool need_history = true, int32_t round = 3, bool 
 >
 > 但要清楚它**不提供**什么：
 >
-> - **不隔离模型实例**。多音区并发请求最终仍汇聚到同一个 `ModelScheduler` / `ModelInstance`（§3），音区之间是**抢占与排队**关系，不是并行独立推理。真正的并发度由 `worker_count` / `generate_concurrent` 决定，与音区数无关。
+> - **不隔离模型实例**。多音区并发请求最终仍汇聚到同一个 `ModelScheduler` / `ModelInstance`（§4），音区之间是**抢占与排队**关系，不是并行独立推理。真正的并发度由 `worker_count` / `generate_concurrent` 决定，与音区数无关。
 > - **`addResponse` 会把回复的音区改写成上一条 query 的音区**（便于后续按音区检索/删除）。这在单音区轮替下没问题，但**多音区全双工**（两个座位同时说话）时，"上一条 query"可能来自另一个音区，回复就会被挂到错误的音区上。代码里对此留有 `TODO：多音区全双工是否适用` 的注释——即这是**已知未解决**的边界，全双工场景需要业务侧自己用 `call_id` 对齐 query/response，不要依赖音区自动继承。
 > - **关键人物没有自动过期**。`getUserinfos()` 的注释明确写了"目前 PRD 要求人工操作（下车后删除历史）保证关键人物信息的有效性"，`addUserinfo` 对同一音区是**覆盖**语义。也就是说换人上车若没触发删除/覆盖，上一位乘客的 `alias` / `summarize` 仍会留在上下文里参与指代消歧——这是隐私与正确性双重风险点，业务侧必须接上下车/清场事件调 `removeUserinfoByAlias` 或 `clear()`。
 
-### 4.3 历史获取策略
+### 6.3 历史获取策略
 
 | 方法 | 参数 | 说明 |
 | :--- | :--- | :--- |
-| `getHistoryByNum(rounds, filter_types)` | `size_t rounds, const vector<string>& filter_types = {}` | 获取最近 N 条对话。`filter_types` 为空时取全部类型；传 `{"query","response"}` 等可**按类型过滤**（2026-07 新增，见 §4.4） |
+| `getHistoryByNum(rounds, filter_types)` | `size_t rounds, const vector<string>& filter_types = {}` | 获取最近 N 条对话。`filter_types` 为空时取全部类型；传 `{"query","response"}` 等可**按类型过滤**（2026-07 新增，见 §6.4） |
 | `getHistoryByPeriod(start, end, use_alias)` | `int64_t start_time, end_time, bool use_alias = false` | 获取指定时间段的对话；`-1` 表示不限；`use_alias=true` 时用关键人物 alias 替代音区名 |
 | `getHistoryByTokenLimit(limit, counter)` | `size_t limit, optional<function>` | 获取不超过 token 限制的对话；支持自定义 token 计数器。**只遍历 `messages_`，不含 UserInfo**——返回的历史里不会带关键人物条目。返回顺序是**从新到旧**（内部从尾部反向遍历） |
 | `getHistoryByUserinfo(alias, start, end)` | `string alias, int64_t start=-1, end=-1` | 获取特定关键人物所在音区的对话历史（只含 query/response，不含 info/system） |
 | `getUserinfos()` | - | 返回全部关键人物 `vector<UserInfo>`（const 引用） |
 | `getTotalHistory()` | - | 返回全部音区的完整历史（const 引用） |
-| `addResponse(msg)` / `addRag(msg)` / `addInfo(msg)` / `addSystem(content, ...)` | `ChatMessage` / 字符串 | 分类写入历史；`addResponse` 会把音区改写成上一条 query 的音区（见 §4.2 NOTE） |
+| `addResponse(msg)` / `addRag(msg)` / `addInfo(msg)` / `addSystem(content, ...)` | `ChatMessage` / 字符串 | 分类写入历史；`addResponse` 会把音区改写成上一条 query 的音区（见 §6.2 NOTE） |
 | `removeHistoryByAudioZone(zone, start, end)` | `int zone, int64_t start=-1, end=-1` | 删除指定音区的对话记录 |
 | `removeHistoryByTime(start, end)` | `int64_t` | 按时间段删除**所有音区**的对话记录 |
 | `removeUserinfoByAlias(alias, remove_history)` | `string, bool remove_history = true` | 删除关键人物，可选同时删除其对话记录。**存在多个同名 alias 时只删除最近添加的一个**（从后往前找到第一个匹配即 `break`），不会批量清理同名人物 |
@@ -869,7 +874,7 @@ addQuery(ChatMessage message, bool need_history = true, int32_t round = 3, bool 
 >
 > 顺带提醒：`chat_history.hpp` 里 `getHistoryByTokenLimit` 的**头注释是过时的**——它写的是"中文 1:1，英文 1.3:1"，与实现的 `1.8` / `0.25` 系数**都不一致**。以 `src/memory/chat_history.cpp` 的 `estimate_tokens()` 实现为准，别被头注释误导。
 
-### 4.4 2025–2026 演进
+### 6.4 2025–2026 演进
 
 本篇覆盖的 ChatHistory 能力以主线 `origin/agent_core_dev` 为准，近一年仍在活跃演进，阅读旧代码/旧文档时注意口径：
 
@@ -877,7 +882,7 @@ addQuery(ChatMessage message, bool need_history = true, int32_t round = 3, bool 
 - **意图字段贯穿对话（2026 上半年）**：`ChatMessage` 增加 `intent` 字段并在 `response` / `info` 工厂方法中开放，供导航等下游 Agent 拼接 history 时按意图对齐轮次。
 - **记忆从"对话历史"扩展到"结构化状态"**：主线在 2026-06 引入座舱状态服务与数据库管理（`feat(memory): add cabin state service and database manager`），并配套"基于记忆的召回"（memory-based recall，导航/POI/媒体）能力。这意味着"记忆"不再只有 `ChatHistory` 这一条线性对话流，还叠加了可查询的结构化事件——`ChatHistory` 负责对话上下文，结构化状态走独立的记忆/数据库通道，两者在 Agent 侧汇合。
 
-## 5. RAG 知识增强
+## 7. RAG 知识增强
 
 `RagInstance`（定义于 `aadkapi/rag_instance.hpp`）为 Agent 提供可插拔的 RAG（Retrieval-Augmented Generation）能力。通过构造时指定 `service_name`，内部路由到对应的 `RagServiceBase` 实现。
 
@@ -949,10 +954,10 @@ if (rag.isReady()) {
 > 对端侧的实际影响有三点：
 >
 > - **知识更新与模型解耦**。车控规则、用户手册这类知识变更频繁，走 RAG 注入就不必为每次知识更新重训/重量化模型，也避开了端侧 LoRA 重训的成本。这是端侧 RAG 相对"把知识塞进权重"的主要收益。
-> - **上下文预算是硬约束**。检索片段最终要拼进 prompt，而端侧模型的上下文窗口和 KV Cache 显存都远小于云端。因此 `query` 的返回**必须在上层做截断/排序**，不能把 map 里所有片段全量注入——否则挤占的正是对话历史（§4.3 的 `getHistoryByTokenLimit`）的预算。建议与历史裁剪共用同一套 token 计数口径。
+> - **上下文预算是硬约束**。检索片段最终要拼进 prompt，而端侧模型的上下文窗口和 KV Cache 显存都远小于云端。因此 `query` 的返回**必须在上层做截断/排序**，不能把 map 里所有片段全量注入——否则挤占的正是对话历史（§6.3 的 `getHistoryByTokenLimit`）的预算。建议与历史裁剪共用同一套 token 计数口径。
 > - **检索延迟串在首 token 之前**。RAG 检索发生在 prefill 之前，其耗时直接叠加到 TTFT 上。端侧若要控制首字延迟，应把检索与多模态预处理（`preprocessImage` / `preprocessAudio`）并行，而不是串行等待。
 >
-> 另外，`ChatHistory` 侧有配套的 `ChatMessage::rag(...)` 消息类型与 `addRag()` 方法（见 §4.1），用于把注入过的知识片段**回写进对话历史**，便于后续轮次复用与审计——是否回写由业务决定，框架不自动做。
+> 另外，`ChatHistory` 侧有配套的 `ChatMessage::rag(...)` 消息类型与 `addRag()` 方法（见 §6.1），用于把注入过的知识片段**回写进对话历史**，便于后续轮次复用与审计——是否回写由业务决定，框架不自动做。
 
 > [!TIP]
 > **下一篇：协议与运行时执行**
