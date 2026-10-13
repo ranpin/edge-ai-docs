@@ -126,6 +126,8 @@ def sidebar(toc_part, toc):
             cls = ' class="active"' if first else ''
             first = False
             links.append(f'  <a href="#{hid}"{cls}>{plain}</a>')
+        else:  # h3：二级目录，缩进呈现（scroll-spy 已按 #id 高亮）
+            links.append(f'  <a href="#{hid}" class="toc-sub">{plain}</a>')
     return '\n'.join(links)
 
 def load_titles():

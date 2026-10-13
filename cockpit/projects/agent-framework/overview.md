@@ -27,6 +27,25 @@ aadkcore 提供统一模型接口（ModelInstance）、模型调度器（ModelSc
 
 ## 3. 方法总览
 
+本节按「**总—分**」展开：**§3.1 先给框架的整体分层架构（总）**，随后 §3.2–3.6 沿**一条请求在框架内的数据流**依次拆解五类核心能力，§3.7 说明这些能力如何组合成座舱场景 Agent（应用落地）。六节关系一图看懂：
+
+```mermaid
+flowchart LR
+    B["§3.2 模型选型"] --> C["§3.3 输入与车态注入"]
+    C --> D["§3.4 Function Calling"]
+    D --> E["§3.5 Tool Use"]
+    E --> F["§3.6 记忆系统"]
+    F --> G["§3.7 场景 Agent 应用"]
+    style B fill:#7b8cff,color:#fff
+    style C fill:#7b8cff,color:#fff
+    style D fill:#f39c12,color:#fff
+    style E fill:#f39c12,color:#fff
+    style F fill:#f39c12,color:#fff
+    style G fill:#2ecc71,color:#fff
+```
+
+> **怎么读这五步**：§3.2 决定**用哪个模型**，§3.3 解决**数据怎么进框架**，§3.4–3.5 是**意图怎么变成动作**（Function Calling 是流程、Tool Use 是工具的注册与安全设计），§3.6 提供**跨轮上下文**，§3.7 把上述能力**落到车控 / 视觉 / 闲聊 / GUI** 各场景。五步都构建在 §3.1 的分层架构之上：选型与输入对应**模型 / 输入层**，Function Calling 与 Tool Use 对应**推理执行层**，记忆对应**记忆层**，场景 Agent 对应**应用层**。
+
 ### 3.1 整体架构
 
 先看框架的实际分层：应用层的场景 Agent 构建在 aadkcore 的统一 API 之上，内部实现调度、对话与 Tool 流程，最终通过平台适配层对接不同推理后端：
@@ -135,7 +154,13 @@ graph LR
     D --> E4
 ```
 
-具体分工：语音经 ASR 转为文本进入用户消息（或使用 Qwen3-Omni 的原生音频输入）；图像帧作为 VLM 的原生多模态内容直接送入模型；车辆状态走的是**文本注入**这条路——`CarSignalManager` 并不直接读 CAN，而是接收上游车控服务经 Fusion/DataTransport 推来的车辆状态 JSON 快照（`SystemAgentDispatcher::handle_car_signal_request` 解析后调 `setCarSignalInfo`），解析成 `VehicleState` 后按当前技能 mask 生成 `[CAR_STATE]` 文本（如"空调24度, 车窗关闭, 风速3档"）注入 system prompt；`PromptManager` 则是按场景从 YAML 加载、按 `prompt_id` 取用的 prompt 模板仓库，乘客信息随 `[CAR_STATE]` 一并注入。时间/位置/天气这类实时上下文，框架里不是由 PromptManager 自动占位符替换，而是经 Tool（如 MCP `get_weather`）或上游消息带入。
+具体分工按输入类型拆开看：
+
+- **语音**：经 ASR 转为文本进入用户消息，或走 Qwen3-Omni 的原生音频输入。
+- **图像**：帧作为 VLM 的原生多模态内容直接送入模型。
+- **车辆状态（文本注入）**：`CarSignalManager` 不直接读 CAN，而是接收上游车控服务经 Fusion/DataTransport 推来的车辆状态 JSON 快照（`SystemAgentDispatcher::handle_car_signal_request` 解析后调 `setCarSignalInfo`），解析成 `VehicleState` 后按当前技能 mask 生成 `[CAR_STATE]` 文本（如"空调24度, 车窗关闭, 风速3档"）注入 system prompt。
+- **Prompt 模板**：`PromptManager` 按场景从 YAML 加载、按 `prompt_id` 取用，乘客信息随 `[CAR_STATE]` 一并注入。
+- **实时上下文（时间 / 位置 / 天气）**：不由 PromptManager 自动占位符替换，而是经 Tool（如 MCP `get_weather`）或上游消息带入。
 
 > [!NOTE]
 > **为什么不是 token 级 embedding 融合**
