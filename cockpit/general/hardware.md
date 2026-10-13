@@ -596,9 +596,69 @@ echo performance > /sys/class/devfreq/<cdsp节点名>/governor
 - **与热管理联动**：持续投票高频会更快逼近热降频阈值（§7.3），所以升频通常只在交互窗口内短时启用。
 - 调试时可用 `/sys/class/devfreq/<cdsp节点名>/` 观察投票前后的频率变化（节点名随 BSP 变化，见 §7.3）。
 
-## 8. 竞品芯片对比
+## 8. ISP 与摄像头数据通路
 
-### 8.1 座舱/智驾芯片横向对比
+座舱 / 感知类负载的输入来自摄像头：原始数据先经 ISP 处理成可用图像，再经零拷贝通路喂给 HTP。本节讲这段「摄像头 → 计算」的数据通路（零拷贝的 cache 一致性规则见 §4.3）。
+
+### 8.1 ISP 处理流水线
+
+图像信号处理器 (ISP) 是摄像头原始数据到可用图像的桥梁。SA8397P 内置 Spectra ISP，完整处理流水线如下：
+
+```mermaid
+flowchart LR
+    A["Camera SensorRAW Bayer"] --> B["BLC黑电平校正"]
+    B --> C["BPC坏点校正"]
+    C --> D["Demosaic去马赛克插值"]
+    D --> E["CCM色彩校正矩阵"]
+    E --> F["Gamma伽马校正"]
+    F --> G["NR降噪处理"]
+    G --> H["Sharpen锐化增强"]
+    H --> I["NV12 输出YUV 4:2:0"]
+
+    style A fill:#e74c3c,color:#fff
+    style D fill:#f39c12,color:#fff
+    style G fill:#3498db,color:#fff
+    style I fill:#2ecc71,color:#fff
+```
+
+### 8.2 端到端延迟分解
+
+从摄像头捕获到最终 GPU 渲染输出的全链路，可按阶段拆解延迟。下图为**分阶段延迟分解**示意（每段 = 该阶段在一帧内占用的耗时，各段之和 ≈ 端到端总延迟）：
+
+```mermaid
+xychart-beta
+    title "Camera → AI 输出 分阶段延迟分解（示例）"
+    x-axis ["Camera→ISP", "ISP 处理", "ISP→CDSP (ION)", "HTP 推理", "后处理 (CPU)", "GPU 渲染"]
+    y-axis "各阶段延迟 (ms)" 0 --> 14
+    bar [2, 3, 0.1, 12.9, 2, 4]
+```
+
+> [!NOTE]
+> **数据口径**：图中各段延迟为**示例参数**，仅用于演示「分阶段延迟分解」这一方法，不代表实测；请代入你自己平台的流水线实测替换（全站数据口径见本篇顶部 NOTE）。读图要点：把端到端链路拆成串行阶段后，**HTP 推理通常占大头**，是优化的首要靶点；ISP→CDSP 走 Zero-Copy（§8.3 / §4.3）时该段可压到亚毫秒级。若要画成累计曲线（瀑布），则末段值应等于各阶段之和（此例约 24ms），而非单段值。
+
+### 8.3 Zero-Copy 数据通路
+
+> [!TIP]
+> **Zero-Copy 路径：消除 CPU 内存拷贝瓶颈**
+>
+> 传统方案中数据在 ISP、CPU、DSP、GPU 之间需多次内存拷贝 (`memcpy`)，带来显著延迟和功耗开销。SA8397P 的 Zero-Copy 路径消除了这一瓶颈：
+>
+> * **ISP 写入共享 Buffer**：ISP 处理完成后直接将 NV12 图像写入共享内存缓冲区（早期 ION，新内核已演进为 dma-buf heap，见 §4.3）
+> * **CDSP 映射同一 Buffer**：Hexagon CDSP 通过 FastRPC 映射同一块内存，无需数据拷贝
+> * **HTP 直接读取**：HTP 从映射的 Buffer 直接读取输入张量执行推理
+> * **结果写入另一 Buffer**：推理结果写入新的共享 Buffer 供下游使用
+> * **GPU 读取结果**：Adreno GPU 映射结果 Buffer 直接渲染到显示层
+>
+> **性能收益**：整条通路**无任何 CPU memcpy**，端到端延迟与功耗均有可观下降（量级示意：延迟减少约 3~5ms、功耗降低约 15%，仅为演示方向的示例参数，请代入实测）。Buffer 经 **SMMU/IOMMU 映射**后供各引擎 DMA 访问——dma-buf 允许**非物理连续**的散列页经 IOMMU 拼成设备可见的连续虚拟地址，因此「Zero-Copy」依赖的是 IOMMU 映射而非物理地址连续性。
+
+> [!NOTE]
+> **Zero-Copy 的真实约束（不是「免费」的）**
+>
+> Zero-Copy 成立有前提：(1) **定长 POD 张量**——buffer 的形状/字节数在生产端（ISP）与消费端（HTP graph 输入）必须事先约定，变长数据（文本 token、动态分辨率图）走不了这条通路；(2) **对齐与 stride**——NV12 的行 stride / scanline 对齐、dma-buf 的页对齐要满足各引擎 DMA 要求，生产/消费双方必须用同一套 layout，否则「同一块内存」读出来是错位的；(3) **同一可映射 heap**——buffer 必须从所有引擎都能映射的 heap（system heap 经 SMMU/FastRPC）分配，secure/专用 heap 会破坏共享。cache 一致性的维护规则（CPU 写→DSP 读要 flush、DSP 写→CPU 读要 invalidate）见 §4.3。
+
+## 9. 竞品芯片对比
+
+### 9.1 座舱/智驾芯片横向对比
 
 以下对比涵盖当前主流座舱和跨域计算芯片。**数据截至 2026-09，来源为各厂商公开资料；车规芯片规格多为估算，请以厂商官方发布为准**：
 
@@ -616,7 +676,7 @@ echo performance > /sys/class/devfreq/<cdsp节点名>/governor
 > [!NOTE]
 > **高通座舱平台的 2025-2026 演进**：SA8397P 的继任方向是 **Snapdragon Cockpit Elite**（2024-10 发布、采用 Oryon CPU、2025-2026 起量产上车），厂商宣称 AI 算力与内存带宽大幅提升、以端侧 LLM/Agent 支持为核心卖点；具体 TOPS/带宽/工艺未完全公开（**需核实**）。演进时间线见 §1.3，AD 侧对应的 Ride Elite 见 [自动驾驶算力平台](../../ad/general/soc-platform.html)。
 
-### 8.2 端侧 LLM 可行性对比
+### 9.2 端侧 LLM 可行性对比
 
 从端侧 LLM 部署的角度，各芯片的关键差异在于 **NPU 算力**、**内存带宽** 和 **功耗预算**：
 
