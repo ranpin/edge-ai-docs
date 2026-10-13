@@ -92,4 +92,4 @@ graph TD
 3. 模型输出若含 `FunctionCall`，由业务侧解析并调用对应 `BaseTool`（车控/导航等），结果汇总后生成最终回复。
 4. 回复经 TTS 播报，或驱动车控/UI/告警等执行器；对话写入 `ChatHistory` 供后续轮次取用。
 
-> 端侧模型选型与支持矩阵见 [**aadkcore 核心框架**](agent-core.html) §1.4；Function Calling 与 Tool Use 的代码现状与设计要点见 [**协议与运行时执行**](agent-protocols.html) §4；车态注入与 Prompt 模板见 [**场景 Agent 应用**](agent-group.html) §2/§7；LLM 推理优化（KV Cache/Roofline/投机采样/量化）见通识文档 [**LLM 推理原理与性能模型**](../../general/infer-principles.html)、[**端侧解码与服务化优化**](../../general/infer-serving.html)、[**端侧模型量化与压缩**](../../general/quantization.html)。
+> 端侧模型选型与支持矩阵见 [**aadkcore 核心框架**](agent-core.html) §1.4；Function Calling 与 Tool Use 的代码现状与设计要点见 [**协议与运行时执行**](agent-protocols.html) §2；车态注入与 Prompt 模板见 [**场景 Agent 应用**](agent-group.html) §2/§7；LLM 推理优化（KV Cache/Roofline/投机采样/量化）见通识文档 [**LLM 推理原理与性能模型**](../../general/infer-principles.html)、[**端侧解码与服务化优化**](../../general/infer-serving.html)、[**端侧模型量化与压缩**](../../general/quantization.html)。

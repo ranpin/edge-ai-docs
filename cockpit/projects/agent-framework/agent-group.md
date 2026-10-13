@@ -166,7 +166,7 @@ agent\_factory.cpp 通过多级条件编译宏控制 Agent 的编译包含，实
 >
 > `call_car_control_mcp()` 函数**存在**（`carcontrol_dispatcher.cpp` 内实现，走 `McpSessionManager`），但流式回调里唯一的调用点被**注释掉了**（`// call_car_control_mcp(total_result);`）。也就是说：Dispatcher 产出结构化命令 JSON 后，**只把结果通过 `reply_handler` 回给宿主，并不自己下发车控**——实际执行由下游（宿主/车控服务）接手。
 >
-> 读代码或做端到端联调时别按「Agent 直接控车」建模。MCP 通道的传输形态与会话生命周期见 [Agent 协议](agent-protocols.html) §1；该节同时指出 Tool 执行循环受 `USE_TOOL` 门控，而该宏在仓库中从未定义——即「解析 FunctionCall → 执行 → 回灌再推理」这条自动闭环当前也不成立。
+> 读代码或做端到端联调时别按「Agent 直接控车」建模。MCP 通道的传输形态与会话生命周期见 [Agent 协议](agent-protocols.html) §3；该节同时指出 Tool 执行循环受 `USE_TOOL` 门控，而该宏在仓库中从未定义——即「解析 FunctionCall → 执行 → 回灌再推理」这条自动闭环当前也不成立。
 
 ### 2.1 核心流程
 
@@ -776,7 +776,7 @@ graph TB
 >
 > **判定条件比注释写的宽**：`is_high_priority_task()` 解析消息 JSON，只要 `body.active_vision` 对象里**存在 `mode` 字段**就返回高优先级——函数体里是 `bool is_high = true;` 无条件置真，上方那行 `// dangerous action detect` 注释是残留。也就是说**迎宾(0)/送宾(1)/行中(2) 三类带 mode 的主动视觉消息全部进 critical 队列**，并非只有危险动作检测。而不带 `mode` 的主动视觉消息（task\_id 驱动的乘客特征提取、遗留物检测等）走 main 队列。
 >
-> **分支口径**：本节描述的是岚图 `lantu_sdk_dev` 分支的行为（双 ThreadWorker 分流、`is_high_priority_task()` 对带 mode 消息置真）。**主线 `origin/agent_core_dev` 与此分叉**——主线上 `use_thread_pool_` 默认 true 且从不改写、`is_high_priority_task()` 恒返回 false，两级优先级实际是「双重关掉的脚手架」。分支差异对照见 [协议与运行时执行](agent-protocols.html) §3.4。
+> **分支口径**：本节描述的是岚图 `lantu_sdk_dev` 分支的行为（双 ThreadWorker 分流、`is_high_priority_task()` 对带 mode 消息置真）。**主线 `origin/agent_core_dev` 与此分叉**——主线上 `use_thread_pool_` 默认 true 且从不改写、`is_high_priority_task()` 恒返回 false，两级优先级实际是「双重关掉的脚手架」。分支差异对照见 [协议与运行时执行](agent-protocols.html) §1.4。
 >
 > 另注：§1.1 WARNING 提到的另一个路由器 `MsgDispacher`（agent\_group 自带、`agent_runtime_main` 用）**没有这套两级队列**，只有单个 `main_thread_worker_`——独立进程形态下不存在优先级分流。
 >
