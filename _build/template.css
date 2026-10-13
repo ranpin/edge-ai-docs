@@ -18,6 +18,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans S
 .sidebar a{display:block;padding:4px 16px 4px 20px;text-decoration:none;color:var(--text2);font-size:12px;border-left:3px solid transparent}
 .sidebar a:hover{color:var(--accent);background:var(--accentL)}
 .sidebar a.active{color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.sidebar a.toc-sub{padding-left:34px;font-size:11.5px;color:var(--muted)}
+.sidebar a.toc-sub.active{color:var(--accent);font-weight:600}
 .sidebar .toc-part{padding:8px 20px 4px;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px}
 .main{margin-left:0;margin-top:var(--nav-h);padding:28px 48px 60px 68px;max-width:none}
 h1{font-size:26px;font-weight:800;margin-bottom:6px}
