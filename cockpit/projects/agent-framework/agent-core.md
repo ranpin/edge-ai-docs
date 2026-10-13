@@ -484,7 +484,7 @@ score = priority * weight_priority + wait_time_ms * weight_wait * 0.001
 | `GetTaskStatus(task_id)` | 查询单个任务状态（返回 `TaskResponse`，`status` 为 `TASK_ALREADY_EXISTS` / `TASK_NOT_FOUND`） |
 | `ListAllTasks()` | 列出所有任务及其状态（返回 `vector<TaskUpdate>`） |
 
-**ModelRunner 单例**（`aadkapi/model_runner.h`）是 **API 层的调度入口**：业务 dispatcher 不直接碰 `ModelScheduler`，而是调 `ModelRunner`，由它组好 `CommonSchedulerTask` 再提交调度器（端到端调用链见 [**协议与运行时执行**](agent-protocols.html) §4.3）。作为调度器的上层封装，它的关键成员：
+**ModelRunner 单例**（`aadkapi/model_runner.h`）是 **API 层的调度入口**：业务 dispatcher 不直接碰 `ModelScheduler`，而是调 `ModelRunner`，由它组好 `CommonSchedulerTask` 再提交调度器（完整端到端调用链见 §3.6）。作为调度器的上层封装，它的关键成员：
 
 - `getInstance()` 全局单例，所有 Agent 共享
 - `scene_model_details_`：`scene_id → ModelDetails` 映射，管理各场景的模型实例与 LoRA 配置
@@ -687,6 +687,41 @@ CPROBE_END_SPAN(model_infer_span);
 > - **打断的代价被刻意做高，以抑制滥用**。取消即丢弃 KV、需从 prefill 完整重跑（§3.4 路径一），所以 `break_tag` 默认关闭。框架把"是否值得打断"这个判断交给业务，而不是自己猜——这是对的，因为只有业务知道 prompt 有多长、已播报了多少内容。
 > - **多音区并发靠"共享队列 + 优先级"，不靠"音区配额"**。所有音区的请求进同一个队列竞争同一批 worker（§4.2 NOTE）。好处是实现简单、资源利用率高；代价是**没有按音区的隔离或配额**，一个音区的长任务会挤占其他音区。若产品要求"每个座位都有保底响应能力"，需要在业务层按音区映射到不同 `PriorityBase`，或自行做准入控制——框架不提供。
 > - **并发执行是默认（`generate_concurrent = true`）**，这与"端侧算力有限、串行更省内存"的直觉相反。默认并发的收益是多个短任务不必互相等待，但**它同时让"抢执行权"这条抢占语义失效**（§3.4），只剩 `cancel_flag` 一条打断路径。调这个开关等于在"吞吐"和"抢占可控性"之间做选择，改动前要想清楚业务依赖的是哪一种。
+
+### 3.6 端到端调用链（路径 A）
+
+把前面的构件串起来——生产中一次模型调用的完整链路（**路径 A**）：请求经 `SystemRuntime` 按 `scenario_id` 路由到 `AgentPlugin`（业务 dispatcher），dispatcher 调 `ModelRunner::schedule_run_sync` 组好 `CommonSchedulerTask` 提交 `ModelScheduler`，调度后由 `ModelInstance` 进后端推理，结果沿原路回传：
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant SR as SystemRuntime
+    participant MD as MsgDeliverImpl
+    participant AP as AgentPlugin(业务 dispatcher)
+    participant MR as ModelRunner
+    participant MS as ModelScheduler
+    participant LLM as LLM 模型
+
+    U->>SR: 语音输入 "把空调调到 24 度"
+    SR->>MD: 按 scenario_id 路由
+    MD->>AP: deliver_msg(DataMessage)
+    AP->>MR: schedule_run_sync(data_message, request_id,<br/>system_prompt, user_prompt, history, ...)
+    MR->>MS: SubmitTask(CommonSchedulerTask)
+    MS->>LLM: onProcessing → streamGenerate
+    LLM-->>MS: 推理输出(可能含 FunctionCall)
+    MS-->>MR: ModelResponse
+    MR-->>AP: 返回推理结果
+    AP-->>MD: 回传结果
+    MD-->>SR: 结果回传
+    SR-->>U: TTS 播报
+```
+
+逐跳对应本篇构件：`AP → MR` 是 §3.3 的 `ModelRunner`（API 层调度入口），`MR → MS` 是 §3.1–3.5 的 `ModelScheduler`（`SubmitTask` 进优先级队列、worker 执行、回调返回），`MS → LLM` 经 §2 的 `ModelInstance` 落到平台后端。`scenario_id` 路由与插件加载属运行时主线，见 [**协议与运行时执行**](agent-protocols.html) §3；dispatcher 侧的请求准备（prompt 组装、车态注入、RAG 检索）见 [**场景 Agent 应用**](agent-group.html) §2.1。
+
+> [!NOTE]
+> **这是「路径 A」；还有一条未接线的「路径 B」**
+>
+> 上图是生产中实际在跑的路径 A（dispatcher 直接经 `ModelRunner` 进调度器）。aadkcore 里还预留了一条 ADK 风格的**路径 B**（`Runner → LlmAgent → BaseLlmFlow → BaseTool`），但**大部分未接线**：`SystemAgent` 的 `flow_` 是死成员、`Runner` 从未被实例化、Tool 闭环受 `USE_TOOL` 门控默认未启用。路径 B 的代码现状、以及「为什么生产链路里没有 `BaseLlmFlow` 与 Tool 再推理」见 [**协议与运行时执行**](agent-protocols.html) §4。
 
 ## 4. 多音区对话管理 — ChatHistory
 
