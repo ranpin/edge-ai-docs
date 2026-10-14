@@ -116,7 +116,11 @@ extern "C" void create_dispatcher(int scenario_id, const char* data_path,
 extern "C" void destroy_dispatcher(std::unique_ptr<AgentPlugin> plugin);
 ```
 
-加载流程对应到 `runtime/src/system_agent/msg_deliver_impl.cpp` 的 `init()`：`dlopen("libagent_group.so", RTLD_LAZY)` → `dlsym` 解析 `get_supported_agents` 与 `create_dispatcher` → 遍历返回的 `PluginInfo` 逐个 `create_dispatcher`，并校验 `plugin->scenario_id() == info.scenario_id` 后注册进 `dispatchers_[scenario_id]`。
+加载流程对应到 `runtime/src/system_agent/msg_deliver_impl.cpp` 的 `init()`：
+
+1. `dlopen("libagent_group.so", RTLD_LAZY)` 加载插件库；
+2. `dlsym` 解析 `get_supported_agents` 与 `create_dispatcher`；
+3. 遍历返回的 `PluginInfo` 逐个 `create_dispatcher`，并校验 `plugin->scenario_id() == info.scenario_id` 后注册进 `dispatchers_[scenario_id]`。
 
 两个容易漏掉的细节：
 
@@ -687,7 +691,13 @@ stateDiagram-v2
 }
 ```
 
-从这份配置能读出 aadkcore A2A 服务端的实际形态：**JSON-RPC over HTTP**（`jsonRPCEndpoint`）+ **SSE 流式**（`capabilities.streaming`）+ **推送通知**（`pushNotifications`），并自带 **API Key 认证**、**会话 TTL 与定期清理**（`conversationTTL_hours` / `cleanupInterval_secs`）、**历史长度上限**（`maxHistoryLength`）。这几项对端侧部署很实在：TTL 与清理决定了常驻 Agent 的内存是否会随会话数无界增长。
+从这份配置能读出 aadkcore A2A 服务端的实际形态：
+
+- **传输**：JSON-RPC over HTTP（`jsonRPCEndpoint`）+ SSE 流式（`capabilities.streaming`）+ 推送通知（`pushNotifications`）；
+- **认证**：自带 API Key 认证；
+- **会话治理**：会话 TTL 与定期清理（`conversationTTL_hours` / `cleanupInterval_secs`）、历史长度上限（`maxHistoryLength`）。
+
+这几项对端侧部署很实在：TTL 与清理决定了常驻 Agent 的内存是否会随会话数无界增长。
 
 ### 4.3 A2ATaskHandler
 

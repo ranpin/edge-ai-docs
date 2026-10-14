@@ -164,7 +164,13 @@ sequenceDiagram
     SR-->>U: TTS 播报
 ```
 
-逐跳对应本篇构件：`AP → MR` 是 §3 的 `ModelRunner`（API 层调度入口），`MR → MS` 是 §4.1–4.5 的 `ModelScheduler`（`SubmitTask` 进优先级队列、worker 执行、回调返回），`MS → MI → BE` 是 worker 经 §5 的 `ModelInstance.streamGenerate` 落到平台后端推理。`scenario_id` 路由与插件加载属运行时主线，见 [**协议与运行时执行**](agent-protocols.html) §1；dispatcher 侧的请求准备（prompt 组装、车态注入、RAG 检索）见 [**场景 Agent 应用**](agent-group.html) §2.1。
+逐跳对应本篇构件：
+
+- `AP → MR`：§3 的 `ModelRunner`（API 层调度入口）；
+- `MR → MS`：§4.1–4.5 的 `ModelScheduler`（`SubmitTask` 进优先级队列、worker 执行、回调返回）；
+- `MS → MI → BE`：worker 经 §5 的 `ModelInstance.streamGenerate` 落到平台后端推理。
+
+`scenario_id` 路由与插件加载属运行时主线，见 [**协议与运行时执行**](agent-protocols.html) §1；dispatcher 侧的请求准备（prompt 组装、车态注入、RAG 检索）见 [**场景 Agent 应用**](agent-group.html) §2.1。
 
 > [!NOTE]
 > **这是「路径 A」；还有一条未接线的「路径 B」**
@@ -250,7 +256,11 @@ flowchart LR
 score = priority * weight_priority + wait_time_ms * weight_wait * 0.001
 ```
 
-`CompareTask` 有一个默认构造器（`weight_priority = 2.0`、`weight_wait = 0.5`、`weight_type = 1.0`），但**它从未被使用**——`ModelScheduler` 构造时显式传入 `CompareTask(2, 0.1, 0.5)`（`model_scheduler.cpp`），因此本分支实际生效的是 `weight_priority = 2`、`weight_wait = 0.1`（`weight_type` 槽位当前未参与评分公式）。**不同分支/配置的构造实参可能不同**，调优前请先确认自己分支上传给优先队列的 `CompareTask(wp, ww, wt)` 实参，不要照搬默认构造器的值。
+`CompareTask` 的构造实参在本分支需特别留意：
+
+- **默认构造器从未被使用**：`CompareTask()` 的 `weight_priority = 2.0`、`weight_wait = 0.5`、`weight_type = 1.0` 只是占位。
+- **实际生效值**：`ModelScheduler` 构造时显式传入 `CompareTask(2, 0.1, 0.5)`（`model_scheduler.cpp`），即 `weight_priority = 2`、`weight_wait = 0.1`（`weight_type` 槽位当前未参与评分公式）。
+- **调优前先确认分支**：不同分支/配置的构造实参可能不同，请核对自己分支上传给优先队列的 `CompareTask(wp, ww, wt)` 实参，不要照搬默认构造器的值。
 
 > [!WARNING]
 > **"避免饥饿"需要限定条件：本分支实参下的饥饿窗口是 10 分钟级**
