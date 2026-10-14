@@ -172,49 +172,17 @@ flowchart TD
 
 ### 2.2 量化敏感层分析
 
-LLM 的不同层对量化的敏感度差异很大。通常以下层最为敏感：
-
-| 层类型 | 量化敏感度 | 原因 | 建议精度 |
-| :--- | :--- | :--- | :--- |
-| **Embedding 层** | 高 | 词表映射精度直接影响 token 表示 | INT8 或 FP16 |
-| **LM Head（输出层）** | 高 | 决定最终 token 选择，微小误差可能改变输出 | INT8 或 FP16 |
-| **前几层 Attention** | 中-高 | 底层特征提取对后续所有层有级联影响 | INT8 |
-| **中间层 FFN** | 低 | 冗余度高，量化容忍度大 | INT4 |
-| **后几层 Attention** | 中 | 接近输出，精度影响较直接 | INT8 或 INT4 |
-| **Vision Encoder** | 中-高 | 图像特征编码精度影响多模态理解 | INT8 |
-
-```
-# 逐层精度敏感度分析 (AIMET 方式)
-# 逐个将每层量化为 INT4，其余保持 FP16，观察 Perplexity 变化
-
-for layer_idx in range(num_layers):
-    # 仅量化第 layer_idx 层为 INT4，其余 FP16
-    model = load_fp16_model()
-    quantize_single_layer(model, layer_idx, bits=4)
-    ppl = evaluate_perplexity(model, eval_dataset)
-    print(f"Layer {layer_idx}: PPL = {ppl:.2f} (delta = {ppl - fp16_ppl:+.2f})")
-
-# 输出示例:
-# Layer 0 (Embed):   PPL = 8.95 (delta = +1.32)  ← 高敏感
-# Layer 1 (Attn):    PPL = 8.12 (delta = +0.49)  ← 中敏感
-# Layer 17 (FFN):    PPL = 7.68 (delta = +0.05)  ← 低敏感
-# Layer 35 (LMHead): PPL = 9.21 (delta = +1.58)  ← 高敏感
-```
+LLM 不同层对量化的敏感度差异很大（Embedding / LM Head / 前几层 Attention 高敏感、中间层 FFN 低敏感），逐层敏感度扫描方法、AIMET 工作流与混合精度策略（Embedding+LM Head 保 INT8、其余 INT4 一类）见 [**端侧模型量化与压缩 · §2.4 AIMET 敏感度分析与混合精度**](../../general/quantization.html) 与 §1.3。本节只记**部署侧逐层定位误差**的实操路线。
 
 > [!NOTE]
 > **逐层定位的两条实操路线**
 >
-> 上面的伪代码示意"单层量化、其余高精度"的敏感度扫描思路（示例 PPL 数字非实测）。落到 QNN/QAIRT 部署时有两条互补路线：
+> 落到 QNN/QAIRT 部署时有两条互补路线：
 >
 > 1. **量化前（浮点侧）**：用 AIMET 做逐层敏感度分析/混合精度搜索，确定哪些层保 INT8/FP16、哪些层可压 INT4——在 PyTorch/ONNX 侧完成，再把混合精度配置带入 QNN 转换流程。
 > 2. **量化后（目标硬件侧）**：用 `qnn-net-run` 的 debug 输出 dump 中间层 tensor（选项名以所用 QAIRT 版本的 `qnn-net-run --help` 为准），与浮点参考实现逐层对比余弦相似度/SNR，定位**转换与量化真正落地后**的误差放大层——浮点侧敏感度分析无法覆盖图优化（算子融合、layout 变换）引入的偏差，两侧结论可能不一致，以硬件侧为准。
 >
 > 两条路线的分工：浮点侧决定"该给哪层多少 bit"，硬件侧验证"实际误差在哪层放大"。
-
-> [!TIP]
-> **混合精度量化策略**
->
-> 基于敏感度分析结果，推荐的混合精度策略：**Embedding + LM Head 用 INT8，前 2 层和后 2 层 Attention 用 INT8，其余全部 INT4**。相比全 INT4，Perplexity 增幅从 ~1.5% 降至 ~0.5%，而模型大小仅增加约 10%——以上增幅与体积数字均为**示例参数（非实测）**，仅示意精度-体积的权衡方向，请以自己模型的敏感度分析实测为准。这是端侧部署中精度和体积的常见平衡点。
 
 ### 2.3 间歇性精度错误（非 crash）：先怀疑 DMA-BUF cache 一致性
 
@@ -249,29 +217,7 @@ for layer_idx in range(num_layers):
 
 ### 3.2 KV Cache OOM 排障
 
-KV Cache 是端侧 LLM 最常见的 OOM 来源。随着对话轮次增加，KV Cache 持续增长直至内存耗尽：
-
-```
-KV Cache 内存计算（以 Qwen3-4B 级典型配置为例:
-n_layers=36, n_kv_heads=8 (GQA), head_dim=128, KV 用 INT8）:
-
-  per_token = 2 × n_layers × n_kv_heads × head_dim × dtype_bytes
-            = 2 × 36 × 8 × 128 × 1B (INT8)
-            = 73,728 Bytes = 72 KB/token
-
-  不同序列长度的 KV Cache 占用:
-    256 tokens:   72KB × 256   ≈ 18 MB
-    512 tokens:   72KB × 512   ≈ 36 MB
-    1024 tokens:  72KB × 1024  ≈ 72 MB
-    2048 tokens:  72KB × 2048  ≈ 144 MB
-    4096 tokens:  72KB × 4096  ≈ 288 MB
-
-  多请求并发 (Continuous Batching):
-    4 个请求 × 1024 tokens/请求 ≈ 288 MB
-
-  结合模型权重 2.5GB + 激活值 0.5GB:
-    总内存 ≈ 3.0 GB + KV Cache
-```
+KV Cache 是端侧 LLM 最常见的 OOM 来源——随对话轮次增加持续增长直至内存耗尽。内存公式（`per_token = 2 × n_layers × n_kv_heads × head_dim × dtype_bytes`）与不同序列长度的占用推导见 [**LLM 推理原理与性能模型 · §3.1 KV Cache 内存公式**](../../general/infer-principles.html)。以 Qwen3-4B 级配置（36 层、8 KV head、head_dim 128、KV INT8）为例约 **72 KB/token**，4096 tokens 约 288 MB；叠加权重 ~2.5GB + 激活 ~0.5GB，总内存 ≈ 3.0 GB + KV Cache。
 
 > [!NOTE]
 > **端侧"batching"不一定是真 batch**
