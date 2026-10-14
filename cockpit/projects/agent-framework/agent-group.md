@@ -150,7 +150,11 @@ agent\_factory.cpp 通过多级条件编译宏控制 Agent 的编译包含，实
 
 ### 1.4 runtime\_config.json 配置
 
-运行时配置**按平台目录组织**（`runtime/data/config/` 下 `8295/`、`8397/`、`9075/`、`orin/` 各一套），平台选择靠**选目录**而非配置文件内字段。模型角色由 `multi_lora_runtime_config.json` 的两套模型参数承载：`model_config`（**主对话模型**，CarControl / Chitchat 使用）与 `active_model_config`（**主动视觉模型**，ActiveVision 使用，可独立于主模型）；同目录的 `runtime_config.json` 只承载调度参数（worker\_count / capacity / timeout\_s 等）。
+运行时配置**按平台目录组织**，平台选择靠**选目录**而非配置文件内字段：
+
+- **目录布局**：`runtime/data/config/` 下 `8295/`、`8397/`、`9075/`、`orin/` 各一套。
+- **模型角色**（`multi_lora_runtime_config.json` 的两套模型参数）：`model_config` = **主对话模型**（CarControl / Chitchat 使用）；`active_model_config` = **主动视觉模型**（ActiveVision 使用，可独立于主模型）。
+- **调度参数**：同目录的 `runtime_config.json` 只承载 worker\_count / capacity / timeout\_s 等。
 
 > [!NOTE]
 > **以 deploy.md 为准**
@@ -254,7 +258,12 @@ sequenceDiagram
 
 ### 2.3 车控技能精华表
 
-技能定义在 `car_control.yaml` 的 `car_skills` 部分，共 **40 项**（39 个真实技能 + 兜底的 `cant_control`）。下表是核心技能摘要（代表性子集）；未列出的还有座椅调节簇（`seat_base_adjust` / `seat_backrest_adjust` / `driver_cushion_firmness_adjust` / `passenger_seat_zero_gravity_mode` / `seat_lounge_mode`）、外灯/显示簇（`exterior_headlight_control` / `rear_fog_light_control` / `night_eye_protection_mode` / `display_mode` / `screen_brightness_control`）、空调模式簇（`ac_auto_mode` / `ac_sync` / `ac_energy_saving_mode` / `cycle_mode_switching` / `car_demisting` / `rearview_mirror_heating`）与冰箱细节（`icebox_door` / `icebox_child_lock`）等：
+技能定义在 `car_control.yaml` 的 `car_skills` 部分，共 **40 项**（39 个真实技能 + 兜底的 `cant_control`）。下表是核心技能摘要（代表性子集）；此外未列入表格的技能簇还有：
+
+- **座椅调节簇**：`seat_base_adjust` / `seat_backrest_adjust` / `driver_cushion_firmness_adjust` / `passenger_seat_zero_gravity_mode` / `seat_lounge_mode`
+- **外灯/显示簇**：`exterior_headlight_control` / `rear_fog_light_control` / `night_eye_protection_mode` / `display_mode` / `screen_brightness_control`
+- **空调模式簇**：`ac_auto_mode` / `ac_sync` / `ac_energy_saving_mode` / `cycle_mode_switching` / `car_demisting` / `rearview_mirror_heating`
+- **冰箱细节**：`icebox_door` / `icebox_child_lock`
 
 | 技能名 | 功能 | 关键参数 | 规则要点 |
 | :--- | :--- | :--- | :--- |
@@ -331,7 +340,21 @@ CarControlDispatcher 通过 `PassengerInfo` 结构体（含 pos/occupancy/gender
 | 座椅加热联动 | 有人座位同步加热档位 | seat\_heating 技能规则 |
 | 座椅通风 + 成年女性 | 女性座位通风强制 1 档 | seat\_ventilation 技能规则 |
 
-此外，`voice_zone_map_` 将音区编码映射到位置名称。aadkcore `AudioZone` 权威枚举（`chat_history.hpp`）的完整取值为：**InvalidZone=0（无效音区）、1=FrontLeftZone（主驾/前左）、2=FrontRightZone（副驾/前右）、4=MiddleLeftZone（中左）、8=MiddleRightZone（中右）、16=BackLeftZone（后左）、32=BackRightZone（后右）、FrontZone=FrontLeftZone（别名，等同主驾，非独立音区）、AllZone=0xFF**。注意 `AllZone=0xFF` 是**哨兵值**（表示「全部音区」），并非 6 个音区按位或的结果（按位或应为 0x3F）——判断「是否全选」应比对 0xFF 而非做位运算。
+此外，`voice_zone_map_` 将音区编码映射到位置名称。aadkcore `AudioZone` 权威枚举（`chat_history.hpp`）的完整取值：
+
+| 枚举值 | 含义 |
+| :--- | :--- |
+| `InvalidZone=0` | 无效音区 |
+| `1=FrontLeftZone` | 主驾/前左 |
+| `2=FrontRightZone` | 副驾/前右 |
+| `4=MiddleLeftZone` | 中左 |
+| `8=MiddleRightZone` | 中右 |
+| `16=BackLeftZone` | 后左 |
+| `32=BackRightZone` | 后右 |
+| `FrontZone=FrontLeftZone` | 别名，等同主驾，非独立音区 |
+| `AllZone=0xFF` | 全部音区（哨兵值） |
+
+注意 `AllZone=0xFF` 是**哨兵值**（表示「全部音区」），并非 6 个音区按位或的结果（按位或应为 0x3F）——判断「是否全选」应比对 0xFF 而非做位运算。
 
 > [!WARNING]
 > **音区标签两套不一致 + Back/Middle 语义倒挂（需统一）**
@@ -428,7 +451,11 @@ graph LR
 
 ### 3.3 多 LoRA 架构
 
-ActiveVisionDispatcher 通过 `use_multi_lora_` 标志支持同一基础 VLM 模型搭配不同场景 LoRA 适配器。这里的多 LoRA 基座即**主动视觉模型**（由 `multi_lora_runtime_config.json` 的 `active_model_config` 指定，可独立于 CarControl / Chitchat 使用的**主对话模型**，也可共用同一基座）；以全站锚点的 Qwen3-Omni-4B 内部定制型号为例，通过 `addLora` / `switchLora` 接口在同一基座上切换不同场景的微调权重，避免为每个场景单独加载完整模型。各 scene\_id 对应的 LoRA 路由、完整 scene\_id ↔ Agent ↔ LoRA 映射、以及 `--dual`（主动视觉是否独立成第二个模型实例）的取舍，见 [部署与运行时配置](deploy.html) §4.3 的映射表与 NOTE（deploy 为主参考，本篇不重复）。
+ActiveVisionDispatcher 通过 `use_multi_lora_` 标志支持同一基础 VLM 模型搭配不同场景 LoRA 适配器：
+
+- **基座**：多 LoRA 基座即**主动视觉模型**，由 `multi_lora_runtime_config.json` 的 `active_model_config` 指定——可独立于 CarControl / Chitchat 使用的**主对话模型**，也可共用同一基座。
+- **切换**：以全站锚点的 Qwen3-Omni-4B 内部定制型号为例，通过 `addLora` / `switchLora` 接口在同一基座上切换不同场景的微调权重，避免为每个场景单独加载完整模型。
+- **路由与取舍**：各 scene\_id 对应的 LoRA 路由、完整 scene\_id ↔ Agent ↔ LoRA 映射、以及 `--dual`（主动视觉是否独立成第二个模型实例）的取舍，见 [部署与运行时配置](deploy.html) §4.3 的映射表与 NOTE（deploy 为主参考，本篇不重复）。
 
 > [!NOTE]
 > **连续帧推理与丢帧策略**
@@ -455,7 +482,12 @@ ActiveVisionDispatcher 通过 `use_multi_lora_` 标志支持同一基础 VLM 模
 | `AdaptiveReadingLights` | 根据视觉识别结果自动调节阅读灯亮度和开关 | 检测到阅读行为时开灯，离开时关灯 |
 | `AdaptiveAirCondition` | 根据乘客状态自动调节空调 | 检测到乘客体表温度偏差时调整空调 |
 
-两者的处理管线一致：行为 VLM 推理结果先经 `vlm_postprocessor_.post_process()` / `parse_vlm_results()` 后处理，取出**分侧时长**（`get_last_reading_and_play3c_duration()` 返回左/右阅读时长）或体感信息，再过两道确定性门——`disabled(task_id, ...)`（该任务/该侧是否被禁用）与 `precondition(incar_info_, task_id, ...)`（结合当前舱内状态判断是否满足触发前提）——**门都过了才进入决策**。决策本身有**两套实现，由 `USE_MODEL_INFERENCE` 编译开关二选一**：
+两者的处理管线一致，行为 VLM 推理结果依次经过：
+
+1. **后处理**：`vlm_postprocessor_.post_process()` / `parse_vlm_results()` 取出**分侧时长**（`get_last_reading_and_play3c_duration()` 返回左/右阅读时长）或体感信息；
+2. **两道确定性门**：`disabled(task_id, ...)`（该任务/该侧是否被禁用）与 `precondition(incar_info_, task_id, ...)`（结合当前舱内状态判断是否满足触发前提）——**门都过了才进入决策**。
+
+决策本身有**两套实现，由 `USE_MODEL_INFERENCE` 编译开关二选一**：
 
 - **模型式**：控制器用 `get_prompt(incar_info_, prefix, task_id, ...)` 把「当前舱内状态 + 行为时长 + 穿着信息」拼成一段 prompt，再发起**第二次 VLM 推理**，由模型给出控制决策；
 - **规则式**：`get_control(incar_info_, task_id, ...)` 直接返回确定性控制串，`do_trigger()` 触发，**不再过模型**。
@@ -544,7 +576,10 @@ ChitchatDispatcher 同样继承自 `AgentPlugin`，核心组件包括：
 
 ### 5.2 id\_table.yaml 映射
 
-`id_table.yaml` 定义了**数字 ID → 页面 URL** 的映射表（约 219 条），用于把 VLM 输出的控件 ID 还原成实际页面地址。文件结构是根键 `ID_TABLE` 下的 `数字: page://<domain>/<element_id>`（`<domain>` 为车机系统的应用域，随平台而异），覆盖 SystemUI、SmartCar、AirCondition 等多个应用域。代码侧按 `getPrompt("ID_TABLE." + std::to_string(id))` 取值，查不到时打 `URI not found for ID: {}` 并跳过该 ID（不中断整批）。
+`id_table.yaml` 定义了**数字 ID → 页面 URL** 的映射表（约 219 条），用于把 VLM 输出的控件 ID 还原成实际页面地址：
+
+- **文件结构**：根键 `ID_TABLE` 下的 `数字: page://<domain>/<element_id>`（`<domain>` 为车机系统的应用域，随平台而异），覆盖 SystemUI、SmartCar、AirCondition 等多个应用域。
+- **代码侧取值**：按 `getPrompt("ID_TABLE." + std::to_string(id))` 取值，查不到时打 `URI not found for ID: {}` 并跳过该 ID（不中断整批）。
 
 > [!WARNING]
 > **仓库里有两份同名 `id_table.yaml`，键值方向相反，只有一份被加载**

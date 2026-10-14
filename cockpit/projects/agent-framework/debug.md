@@ -104,7 +104,13 @@ FastRPC 是 ARM CPU 与 Hexagon DSP 之间的远程过程调用机制。FastRPC 
 
 ### 1.4 常见性能优化清单
 
-本节聚焦**排障/诊断**视角：每项优化点给出"怎么检查、怎么判断"。优化手段本身的原理与推导见通识篇：量化 → [**端侧模型量化与压缩**](../../general/quantization.html)；roofline / 带宽模型 / 推理引擎 → [**LLM 推理原理与性能模型**](../../general/infer-principles.html)；投机采样、约束解码、延迟优化 → [**端侧解码与服务化优化**](../../general/infer-serving.html)。以下清单涵盖端侧推理的常见性能优化点，按优先级排序：
+本节聚焦**排障/诊断**视角：每项优化点给出“怎么检查、怎么判断”。优化手段本身的原理与推导见通识篇：
+
+- 量化 → [**端侧模型量化与压缩**](../../general/quantization.html)
+- roofline / 带宽模型 / 推理引擎 → [**LLM 推理原理与性能模型**](../../general/infer-principles.html)
+- 投机采样、约束解码、延迟优化 → [**端侧解码与服务化优化**](../../general/infer-serving.html)
+
+以下清单涵盖端侧推理的常见性能优化点，按优先级排序：
 
 | 优先级 | 优化项 | 检查方法 | 预期提升 | 注意事项 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -334,7 +340,10 @@ done
 
 ### 5.1 aadkcore 日志系统
 
-aadkcore 的日志基于 **spdlog**，核心定义在 `aadkapi/aadk_log.hpp`，提供两套宏：带日志器名的 `AADK_LOG_TRACE/DEBUG/INFO/WARN/ERROR/CRITICAL(name, ...)`，以及按平台分流的简化宏 `LOG_V/D/I/W/E/F(...)`——Android 平台走 `__android_log_print` 直接进 logcat（tag 为编译期 `TAGNAME`），YunOS 走 `YUNOS_LOG`，Linux 走 spdlog socket 日志器（默认 sink 是 unix socket `/tmp/aadk_log.sock`）。
+aadkcore 的日志基于 **spdlog**，核心定义在 `aadkapi/aadk_log.hpp`，提供两套宏：
+
+- **带日志器名**：`AADK_LOG_TRACE/DEBUG/INFO/WARN/ERROR/CRITICAL(name, ...)`；
+- **按平台分流的简化宏**：`LOG_V/D/I/W/E/F(...)`——Android 平台走 `__android_log_print` 直接进 logcat（tag 为编译期 `TAGNAME`），YunOS 走 `YUNOS_LOG`，Linux 走 spdlog socket 日志器（默认 sink 是 unix socket `/tmp/aadk_log.sock`）。
 
 | 日志级别 | 宏（简化 / 命名） | 典型内容 | 说明 |
 | :--- | :--- | :--- | :--- |
