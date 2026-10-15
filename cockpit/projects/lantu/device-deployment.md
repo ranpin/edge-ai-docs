@@ -14,6 +14,13 @@
 >
 > **代码基线**：aadkcore 仓库 `lantu_sdk_dev` 分支 `runtime/src/android_sdk/`（`model_inference.cpp/h`、`MsgDeliverImpl`、`data_message.h`）；构建开关与产物判据按 2026-09 岚图分支状态核实。
 
+两种部署方式的分工——**SDK 打包**（§1，可执行文件 `android_test`）用于算法快速验证 / 离线跑测，**APK 打包**（§2）用于实车部署 / 对接「元启」平台：
+
+| 部署方式 | 实现路径 | 适用场景 |
+| :--- | :--- | :--- |
+| **SDK 打包**（§1） | 编译生成可执行文件 `android_test`，构建推理对象，读本地 JSON 批量推理 | 算法快速验证、离线跑测 |
+| **APK 打包**（§2） | Android APK 集成 AADK 框架，JNI 调用底层 C++ 推理服务 | 实车部署、对接「元启」平台 |
+
 ## 1. 可执行文件部署（android\_test）
 
 可执行文件部署主要用于 SA8397P Android 平台的**开发调试和功能验证**。通过 NDK 交叉编译生成 `android_test` 可执行文件，adb push 到设备后直接运行，无需 APK 集成，方便快速迭代。
