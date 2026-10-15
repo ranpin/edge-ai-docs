@@ -1,6 +1,6 @@
 # 岚图8397量产项目SDK：核心技术架构与优化总结
 
-*GenAI 方案 · Qwen3-Omni-4B 端侧部署 · AgentCore / AgentGroup 框架 · 性能优化体系*
+*GenAI 方案 · Qwen3-Omni-4B 端侧部署 · AgentCore / AgentGroup 框架*
 
 > [!TIP]
 > **本篇讲什么**
@@ -8,17 +8,16 @@
 > 这是岚图 8397 座舱 VLM 的 **GenAI 方案**（高通 QNN / genai 推理框架）总览，覆盖：
 >
 > - 系统全景与**模型制备链路**（AIMET 量化 → QNN 转换 → Context Binary 生成 → Genie 配置）
-> - AgentCore 框架的**岚图分支定制点**（多 LoRA / scene / prefix 映射、多 VIT 两档路由）
+> - AgentCore 框架的**岚图分支定制点**（多 LoRA / scene / prefix 映射、多 VIT 两档路由、Genie 推理选项链与前缀缓存命中条件）
 > - AgentGroup 业务编排（舱内遗留 / 衣着、舱外三阶段问答）
-> - 性能优化体系（量化、多 VIT、多核、前缀缓存、DeepStack）
-> - 车机部署与评测链路
-> - 关键数据核查记录（量化损失 / SSD 释义 / 前缀缓存 token 数）
+>
+> **性能优化、车机部署与评测、关键数据核查**已归入专篇：性能 / 优化收益 / 前缀缓存 token 与预算见 [效果、性能与稳定性](effect-perf-stability.html)，部署上车见 [设备部署与上车流程](device-deployment.html)。
 >
 > **代码基线**：aadkcore 与 agent_group 仓库 `lantu_sdk_dev` 分支。核心文件：
 >
 > - AgentCore：`aadkcore/src/models/qnn/qnn_model.cpp`、`src/runtime/model_runner.cpp`
 > - 模型配置：`runtime/data/config/multi_lora_runtime_config.json`（**7 条** LoRA 配置）、`config/qwen3-omni-4b_8397.json`（模型路径 + 两档 VIT）
->   - ⚠️ 同目录的 `runtime/data/config/base_model.json` 是 **Orin / Lape 形态配置**（`model_name: lape/Qwen2.5-Omni-7B`、TensorRT engine 路径），其 `enable_prefix_caching` 只被 `lape_model.cpp` 消费，**不在 8397 genai 链路上**——本篇前缀缓存开关以设备侧 Genie `config.json` 为准（见 2.4 / 5.2）。
+>   - ⚠️ 同目录的 `runtime/data/config/base_model.json` 是 **Orin / Lape 形态配置**（`model_name: lape/Qwen2.5-Omni-7B`、TensorRT engine 路径），其 `enable_prefix_caching` 只被 `lape_model.cpp` 消费，**不在 8397 genai 链路上**——本篇前缀缓存开关以设备侧 Genie `config.json` 为准（见 §2.4 / §3.3）。
 > - AgentGroup：`agent_group/src/{outcar_qa,incar_item_detect,dress_detect}_agent/*_dispatcher.cpp`
 
 ## 1. 背景简介与系统全景
