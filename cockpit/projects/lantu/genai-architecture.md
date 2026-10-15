@@ -255,13 +255,41 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 
 | 业务场景 | 预处理策略 | 推理逻辑 | 后处理策略 |
 | :--- | :--- | :--- | :--- |
-| **舱内遗留** | 左右翻转图像（解决 OMS 相机物理镜像） | 两次串行推理 | 输出结果映射 |
+| **舱内遗留** | 左右翻转图像（解决 OMS 相机物理镜像） | 两次串行推理（① `person_desc` 全景图识别乘员、过滤儿童 ② 遗留物 LoRA 检测） | 输出结果映射 |
 | **舱内衣着** | 左右翻转图像 | 单次推理 | 边界值处理（避免输出为空/"未知"）、置信度映射 |
 
-代码落点：
+代码落点（均在 `incar_item_detect_dispatcher.cpp`）：
 
-- 翻转：`incar_item_detect_dispatcher.cpp` 里 `cv::flip(full_img, flipped, 1)`（`flipCode=1` 水平翻转，解码后以 BGR raw 写回 letterboxed_msg）
-- 遗留物中英映射：`map_item_to_english`（电脑包/手提包→backpack、平板→laptop 等**粗粒度归并，是需求刻意设计，不要"修"**）
+- 翻转：`cv::flip(full_img, flipped, 1)`（`flipCode=1` 水平翻转，解码后以 BGR raw 写回 letterboxed_msg）
+- 遗留物中英映射：`map_item_to_english`（**粗粒度归并，是需求刻意设计，不要"修"**）；区域→位置映射：`region_key_to_position`
+
+**① 遗留物中英映射**（`map_item_to_english`：物品中文名**包含关键字即映射**，未命中返回空、该物品被过滤丢弃）：
+
+| 接口英文 key | 归并的中文名（含颜色/品牌前缀也按关键字命中） |
+| :--- | :--- |
+| `phone` | 手机 |
+| `key` | 钥匙 |
+| `wallet` | 钱包 |
+| `backpack` | 背包 / 书包 / 电脑包 / 挎包 / 手提包 / 帆布包 / 手提袋 / 帆布袋 |
+| `laptop` | 平板 / 电脑 |
+| `cup` | 水杯 / 杯子 / 马克杯 / 奶茶杯 / 咖啡杯 / 杯 / 瓶 / 壶 / 矿泉水 |
+
+**② 遗留物区域 → 位置映射**（`region_key_to_position`：LoRA 输出 `{"left":[...],"right":[...]}` 的 region key → 接口 position）：
+
+| LoRA region key | 接口 position |
+| :--- | :--- |
+| `left` | `first_row_right` |
+| `middle` | `first_row_console` |
+| `right` | `first_row_left` |
+| `rear_left` | `second_row_right` |
+| `rear_middle` | `second_row_middle` |
+| `rear_right` | `second_row_left` |
+
+> [!NOTE]
+> **两处易错点**
+>
+> - **left↔right 是反的**：因图像已水平翻转（`cv::flip`），LoRA 输出的 `left`/`right` 与车辆实际左右互换，故 region key 与 position 的 left/right 故意对调（`left`→`first_row_right`、`right`→`first_row_left`），不是 bug。
+> - **儿童检测（`person_desc`）当前走全景图、非按座位裁图**：`run_person_desc_inference` 用预处理后的整张 letterboxed 图识别所有乘员、过滤出儿童写入 `output.children`。源码里「按 `seat_pressure` 逐座位裁图 + `SEAT_REGION_MAP` 固定区域」的旧逻辑**已注释停用**（注释原文：*原有的按 seat_pressure 裁图逻辑已注释，后续算法输出解析待与算法团队核对后调整*），故座位→裁图区域映射当前不生效、不要照搬。
 
 ### 4.2 舱外问答业务 Pipeline（车辆/动物/植物/交通标识/其它）
 
@@ -295,33 +323,63 @@ sequenceDiagram
 
 | 推理阶段 | 图像与 Bbox 处理 | 推理策略与 Prompt 组织 | 输出与后处理 |
 | :--- | :--- | :--- | :--- |
-| **第一阶段** | ① 后视摄像头所有场景先翻转一次 ② 按 `camera_id` 选 `grounding_sr`/`grounding_base`（均为 LoRA adapter，非基模；一阶段无输入 bbox，选择依据是相机位）③ 输出 Bbox 对应 1024×768，需映射回原图坐标 | 约束解码（`SetDecodeFormat(dwsr/dwbs)`，见 3.3） | ① 粗分类标签 ② 流式结果累积 |
+| **第一阶段** | ① 后视摄像头所有场景先翻转一次 ② 按 `camera_id` 选 `grounding_sr`/`grounding_base`（均为 LoRA adapter，非基模；一阶段无输入 bbox，选择依据是相机位）③ 输出 Bbox 为 **0~1000 归一化坐标**，经 `bbox1000ToOriginal` 映射回原图像素坐标 | 约束解码（`SetDecodeFormat(dwsr/dwbs)`，见 3.3） | ① 粗分类标签 ② 流式结果累积 |
 | **第二阶段** | ① 图像/Bbox 翻转回去（车辆/动物/交通标识反转，植物/通识不反转）② **车辆/动物/交通标识**按 Bbox 扩框 10% 后裁剪到 448×448，bbox 过小/为空则跳过；**植物/通识**忽略 bbox、整图 1024×768（当前 `USE_20260423_RULE` 正式版，逐 label 见下表）③ 类别差异化预处理 | ① 组织图像+Prompt ② **不走 Genie 解码格式约束**（znzs/default_adapter 被 `SetDecodeFormat` 显式跳过，见 3.3）；结构化输出靠 prompt 约定 + 后处理 `parseModelOutputToUnifiedByLabel` 解析 | ① 置信度映射（基于 Bbox 大小）② 标准图像库映射 ③ 细分类标签（name/type/caption），流式解析 |
 | **第三阶段** | 无图像处理 | ① 拼接用户 Query + 二阶段结构化输出作为 User Prompt ② 纯文本推理，**不使用**约束解码（znzs 同样被 `SetDecodeFormat` 跳过） | NLG 流式输出，用于 TTS 播报 |
 
-#### 4.2.2 二阶段逐 label 决策表（`decide_stage2_by_label`，已对 `outcar_process.hpp` 核实）
+#### 4.2.2 三阶段逐 label 决策表（`decide_stage2_by_label`，已对 `outcar_process.hpp` / `outcar_qa_dispatcher.cpp` 核实）
 
-二阶段「用哪个 LoRA、裁不裁图、走哪档 VIT、挂哪个 prefix」全部由一阶段 label 决定。当前源码 `USE_20260423_RULE = true`（正式版）下的实际行为：
+三阶段「用哪个 LoRA、裁不裁图、走哪档 VIT、挂哪个 prefix、置信度怎么给」全部由**一阶段 label** 决定。当前源码 `USE_20260423_RULE = true`（正式版）下的实际行为：
 
-| 一阶段 label | 二阶段模型（LoRA） | 图像处理（`Stage2ImageMode`） | VIT 档 | prefix | bbox 门限 / 扩框 |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| 车辆 | visual_assistant（znzs） | crop 448×448（`USE_CROP_448`） | 小档 | `znzs-car` | 扩框 10%；bbox 宽或高 < 120（或空）→ 跳过二阶段 |
-| 动物 | visual_assistant（znzs） | crop 448×448 | 小档 | `znzs-animal` | 扩框 10%；bbox 宽或高 < 80（或空）→ 跳过 |
-| 交通标识 | visual_assistant（znzs） | crop 448×448 | 小档 | `znzs-sign` | 扩框 10%；bbox 宽或高 < 30（或空）→ 跳过 |
-| 植物 | visual_assistant（znzs） | 整图 1024×768（`USE_FULL_1024`） | 大档 | `znzs-plant` | 忽略 bbox，不裁剪、不跳过 |
-| 通识 | **general_base（default_adapter）** | 整图 1024×768（`USE_FULL_1024`） | 大档 | `znzs-general` | 忽略 bbox，不裁剪、不跳过 |
-| 其它 | —（跳过二阶段） | `SKIP_STAGE2` | — | — | `clear_bbox`，直接走兜底回复 |
+| 一阶段 label | 一阶段 grounding | 二阶段模型（LoRA） | 图像处理（`Stage2ImageMode`） | VIT 档 | 二阶段 prefix | bbox 门限 / 扩框 | 三阶段 NLG |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 车辆 | `grounding_sr`/`base`（按 camera_id）→ dwsr/dwbs | visual_assistant（znzs） | crop 448×448（`USE_CROP_448`） | 小档 | `znzs-car` | 门限 120×120；扩框 10%；过小/空→跳过 | `znzs-nlg`，纯文本 |
+| 动物 | 同上 | visual_assistant（znzs） | crop 448×448 | 小档 | `znzs-animal` | 门限 80×80；扩框 10%；过小/空→跳过 | `znzs-nlg`，纯文本 |
+| 交通标识 | 同上 | visual_assistant（znzs） | crop 448×448 | 小档 | `znzs-sign` | 门限 30×30；扩框 10%；过小/空→跳过 | `znzs-nlg`，纯文本 |
+| 植物 | 同上 | visual_assistant（znzs） | 整图 1024×768（`USE_FULL_1024`） | 大档 | `znzs-plant` | 忽略 bbox，不裁剪、不跳过 | `znzs-nlg`，纯文本 |
+| 通识 | 同上 | **general_base（default_adapter）** | 整图 1024×768（`USE_FULL_1024`） | 大档 | `znzs-general` | 忽略 bbox，不裁剪、不跳过 | `znzs-nlg`，纯文本 |
+| 其它 | 同上 | —（跳过二阶段） | `SKIP_STAGE2` | — | — | `clear_bbox`，直接走兜底回复 | 兜底文案，不进 NLG |
 
 > [!NOTE]
-> **两处易错点**
+> **三处易错点**
 >
-> - **通识二阶段走的是 `general_base`（default_adapter），不是 znzs**——但它的 prefix 仍叫 `znzs-general`（prefix 名与 adapter 解耦，呼应 3.1「prefix 数 > adapter 数」）。且 default_adapter 被 `SetDecodeFormat` 跳过，故通识二阶段无解码格式约束。
+> - **一阶段 grounding 与 label 无关**：`grounding_sr`（camera_id 0/5，挂 dwsr adapter + `dwsr` 前缀）vs `grounding_base`（其余，挂 dwbs adapter + `dwbs` 前缀）的选择依据是**相机位**，不是 label——label 是一阶段的**产出**。一阶段本身没有输入 bbox（bbox 是它的产出）。grounding_sr/grounding_base **都是 LoRA adapter，不是基模**。
+> - **通识二阶段走的是 `general_base`（default_adapter），不是 znzs**——但它的 prefix 仍叫 `znzs-general`（prefix 名与 adapter 解耦，呼应 §3.1「prefix 数 > adapter 数」）。且 default_adapter 被 `SetDecodeFormat` 跳过，故通识二阶段无解码格式约束。
 > - **植物/通识在正式版下不再「bbox 为空就跳过」**：旧「临时版」逻辑（bbox 空或过小 → `SKIP_STAGE2`）已被 `USE_20260423_RULE` 分支取代为「忽略 bbox、整图 1024×768 送二阶段」。只有车辆/动物/交通标识这三个 crop 类仍保留 bbox 门限与跳过逻辑。
+
+> [!IMPORTANT]
+> **bbox 门限 / 扩框的处理时机与顺序（已对代码核实）**
+>
+> 一阶段模型输出的 bbox 是 **0~1000 归一化坐标**，处理链严格如下：
+>
+> 1. **先映射回原图**：`bbox1000ToOriginal(meta.bbox, src.cols, src.rows, 1024, 768)` 把 0~1000 坐标换算到**原图像素坐标**（`outcar_qa_dispatcher.cpp:250`）。
+> 2. **再门限判定**：`decide_stage2_by_label(label, bbox)` 用**原图坐标系**下的 bbox 宽高判门限（车辆/动物 120/80、交通标识 30），过小或空则 `skip_stage2`（`:282`）。
+> 3. **后扩框**：仅当不跳过、且 `image_mode == USE_CROP_448`（车辆/动物/交通标识）时，才 `expand_bbox_safe(bbox, src.cols, src.rows, 0.1)` 按 10% 扩框（`:431`），再 crop。
+>
+> 即：**门限和扩框都在「映射回原图」之后**（门限基于原图像素尺寸，不是 0~1000 归一值）；**顺序是先门限、后扩框**——先用原始 bbox 判是否够大，够大才扩框裁剪。植物/通识走整图、不扩框不门限。另：camera_id==5 时图像与 bbox 会先水平翻转（`cv::flip` + bbox x 坐标 `cols-x` 镜像），翻转不改变 bbox 宽高，故门限判定不受影响。
+
+**二阶段置信度映射**（`compute_confidence_by_mapping`，`outcar_process.hpp`）：置信度**不是模型输出**，而是按 label + bbox 面积（原图像素²）映射到一个区间、再在区间内取随机值（`rand_range`，保留一位小数）。面积门限与区间：
+
+| label | bbox 面积门限（原图像素²） | 置信度区间 |
+| :--- | :--- | :--- |
+| 车辆 | ≥ 40000 | 85~95% |
+| 车辆 | ≥ 32400 | 75~85% |
+| 车辆 | ≥ 22500 | 60~75% |
+| 车辆 | < 22500 | 30~60% |
+| 交通标识 / 动物 | ≥ 22500 | 80~95% |
+| 交通标识 / 动物 | ≥ 10000 | 60~80% |
+| 交通标识 / 动物 | < 10000 | 30~60% |
+| 植物 / 通识 | 不看面积 | 65~85% |
+| 其它 | — | 空（不输出 confidence） |
+
+> [!WARNING]
+> **置信度是「面积→区间→随机」的伪置信度，不是模型真实置信度**：同一目标多次推理给出的 confidence 会在区间内抖动（`rand_range` 每次随机），只能作粗粒度参考，不能当精确概率用，也不要拿它做跨帧一致性判断。
 
 代码落点（`outcar_qa_dispatcher.cpp`）：
 
 - 翻转：`cv::flip(src, src, 1)`（一阶段入口 + 二阶段翻回；二阶段翻回仅对车辆/动物/交通标识，且限 `camera_id==5`）
-- 一阶段 grounding：`handle_view_request(msg, model_data, ...)`——**按 `camera_id` 选模板**（`0`/`5` → `grounding_sr`，挂 dwsr adapter + `dwsr` 前缀；其余 → `grounding_base`，挂 dwbs adapter + `dwbs` 前缀）。注意一阶段本身**没有输入 bbox**（bbox 是它的产出），故选择依据是相机位而非「bbox 是否为空」；grounding_sr/grounding_base **都是 LoRA adapter，不是基模**
+- 一阶段 grounding：`handle_view_request(msg, model_data, ...)`——按 `camera_id` 选 `grounding_sr`/`grounding_base`（见上表 NOTE）
 - Bbox 映射：`bbox1000ToOriginal(meta.bbox, cols, rows, 1024, 768)`（模型输出 0~1000 → 原图坐标）
-- 二阶段决策：`decide_stage2_by_label(label, bbox)`（逐 label 见 4.2.2）；二阶段走 `data_message_lora5`，模型名取 `decision.stage2_model_name`（visual_assistant / general_base），prefix 按 label 映射 `znzs-*`
+- 二阶段决策：`decide_stage2_by_label(label, bbox)`（逐 label 见上表）；二阶段走 `data_message_lora5`，模型名取 `decision.stage2_model_name`（visual_assistant / general_base），prefix 按 label 映射 `znzs-*`
+- 置信度：`compute_confidence_by_mapping(label, bbox)`（按面积映射区间 + 随机取值）
 - 三阶段 NLG：`schedule_run_sync(..., "visual_assistant", ..., "znzs-nlg")`，纯文本、无解码格式约束
