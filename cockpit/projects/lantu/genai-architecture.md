@@ -109,7 +109,7 @@ AIMET（高通开源量化工具）把浮点权重压到 **INT4**，本项目 LL
 
 - **校准集须覆盖实际业务分布**：舱内（遗留物 / 儿童 / 衣着）+ 舱外（车辆 / 动物 / 植物 / 交通标识 / 通识）各类场景图像，且**与评测集隔离**（否则量化参数对评测分布过拟合、线上必掉点）；具体构成以模型团队交付为准。
 - **VIT 同样压 INT4 是激进选择**：其激活位宽组合（weight-only W4A16 还是 W4A8）本篇未拿到模型团队明确口径；精度/时延权衡与恢复策略见 [效果·性能·稳定性篇](effect-perf-stability.html) §3.5。
-- **0527 build 的量化代价**：衣着描述塌至 ~0%、植物 caption −10pp（见 §5.1），疑与激进量化（尤其 VIT INT4）相关，是精度恢复策略需重点覆盖的对象。
+- **0527 build 的量化代价**：衣着描述塌至 ~0%、植物 caption −10pp，疑与激进量化（尤其 VIT INT4）相关，是精度恢复策略需重点覆盖的对象。
 - per-channel / group size 的具体取值以模型团队交付为准。
 ### 2.3 QNN 转换与 Context Binary 生成
 
@@ -123,9 +123,9 @@ QNN 转换链路（converter 消费 AIMET 已产出的量化编码 `.encodings`�
 
 关键配置（`config.json`，已核实）：
 
-- sampler `greedy:true / type:basic`（greedy 单模型解码，**未启用**推测性采样，见 §5.2）
+- sampler `greedy:true / type:basic`（greedy 单模型解码，**未启用**推测性采样）
 - 上下文 `cl2560`、`max_tokens 512`
-- `enable_prefix_caching=true`（前缀缓存，见 [效果·性能·稳定性篇](effect-perf-stability.html) §3.1 / §5.3）
+- `enable_prefix_caching=true`（前缀缓存，见 [效果·性能·稳定性篇](effect-perf-stability.html) §3.1 / §3.3）
 - LoRA / scene 配置在 `multi_lora_runtime_config.json`（**7 条** LoRA 配置，映射关系见 3.1）
 
 **两个模型根目录的关系**（已核实，全站统一口径）：
@@ -211,7 +211,7 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 > | 舱外问答 stage1（outcar_qa） | `1024×768` | 大档 |
 > | 舱外问答 stage2 | 按 `Stage2ImageMode`：`USE_FULL_1024`→`1024×768`（大档）；`USE_CROP_448`/`USE_FULL_448`→`448×448`（小档） | 视模式而定 |
 >
-> 即**舱内遗留物走的是大档（1024×768），不是小档**——这一点是 [效果·性能·稳定性篇](effect-perf-stability.html) §3.1 / 本篇 §5.3 前缀缓存收益因场景而异的根因之一（遗留物帧的视觉 token 多，见 §5.3 的预算核算 NOTE）。
+> 即**舱内遗留物走的是大档（1024×768），不是小档**——这一点是 [效果·性能·稳定性篇](effect-perf-stability.html) §3.1 / §3.3 前缀缓存收益因场景而异的根因之一（遗留物帧的视觉 token 多，见该篇 §3.3 的预算核算 IMPORTANT）。
 
 ### 3.3 Genie 推理选项链（LoRA / 前缀 / 解码格式如何实际下发）
 
@@ -221,8 +221,8 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 | :--- | :--- | :--- | :--- |
 | `SetLora(name)` | `prompt.Option().SetLora(lora_names_[lora_id])` | `lora_id != -1` | 选定 LoRA adapter（cnyb/dwsr/dwbs/znzs/default_adapter） |
 | `SetLoraStrength(2.0)` | 硬编码 | `lora_id != -1` | LoRA 融合强度（即 Genie 的 lora_alpha），**genai 路径写死 2.0、非配置项**（配置里的 `lora_alpha` 字段不被解析器读取） |
-| `SetTemperature/TopP/TopK` = `0.0/1.0/1.0` | 硬编码 | 两分支都设 | 等价 greedy，与 2.4 的 `config.json sampler greedy:true` 一致（见 §5.2） |
-| `SetCommonPrefix(prefix)` | `if(!prefix_name.empty()) SetCommonPrefix(...)` | **`lora_id != -1` 且 prefix_name 非空** | 命中前缀缓存（见 [效果·性能·稳定性篇](effect-perf-stability.html) §3.1 / §5.3） |
+| `SetTemperature/TopP/TopK` = `0.0/1.0/1.0` | 硬编码 | 两分支都设 | 等价 greedy，与 2.4 的 `config.json sampler greedy:true` 一致 |
+| `SetCommonPrefix(prefix)` | `if(!prefix_name.empty()) SetCommonPrefix(...)` | **`lora_id != -1` 且 prefix_name 非空** | 命中前缀缓存（见 [效果·性能·稳定性篇](effect-perf-stability.html) §3.1 / §3.3） |
 | `SetDecodeFormat(name)` | `if(cur_lora!="znzs" && cur_lora!="default_adapter") SetDecodeFormat(cur_lora)` | 仅 cnyb / dwsr / dwbs | 解码格式约束（见 4.2） |
 
 > [!IMPORTANT]
@@ -231,6 +231,24 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 > 1. **前缀缓存与「具名 LoRA」绑定**：`SetCommonPrefix` 写在 `if (lora_id != -1)` 分支内。走基模（`lora_id == -1`，即 scene 1003 或 `__base__`/`base`/`base_model` 强制基模）时，**即使 dispatcher 传了 prefix_name 也不会下发前缀**——基模分支只设 temperature/top_p/top_k。所以「基模 + 前缀缓存」在 genai 形态**不是合法组合**。
 > 2. **解码格式约束只覆盖 3 个 adapter**：`SetDecodeFormat` 对 `znzs` 与 `default_adapter` **显式跳过**（源码注释 "does not need to set"）。即舱外二阶段（visual_assistant=znzs）、三阶段 NLG（znzs）、通识兜底（general_base=default_adapter）**都不走 Genie 解码格式约束**，只有舱内 cnyb 与一阶段 grounding（dwsr/dwbs）走。这直接修正了 4.2 旧版「二阶段约束解码」的说法（见 4.2.1）。
 > 3. **`SetDecodeFormat` 传的是 LoRA 名**，由 Genie 侧据此选择已注册的解码格式；**改名 / 缺对应格式会静默失效**（不报错、只是不再约束），与 [AIService 后端集成](aiservice-integration.html) 记录的 grammar 改名坑同源。genai 形态的 `multi_lora_runtime_config.json` 已**不含** `ebnf_path`/`enable_constrained_decoding` 字段（`model_runner` 里那道 `enable_constrained_decoding && ebnf_path` 门禁在本形态恒不触发），约束解码只经 `SetDecodeFormat` 这一条路。
+
+> [!IMPORTANT]
+> **前缀缓存的命中条件与逐阶段下发（genai 形态，已对代码核实）**
+>
+> 前缀缓存不是「开了就自动命中」，genai 形态下要**同时**满足三条：
+>
+> 1. **设备侧 Genie `config.json: enable_prefix_caching=true`**（总开关，见 §2.4）；
+> 2. **该请求走具名 LoRA（`lora_id != -1`）**——`SetCommonPrefix` 只在具名 LoRA 分支调用；基模推理（scene 1003 / `__base__`）即使传了 prefix_name 也不下发（即上方结构耦合①）；
+> 3. **dispatcher 在 `schedule_run_sync(..., prefix_name)` 末参显式传入**，且模型包内存在该 prefix 的预计算 KV（`SetCommonPrefix` 只传名字，KV 由 Genie 按名解析；缺文件 / 改名会静默不命中）。
+>
+> 各链路实际下发的 prefix（舱外逐 label 见 §4.2.2，舱内见 §3.1）：
+>
+> - 舱内遗留物 → `cnyb-left`；舱内儿童（整图 child detect）→ `cnyb-child`；舱内衣着 → `cnyb-cloth`
+> - 舱外一阶段 → `dwsr`（grounding_sr）/ `dwbs`（grounding_base）
+> - 舱外二阶段 → `znzs-car/animal/sign/plant/general`（按 label）
+> - 舱外三阶段 NLG → `znzs-nlg`
+>
+> 反例（条件 3 不满足）：舱内**逐座位 person_desc 裁剪**那次 `schedule_run_sync` 未传 prefix_name，故该次推理**不命中前缀缓存**——同一 `person_desc.system_prompt` 在「整图 child detect」走 `cnyb-child`、在「逐座位 crop」不走前缀，二者不要混为一谈。
 
 ## 4. AgentGroup 业务流程
 
@@ -308,86 +326,3 @@ sequenceDiagram
 - Bbox 映射：`bbox1000ToOriginal(meta.bbox, cols, rows, 1024, 768)`（模型输出 0~1000 → 原图坐标）
 - 二阶段决策：`decide_stage2_by_label(label, bbox)`（逐 label 见 4.2.2）；二阶段走 `data_message_lora5`，模型名取 `decision.stage2_model_name`（visual_assistant / general_base），prefix 按 label 映射 `znzs-*`
 - 三阶段 NLG：`schedule_run_sync(..., "visual_assistant", ..., "znzs-nlg")`，纯文本、无解码格式约束
-
-## 5. 关键数据核查记录
-
-以下为关键数据的核查 / 核算结论（2026-09-17 更新）。
-
-### 5.1 量化精度与损失评估
-
-- **量化方案**：**W4A16**（权重 INT4、激活 FP16；VIT + LLM，基模 + **7 条 LoRA 配置 / 5 个 adapter**，见 3.1；VIT INT4 的激进性与恢复策略见 [效果·性能·稳定性篇](effect-perf-stability.html) §3.5，W4A16 位宽组合的机制见 [量化 · W4A16（§3）](../../general/quantization.html)）
-- **0527 浮点 vs 端侧量化对比**：
-  - 多数场景通过率差 **0~6pp**（nlg / 儿童遗留 / 遗留物近乎无损）
-  - 植物 caption 约 **−10pp**
-  - 交通标识 bbox 小幅下降
-  - **衣着描述在 0527 版异常塌至 ~0%（浮点 51.76%），疑为该量化 build 的阶段性回归（可能与 VIT INT4 相关，见 [效果·性能·稳定性篇](effect-perf-stability.html) §3.5），后续版本待核**
-- 明细见 `云端浮点与端侧量化模型对比测试/z_summary_0527`
-
-### 5.2 模型 SSD 释义（澄清）
-
-- **当前为 greedy 单模型解码**：`config.json` sampler `greedy:true / type:basic`
-- **未启用推测性采样解码**：配置与 aadkcore / agent_group 源码均无 speculative / draft / forecast 字段
-- 既非 Single Shot Detector，也无存储 Swap 证据
-- 原"开启 SSD"笔记存疑，建议删除或向模型团队确认所指
-
-### 5.3 前缀缓存 Token 数
-
-用 `tokenizer_qwen3.json` 对 11 个 prefix 的 system_prompt（含 `<|fim_prefix|>system…<|fim_suffix|>` sys_tags）逐条统计：**318~959 tokens、均值 ~610**（11 项之和 6709 ÷ 11 ≈ 610）。即每次推理可省去这段 prefill（上下文预算 cl2560、max_tokens 512）。11 个 prefix 与 5 个 adapter 的对应关系见 3.1。
-
-> [!IMPORTANT]
-> **前缀缓存的命中条件与逐阶段下发（genai 形态，已对代码核实）**
->
-> 前缀缓存不是「开了就自动命中」，genai 形态下要**同时**满足三条：
->
-> 1. **设备侧 Genie `config.json: enable_prefix_caching=true`**（总开关，见 2.4）；
-> 2. **该请求走具名 LoRA（`lora_id != -1`）**——`SetCommonPrefix` 只在具名 LoRA 分支调用；基模推理（scene 1003 / `__base__`）即使传了 prefix_name 也不下发（见 3.3）；
-> 3. **dispatcher 在 `schedule_run_sync(..., prefix_name)` 末参显式传入**，且模型包内存在该 prefix 的预计算 KV（`SetCommonPrefix` 只传名字，KV 由 Genie 按名解析；缺文件 / 改名会静默不命中）。
->
-> 各链路实际下发的 prefix（舱外逐 label 见 4.2.2，舱内见 3.1）：
->
-> - 舱内遗留物 → `cnyb-left`；舱内儿童（整图 child detect）→ `cnyb-child`；舱内衣着 → `cnyb-cloth`
-> - 舱外一阶段 → `dwsr`（grounding_sr）/ `dwbs`（grounding_base）
-> - 舱外二阶段 → `znzs-car/animal/sign/plant/general`（按 label）
-> - 舱外三阶段 NLG → `znzs-nlg`
->
-> 反例（条件 3 不满足）：舱内**逐座位 person_desc 裁剪**那次 `schedule_run_sync` 未传 prefix_name，故该次推理**不命中前缀缓存**——同一 `person_desc.system_prompt` 在「整图 child detect」走 `cnyb-child`、在「逐座位 crop」不走前缀，二者不要混为一谈。
-
-> [!NOTE]
-> **均值复算说明（修正旧版「~634」）**：旧版正文与 5.2 写「均值 ~634」，与下表 11 个值之和不符（6709 ÷ 11 ≈ 610），现已统一为 **~610**。用 `tokenizer_qwen3.json` + 最新模板（`vllm_sdk/models/template/*.yaml`）按 system sys_tags 包裹复算，**11 项中 10 项与下表逐值精确吻合**；唯一差异是 `znzs-nlg`（复算 751，下表记 770）——该 nlg prompt 在 0811 前后改过版，不同模板包复算值在 751~772 间浮动，下表沿用项目记录的 770，不影响均值量级（~608~610）。
-
-| prefix | 对应 system_prompt | tokens |
-| :--- | :--- | :--- |
-| dwsr | grounding_sr | 640 |
-| dwbs | grounding_base | 623 |
-| znzs-car | 舱外-车辆 | 617 |
-| znzs-sign | 舱外-交通标识 | 318 |
-| znzs-animal | 舱外-动物 | 543 |
-| znzs-plant | 舱外-植物 | 482 |
-| znzs-general | 舱外-通识 | 857 |
-| znzs-nlg | assistant | 770 |
-| cnyb-left | incar_item_detect | 486 |
-| cnyb-cloth | dress_detect | 959 |
-| cnyb-child | person_desc | 414 |
-
-> [!IMPORTANT]
-> **上下文 / KV 预算核算（cl2560 够不够、前缀缓存收益为何因场景而异）**
->
-> 单次推理的 prefill token 预算由四部分构成，必须一起核算（视觉 token 的 KV 占用推导见 [LLM 推理原理 · KV Cache（§3.2）](../../general/infer-principles.html)）：
->
-> ```text
-> 总 prefill token ≈ 文本前缀(prefix, 可缓存) + 视觉 token(每帧, 不可被文本前缀缓存覆盖)
->                    + 用户 query + 结构化拼接(stage2/3)
-> 上下文上限 cl2560，其中 max_tokens 512 预留给 decode 输出
-> ```
->
-> **两档 VIT 各产生多少视觉 token**（按代码常量推导：qwen3 `patch_size=16`、`merge_size=2`，视觉 token = `(H/16/2)×(W/16/2)`；最终值以设备日志 `veg_output_tensors[0].Size()` 核实为准，**待核**）：
->
-> | VIT 档位 | 分辨率 | 视觉 token/帧（推导） |
-> | :--- | :--- | :--- |
-> | 小档 | 448×448 | `(448/32)² = 14×14 ≈ 196` |
-> | 大档 | 1024×768 | `(1024/32)×(768/32) = 32×24 ≈ 768` |
->
-> **关键结论**：
-> - **视觉 token 不被文本前缀缓存覆盖**——前缀缓存只省 system_prompt 那段文本 prefill，视觉 token 每帧都要重算（原理见 [解码服务化 · 前缀缓存节省比例（§1.3）](../../general/infer-serving.html)）。所以**视觉 token 占比越高，前缀缓存的相对收益越低**。
-> - 这正是前缀缓存收益因场景而异的根因，呼应 [AIService 后端集成 · 6.2](aiservice-integration.html) 的实测：舱内**遗留物走大档**（768 视觉 token/帧，见 3.2），视觉 token 多于其 prefix（cnyb-left 486），文本前缀缓存覆盖不到一半的 prefill，故 Agent100 端到端仅 **−0.1%**；而衣着走小档（196 视觉 token）、prefix（cnyb-cloth 959）占 prefill 大头，Agent200 达 **−10.8%**。
-> - **预算是否够**：以大档单帧为例，`prefix(~610) + 视觉(~768) + query + max_tokens(512)` 已接近 cl2560；多帧或长 query 场景需按此式核算是否触顶（触顶会触发 `finish_reason:"length"` 截断，见 aiservice 篇 3.8）。

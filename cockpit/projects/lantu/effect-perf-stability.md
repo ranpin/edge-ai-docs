@@ -22,7 +22,7 @@
 > - 数据集分布 → banma-内部测试数据集（5 张类别拆分图）
 > - 上海早期基线（0428 首测）→ `性能测试报告v1.0_20260428-final.xlsx`
 > - **服务形态内存对比（§4.3②，aiservice vs genai VmRSS+dma-buf 及 RssAnon/RssFile 分解）→ 设备 `dmabuf_dump` 稳态采样（≥12s）profiling 记录，2026-08-21**（与 0902 的 xlsx 为不同批次，勿混读）
-> - prefix cache 端到端 A/B（§3.3）→ [AIService 篇 §6.2](aiservice-integration.html)（08-11 vs 08-07）；INT4 精度代价对照（§3.5）→ [架构篇 §5.1](genai-architecture.html)（0527 `z_summary_0527`）
+> - prefix cache 端到端 A/B（§3.3）→ [AIService 篇 §6.2](aiservice-integration.html)（08-11 vs 08-07）；INT4 精度代价对照（§3.5，0527 `z_summary_0527`）
 
 ## 1. 效果指标
 
@@ -244,7 +244,7 @@ graph LR
 > [!NOTE]
 > **TTFT / TPS 的量级互核与口径陷阱（推导，非实测归因）**
 >
-> **① TTFT 与视觉 token 数高度一致（支持「TTFT 由 VIT 档位主导」）**。用 [架构篇 §5.3](genai-architecture.html) 的视觉 token 推导（小档 448×448 ≈ 196 token/帧、大档 1024×768 ≈ 768 token/帧）对各场景 TTFT 做「隐含吞吐 = 视觉 token ÷ TTFT」检查：
+> **① TTFT 与视觉 token 数高度一致（支持「TTFT 由 VIT 档位主导」）**。用 §3.3 的视觉 token 推导（小档 448×448 ≈ 196 token/帧、大档 1024×768 ≈ 768 token/帧）对各场景 TTFT 做「隐含吞吐 = 视觉 token ÷ TTFT」检查：
 >
 > | 场景/阶段 | VIT 档位 | 视觉 token（推导） | TTFT (ms) | 隐含吞吐 (token/s) |
 > | :--- | :--- | :--- | :--- | :--- |
@@ -322,7 +322,7 @@ graph LR
 | **前缀缓存（Prefix cache）** | 框架级 Prefix Caching，开关在设备侧 Genie `config.json: enable_prefix_caching=true`（`base_model.json` 同名字段属 Orin/Lape、不在本链路）；运行期 `SetCommonPrefix(prefix_name)` 按请求下发，**只在具名 LoRA（`lora_id!=-1`）分支生效**（见 3.3） | aiservice 端到端 A/B：Agent300 −7.9% / Agent200 −10.8% / Agent100 −0.1%（08-11 vs 08-07）；genai prefill 级**无数据** | **部分实测/部分待补**：A/B 非严格控变量（08-11 另有路径修复等改动）；收益因场景而异的机理见 3.3 |
 | **多 VIT 动态切换** | 进 VIT 前 Resize，按业务选 `1024×768`（大档）或 `448×448`（小档）两档 Context Binary（精确档位见 3.4，**舱内遗留物走大档、衣着走小档**） | 省多少：**无数据**（「档位→视觉 token→TTFT」机理链已与 2.2 互核） | **待补**：无量化收益数据；档位路由勿简化为「舱内小/舱外大」 |
 | **INT4 量化（W4A16，VIT+LLM）** | VIT + LLM 权重均 INT4（基模 + 7 条 LoRA / 5 adapter，制备见 [架构篇 §2.2](genai-architecture.html)）；decode memory-bound 压权重减每 token 读取，但对 compute-bound 的 prefill/VIT 基本无收益（matmul 仍走 FP16，见 [解码服务化 §5.3](../../general/infer-serving.html)） | 时延：**无数据**；精度：**已有 0527 浮点 vs 量化对照**（多数 0~6pp、植物 caption −10pp、衣着塌至 ~0%） | **时延待补/精度已有对照**：VIT 压 INT4 较激进（业界多 INT8）；0527 对照坐实「有精度代价」，当前 build 待以 INT8 复测（见 3.5） |
-| **模型 SSD（经核查未启用）** | 经核查为 greedy 单模型解码（`config.json` sampler `greedy:true/type:basic`，源码无 speculative/draft/forecast 字段），非推测性采样解码 | — | 原「开启 SSD」笔记存疑，既非 Single Shot Detector 也无存储 Swap 证据（见 [架构篇 §5.2](genai-architecture.html)） |
+| **模型 SSD（经核查未启用）** | 经核查为 greedy 单模型解码（`config.json` sampler `greedy:true/type:basic`，源码无 speculative/draft/forecast 字段），非推测性采样解码 | — | 原「开启 SSD」笔记存疑，既非 Single Shot Detector 也无存储 Swap 证据 |
 | **开启 DeepStack** | VIT（`MultiVegModel::Predict`）输出多路 tensor：第 0 路作主视觉 embedding，第 1..N−1 路逐路 `Append` 进 `aios::llms::Deepstack` 拼入 prompt，由 Genie 注入 LLM Decoder 多层（注入层位由模型与 Genie 决定，aadkcore 只透传） | 提升多模态对齐（避免深层遗忘图像信息，Qwen3-Omni 专属） | 定性（无量化收益数据） |
 | **模型换代（旧→当前）** | — | 3806→1942ms（约 -49%） | **不作为优化收益**：跨模型版本，混杂换代与工程优化（见 3.6） |
 
@@ -344,13 +344,54 @@ graph LR
 
 ### 3.3 Prefix cache（部分实测 + 部分待补）
 
-- 定性：复用系统提示词/前缀 KV，减少重复 prefill 计算。11 个 prefix 的 system_prompt 经 tokenizer 实测为 **318~959 tokens、均值 ~610**（详见 [架构篇 §5.3](genai-architecture.html)）。
+- 定性：复用系统提示词/前缀 KV，减少重复 prefill 计算。11 个 prefix 的 system_prompt 经 tokenizer 实测为 **318~959 tokens、均值 ~610**（逐条 token 数见本节下方表）。
 - **已有实测（aiservice 形态，端到端 A/B）**：[AIService 篇 §6.2](aiservice-integration.html) 给出 08-11 prefix 全开 vs 08-07 的端到端提速——**Agent300 −7.9% / Agent200 −10.8% / Agent100 −0.1%**（新增 prefix 的 step2 −2.2%）。这是目前唯一的 prefix cache 量化收益数据。
 - **收益为何因场景差一个数量级（机理，已对架构篇核实）**：前缀缓存**只省 system_prompt 那段文本 prefill，视觉 token 每帧都要重算、不被文本前缀覆盖**。故**视觉 token 占比越高、prefix 收益越低**：
   - Agent100（舱内遗留物）走**大档**（~768 视觉 token/帧）> 其 prefix（cnyb-left 486）→ 文本前缀覆盖不到一半 prefill，端到端仅 **−0.1%**；
   - Agent200（衣着）走**小档**（~196 视觉 token）< 其 prefix（cnyb-cloth 959）→ prefix 占 prefill 大头，端到端达 **−10.8%**。
 - **该 A/B 的口径限制（不可当作纯 prefix 收益）**：① 是 **aiservice 形态**的端到端值，非 genai 形态、也非 prefill 单项；② 08-11 与 08-07 之间**除 prefix 全开外还有前缀缓存路径修复等改动**，非严格控制变量；③ 端到端值还混杂 decode/HTTP/调度，prefix 只影响 prefill 段。
 - **仍待补**：genai 形态的 prefill 级收益、命中/未命中的 **TTFT 差**（同请求带/不带 `prefix_cache_path` 的 A/B）、各场景**命中率**。建议评测脚本同时抓 `image preprocess time` 与 `PERF: … ttft`（见 §1.1.2），即可把 prefix 收益从 TTFT 里分离出来。
+
+**11 个 prefix 的 token 数**（用 `tokenizer_qwen3.json` 对 system_prompt 含 `<|fim_prefix|>system…<|fim_suffix|>` sys_tags 逐条统计，**均值 ~610**：11 项之和 6709 ÷ 11 ≈ 610）——即每次推理可省去这段 prefill（上下文预算 cl2560、max_tokens 512）：
+
+| prefix | 对应 system_prompt | tokens |
+| :--- | :--- | :--- |
+| dwsr | grounding_sr | 640 |
+| dwbs | grounding_base | 623 |
+| znzs-car | 舱外-车辆 | 617 |
+| znzs-sign | 舱外-交通标识 | 318 |
+| znzs-animal | 舱外-动物 | 543 |
+| znzs-plant | 舱外-植物 | 482 |
+| znzs-general | 舱外-通识 | 857 |
+| znzs-nlg | assistant | 770 |
+| cnyb-left | incar_item_detect | 486 |
+| cnyb-cloth | dress_detect | 959 |
+| cnyb-child | person_desc | 414 |
+
+> [!NOTE]
+> **均值复算说明（修正旧版「~634」）**：旧版写「均值 ~634」，与上表 11 个值之和不符（6709 ÷ 11 ≈ 610），现已统一为 **~610**。用 `tokenizer_qwen3.json` + 最新模板（`vllm_sdk/models/template/*.yaml`）按 system sys_tags 包裹复算，**11 项中 10 项与上表逐值精确吻合**；唯一差异是 `znzs-nlg`（复算 751，上表记 770）——该 nlg prompt 在 0811 前后改过版，不同模板包复算值在 751~772 间浮动，上表沿用项目记录的 770，不影响均值量级（~608~610）。
+
+> [!IMPORTANT]
+> **上下文 / KV 预算核算（cl2560 够不够、前缀缓存收益为何因场景而异）**
+>
+> 单次推理的 prefill token 预算由四部分构成，必须一起核算（视觉 token 的 KV 占用推导见 [LLM 推理原理 · KV Cache（§3.2）](../../general/infer-principles.html)）：
+>
+> ```text
+> 总 prefill token ≈ 文本前缀(prefix, 可缓存) + 视觉 token(每帧, 不可被文本前缀缓存覆盖)
+>                    + 用户 query + 结构化拼接(stage2/3)
+> 上下文上限 cl2560，其中 max_tokens 512 预留给 decode 输出
+> ```
+>
+> **两档 VIT 各产生多少视觉 token**（按代码常量推导：qwen3 `patch_size=16`、`merge_size=2`，视觉 token = `(H/16/2)×(W/16/2)`；最终值以设备日志 `veg_output_tensors[0].Size()` 核实为准，**待核**）：
+>
+> | VIT 档位 | 分辨率 | 视觉 token/帧（推导） |
+> | :--- | :--- | :--- |
+> | 小档 | 448×448 | `(448/32)² = 14×14 ≈ 196` |
+> | 大档 | 1024×768 | `(1024/32)×(768/32) = 32×24 ≈ 768` |
+>
+> **关键结论**：
+> - **视觉 token 不被文本前缀缓存覆盖**——前缀缓存只省 system_prompt 那段文本 prefill，视觉 token 每帧都要重算（原理见 [解码服务化 · 前缀缓存节省比例（§1.3）](../../general/infer-serving.html)）。所以**视觉 token 占比越高，前缀缓存的相对收益越低**——这正是上文「收益因场景差一个数量级」的根因。
+> - **预算是否够**：以大档单帧为例，`prefix(~610) + 视觉(~768) + query + max_tokens(512)` 已接近 cl2560；多帧或长 query 场景需按此式核算是否触顶（触顶会触发 `finish_reason:"length"` 截断，见 [AIService 后端集成篇 §3.8](aiservice-integration.html)）。
 
 ### 3.4 多 VIT（定量待补，但「档位 → 视觉 token → TTFT」机理链已可互核）
 
@@ -366,7 +407,7 @@ graph LR
 ### 3.5 INT4 量化（精度代价已有实测对照；时延收益待补）
 
 - 定性：**W4A16**（权重 INT4、激活 FP16；VIT + LLM 均压权重，AIMET 制备）。注意「VIT 也压 INT4」的**激活位宽组合**（weight-only W4A16 还是 W4A8）架构篇未拿到模型团队明确口径，**以模型团队交付为准**。
-- **精度代价已有实测对照（0527 build，云端浮点 vs 端侧量化，来源 `z_summary_0527`，见 [架构篇 §5.1](genai-architecture.html)）**：
+- **精度代价已有实测对照（0527 build，云端浮点 vs 端侧量化，来源 `z_summary_0527`）**：
   - 多数场景通过率差 **0~6pp**（nlg / 儿童遗留 / 遗留物近乎无损）；
   - **植物 caption 约 −10pp**；交通标识 bbox 小幅下降；
   - **衣着描述在 0527 版异常塌至 ~0%（浮点 51.76%）**，疑为该量化 build 的阶段性回归（可能与 VIT INT4 相关）。
