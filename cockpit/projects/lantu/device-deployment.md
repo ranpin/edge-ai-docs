@@ -41,7 +41,15 @@
 | `ENABLE_LANTU_SDK` | 岚图项目闸门：agent\_group 是否编入三个场景 dispatcher（dress\_detect / incar\_item\_detect / outcar\_qa）与岚图形态的模板安装规则（只装编入 dispatcher 实际打开的模板，见 1.2） |
 | `ENABLE_QNN_MODEL` | GenAI/QNN 后端：**四层**——源码（`qnn_model.cpp` 是否编入）、include 路径、链接项、install 规则（`lib/` 相关库 + 整个 `libqnn/` 目录） |
 
-现行岚图构建脚本（`build_8397_android.sh`）传 `-DENABLE_QNN_MODEL=ON -DENABLE_LANTU_SDK=ON -DENABLE_ANDROID_NDK=ON -DENABLE_AGENT_GROUP_BUILD=ON`，外加一串 `-DFEATURE_*=OFF`（car_control / chit_chat / active_vision / gui / car_sentinel / rain_dection / soprt_mode / welcome_mode / video_chat / chery_project，**仅** `FEATURE_OAI_INFERENCE=ON`），并指定 `-DGENAI_SDK_ANDROID_NAME="genai_sdk-sa8397.rel-android"`、`-DCMAKE_INSTALL_PREFIX=vllm_sdk`、`-DAADK_TARGET_PLATFORM=android`、`-DAADK_ENV_PATH=<repo>/aadk_lib`。它是**纯 GenAI 形态**：全仓库 CMakeLists 里 grep 不到 `ENABLE_AISERVICE_MODEL`，脚本也不传任何 AIService 后端开关，即 genai 形态构建**不含** AIService 后端开关/源码。运行期按配置里 `model_name` 前缀路由后端（`qnn/…` → 进程内 QNN，`aiservice/…` → HTTP 8090）的机制**属 aiservice 形态分支**，genai 形态不编入该后端，详见 [AIService 后端集成与重构](aiservice-integration.html)。
+`build_8397_android.sh` 实际传入的开关与取值：
+
+| 类别 | 开关 / 取值 |
+| :--- | :--- |
+| **后端 / 形态** | `-DENABLE_QNN_MODEL=ON`、`-DENABLE_LANTU_SDK=ON`、`-DENABLE_ANDROID_NDK=ON`、`-DENABLE_AGENT_GROUP_BUILD=ON` |
+| **场景特性** | 一串 `-DFEATURE_*=OFF`：car_control / chit_chat / active_vision / gui / car_sentinel / rain_dection / soprt_mode / welcome_mode / video_chat / chery_project，**仅** `FEATURE_OAI_INFERENCE=ON` |
+| **SDK 包 / 安装** | `-DGENAI_SDK_ANDROID_NAME="genai_sdk-sa8397.rel-android"`、`-DCMAKE_INSTALL_PREFIX=vllm_sdk`、`-DAADK_TARGET_PLATFORM=android`、`-DAADK_ENV_PATH=<repo>/aadk_lib` |
+
+**它是纯 GenAI 形态**：全仓库 CMakeLists 里 grep 不到 `ENABLE_AISERVICE_MODEL`，脚本也不传任何 AIService 后端开关，即 genai 形态构建**不含** AIService 后端开关/源码。运行期按配置里 `model_name` 前缀路由后端（`qnn/…` → 进程内 QNN，`aiservice/…` → HTTP 8090）的机制**属 aiservice 形态分支**，genai 形态不编入该后端，详见 [AIService 后端集成与重构](aiservice-integration.html)。
 
 > [!NOTE]
 > **芯片宏由 `GENAI_SDK_ANDROID_NAME` 字符串解析而来（写错包名会静默走错平台分支）**
