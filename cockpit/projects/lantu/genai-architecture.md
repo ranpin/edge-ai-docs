@@ -105,21 +105,18 @@ graph LR
 
 ### 2.2 AIMET 量化
 
-AIMET（AI Model Efficiency Toolkit，高通开源量化工具）把浮点权重压到 **INT4**，核心是「定标度 + 控误差」。本项目 LLM 主体走 **W4A16**（权重 INT4、激活保持 FP16）——这是 HTP 上跑 LLM 的真实主战场，位宽组合的由来与机制见 [端侧模型量化与压缩 · W4A16（§3）](../../general/quantization.html)：
+AIMET（高通开源量化工具）把浮点权重压到 **INT4**，本项目 LLM 主体走 **W4A16**（权重 INT4、激活 FP16）。量化算法（TF-Enhanced / MSE / percentile / AdaRound）、量化粒度（per-tensor / per-channel / 分组）、精度恢复（AdaRound / QAT / 混合精度）等**通用机制见 [端侧模型量化与压缩](../../general/quantization.html)**（W4A16 §3、AIMET §2、校准集 §1.4、分组打包 §3.2）。本篇只记项目强相关的取舍：
 
-- **校准集选择**（方法级）：量化需一小批代表性数据做校准，统计各层激活分布以定 scale。校准集应覆盖**实际业务分布**——舱内（遗留物 / 儿童 / 衣着）与舱外（车辆 / 动物 / 植物 / 交通标识 / 通识）各类场景图像；校准集与上线分布偏移是掉点的常见根因。另需**与评测集隔离**——校准集不要与评测集重叠，否则量化参数会对评测分布过拟合、线上必掉点（判据见 [量化 · 校准集选择（§1.4）](../../general/quantization.html)）。项目具体校准集构成以模型团队交付为准。
-- **量化算法**（方法级）：AIMET 支持 TF-Enhanced / MSE / percentile 等权重量化算法，以及 **AdaRound**（自适应舍入，学习每个权重向上还是向下取整，比朴素最近舍入精度更高）。本项目 LLM 主体走 weight-only **W4A16**（激活 FP16）；**VIT 同样压到 INT4 权重**——但其**激活位宽组合（是 weight-only W4A16，还是 W4A8）本篇未拿到模型团队明确口径，以模型团队交付为准**。这是较激进的选择，精度/时延权衡与恢复策略见 5.2 的专门讨论。
-- **量化粒度：per-tensor / per-channel / 分组**（方法级）：per-tensor 整个张量一个 scale，省内存但精度差；per-channel（逐输出通道）每通道一个 scale，对 INT4 权重更友好、精度更高，是常见选择。**LLM 的 W4A16 还有一层更细的分组量化（group quantization）**——每 `g` 个权重共享一个 scale，`g` 常见取 32 / 64 / 128，`g` 越小精度越好但 scale 元数据与 dequant 开销越大（取舍见 [量化 · 权重 INT4 分组打包（§3.2）](../../general/quantization.html)）。本项目 per-channel / group size 的具体取值以模型团队交付为准。
-- **精度恢复**（方法级）：量化后掉点的常用恢复手段——① AdaRound / 更优校准集；② 量化感知训练（QAT）微调；③ 对敏感层（如 VIT、首尾层）回退更高精度（INT8 / FP16）做**混合精度**。本项目 0527 build 衣着描述塌至 ~0%、植物 caption −10pp（见 7.1）疑与激进量化（尤其 VIT INT4）相关，是精度恢复策略需重点覆盖的对象。
-
+- **校准集须覆盖实际业务分布**：舱内（遗留物 / 儿童 / 衣着）+ 舱外（车辆 / 动物 / 植物 / 交通标识 / 通识）各类场景图像，且**与评测集隔离**（否则量化参数对评测分布过拟合、线上必掉点）；具体构成以模型团队交付为准。
+- **VIT 同样压 INT4 是激进选择**：其激活位宽组合（weight-only W4A16 还是 W4A8）本篇未拿到模型团队明确口径；精度/时延权衡与恢复策略见 §5.2。
+- **0527 build 的量化代价**：衣着描述塌至 ~0%、植物 caption −10pp（见 §7.1），疑与激进量化（尤其 VIT INT4）相关，是精度恢复策略需重点覆盖的对象。
+- per-channel / group size 的具体取值以模型团队交付为准。
 ### 2.3 QNN 转换与 Context Binary 生成
 
-- **QNN 转换**：量化后的模型经 QNN 转换器（`qnn-onnx-converter` / `qnn-pytorch-converter`）生成 QNN graph 与权重，再由 `qnn-model-lib-generator` 编成模型 `.so`。**注意转换器消费的是 AIMET 已产出的量化编码（`.encodings`），不是在转换阶段重新量化**——W4A16 的分组量化与校准在 AIMET / QAIRT 侧完成，converter 只把带量化编码的图转成 QNN 表示（链路见 [量化 · AIMET 与 LLM 的 W4A16 导出（§2.5）](../../general/quantization.html)）。
-- **Context Binary 生成**：用 `qnn-context-binary-generator`，加载模型 `.so` + HTP backend（`libQnnHtp.so`）+ **HTP backend extensions**（指定 SoC 型号、DSP 架构、VTCM 大小、精度、graph 名等），在**离线**把 graph 编译 / prepare 成序列化的 **Context Binary**（`.bin`）。
-- **为什么要离线 prepare**：HTP 上首次加载 graph 需在线编译（prepare），耗时且占资源；离线生成 Context Binary 后，设备端直接反序列化加载，省去上电时的图编译时延——这是车规「上电即可用」的关键。
-- **HTP backend extensions 的版本约束**：`dsp_arch` 必须与 SA8397P 的 Hexagon 版本一致（本项目用 **V81** Skel，`libQnnHtpV81Skel.so`，见 [3. APK 集成](apk-integration.html) 的 `doNotStrip` 清单），否则 Context Binary 无法在设备加载。
-- **产物**（已核实）：设备上的 Context Binary 包括基模、各 LoRA adapter，以及两档 VIT——`veg_448_448_8397.bin`（小档 448×448）与 `veg_1024_768_8397.bin`（大档 1024×768），统一落在 `/AI/VLM/models/qwen3-omni-4b/`（见 2.4）。各业务实际走哪一档见 3.2（**舱内遗留物走大档、衣着走小档**，非「舱内一律小档」）。
+QNN 转换链路（converter 消费 AIMET 已产出的量化编码 `.encodings`、**不是**在转换阶段重新量化）、Context Binary 离线 prepare 的原理（省去上电时的图编译时延、车规「上电即可用」）见 [端侧模型量化与压缩 · AIMET 与 W4A16 导出（§2.5）](../../general/quantization.html) 与 [LLM 推理原理 · Context Binary（§7.2）](../../general/infer-principles.html)。本篇只记项目产物与约束：
 
+- **HTP backend extensions 版本约束**：`dsp_arch` 必须与 SA8397P 的 Hexagon 版本一致（本项目用 **V81** Skel，`libQnnHtpV81Skel.so`，见 [3. APK 集成](apk-integration.html) 的 `doNotStrip` 清单），否则 Context Binary 无法在设备加载。
+- **产物**（已核实）：设备上的 Context Binary 包括基模、各 LoRA adapter，以及两档 VIT——`veg_448_448_8397.bin`（小档 448×448）与 `veg_1024_768_8397.bin`（大档 1024×768），统一落在 `/AI/VLM/models/qwen3-omni-4b/`（见 §2.4）。各业务实际走哪一档见 §3.2（**舱内遗留物走大档、衣着走小档**，非「舱内一律小档」）。
 ### 2.4 Genie 配置与模型根目录
 
 **Genie**（GenAI Inference Extensions，`libGenie.so`）是高通端侧 LLM/VLM 对话运行时，负责加载 Context Binary + tokenizer + 配置并对外提供推理接口。**本项目推理引擎即 Genie（闭源）**。
@@ -380,15 +377,7 @@ graph LR
 > [!NOTE]
 > **内存泄漏排查（保稳定）**
 >
-> - **CPU 侧进程内存**：
->   - `ps -ef | grep android_test` 查 PID
->   - `pmap -x <pid> > /AI/mem_log.txt` 看 PSS 变化，`tail /AI/mem_log.txt` 观察尾部趋势
->   - 或 `cat /proc/<pid>/status | grep VmRSS` 看常驻内存
-> - **DSP/HTP 侧内存（必须一并看，PSS 不体现）**：Context Binary、graph 缓冲等 HTP 侧内存以 **dma-buf** 形式存在，**不计入 CPU 侧 PSS/VmRSS**——只看 `pmap` PSS 会漏掉 NPU 侧的泄漏：
->   - `dmabuf_dump <pid>` 看该进程持有的 dma-buf 缓冲
->   - 或遍历 `/proc/<pid>/fdinfo/` 里 dma-buf 类型的 fd 做统计
-> - **标准口径（与 1.2 架构图 `MEM[内存池 VmRSS + dma-buf]` 对齐）**：全站「推理进程占了多少内存」= **VmRSS + dma-buf 合计**；注意 **PSS ≠ VmRSS + dma-buf**，两套口径不可直接互比（见 [端侧调试与排障 · 内存监控与预警（§3.3）](../../general/troubleshooting.html)）。
-> - **结论**：场景切换时的内存波动属正常内存池分配/回收。**排除泄漏要两套口径都不单调递增**——CPU 侧 PSS/VmRSS 峰值（实测未单调递增）与 DSP 侧 dma-buf 持有量需分别观察；若当时排查只覆盖了 `pmap` PSS、未用 `dmabuf_dump` 采样 dma-buf，则 NPU 侧口径**待补**，不能仅凭 PSS 就宣布「排除内存泄漏」。
+> 通用排查命令与口径（CPU 侧 `pmap` / `VmRSS`、DSP/HTP 侧 `dmabuf_dump` 与 `/proc/<pid>/fdinfo`、「VmRSS + dma-buf 合计」标准口径、**PSS ≠ VmRSS + dma-buf** 两套口径不可互比）见 [端侧调试与排障 · 内存监控与预警（§3.3）](../../general/troubleshooting.html)，与 §1.2 架构图 `MEM[内存池 VmRSS + dma-buf]` 对齐。**本项目的结论**：场景切换时的内存波动属正常内存池分配/回收；**排除泄漏要两套口径都不单调递增**——CPU 侧 PSS/VmRSS 峰值（实测未单调递增）与 DSP 侧 dma-buf 持有量需分别观察。若当时排查只覆盖了 `pmap` PSS、未用 `dmabuf_dump` 采样 dma-buf，则 NPU 侧口径**待补**，不能仅凭 PSS 就宣布「排除内存泄漏」。
 
 > [!IMPORTANT]
 > **系统稳定性防线（防崩溃）**
@@ -408,11 +397,7 @@ graph LR
 | **APK 打包** | Android APK 集成 AADK 框架，JNI 调用底层 C++ 推理服务 | 实车部署、对接"元启"平台 |
 
 > [!NOTE]
-> APK 形态的宿主容器、JNI 桥接、HTTP 服务化与前台服务自愈，见 [3. APK 集成与端侧服务化](apk-integration.html)。
-
-### 6.2 评测链路构建
-
-详细评测方法与指标定义见 [5. 效果、性能与稳定性](effect-perf-stability.html)。
+> APK 形态的宿主容器、JNI 桥接、HTTP 服务化与前台服务自愈，见 [3. APK 集成与端侧服务化](apk-integration.html)；详细评测方法与指标定义见 [5. 效果、性能与稳定性](effect-perf-stability.html)。
 
 ## 7. 关键数据核查记录
 
