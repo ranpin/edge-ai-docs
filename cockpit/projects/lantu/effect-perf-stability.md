@@ -22,7 +22,7 @@
 > - 数据集分布 → banma-内部测试数据集（5 张类别拆分图）
 > - 上海早期基线（0428 首测）→ `性能测试报告v1.0_20260428-final.xlsx`
 > - **服务形态内存对比（§4.3②，aiservice vs genai VmRSS+dma-buf 及 RssAnon/RssFile 分解）→ 设备 `dmabuf_dump` 稳态采样（≥12s）profiling 记录，2026-08-21**（与 0902 的 xlsx 为不同批次，勿混读）
-> - prefix cache 端到端 A/B（§3.3）→ [AIService 篇 §6.2](aiservice-integration.html)（08-11 vs 08-07）；INT4 精度代价对照（§3.5）→ [架构篇 §7.1](genai-architecture.html)（0527 `z_summary_0527`）
+> - prefix cache 端到端 A/B（§3.3）→ [AIService 篇 §6.2](aiservice-integration.html)（08-11 vs 08-07）；INT4 精度代价对照（§3.5）→ [架构篇 §5.1](genai-architecture.html)（0527 `z_summary_0527`）
 
 ## 1. 效果指标
 
@@ -178,6 +178,41 @@ grep -E "image path:|PERF: ModelRunner::inference|final result|final reply|aadk.
 | **生成速度**     | TPS      | Tokens Per Second   | Decode 阶段每秒生成的 Token 数量                            |
 | **端到端总耗时** | Total    | 整体流程耗时        | 包含预处理 + VIT encode + LLM prefill + LLM decode + 后处理 |
 
+端到端时延的构成（预处理 → 推理 → 后处理），对应上表 Total 的各段：
+
+```mermaid
+graph LR
+    A[输入请求] --> B(预处理)
+    B --> C{模型推理}
+    C --> D(后处理)
+    D --> E[输出响应]
+
+    subgraph 预处理耗时
+    B1[图像 Resize/翻转]
+    B2[消息组织与分发]
+    end
+
+    subgraph 推理耗时
+    C1[VIT Encode]
+    C2[LLM Prefill]
+    C3[LLM Decode]
+    end
+
+    subgraph 后处理耗时
+    D1[输出映射]
+    D2[字段转换]
+    D3[置信度计算]
+    end
+
+    B --- 预处理耗时
+    C --- 推理耗时
+    D --- 后处理耗时
+
+    style B fill:#ffccbc,stroke:#bf360c
+    style C fill:#c8e6c9,stroke:#1b5e20
+    style D fill:#bbdefb,stroke:#0d47a1
+```
+
 > [!NOTE]
 > **TTFT / TPS 的代码级口径（已对 `lantu_sdk_dev` 核实）——与「仅含 LLM prefill」的说法不符，待核实**
 >
@@ -209,7 +244,7 @@ grep -E "image path:|PERF: ModelRunner::inference|final result|final reply|aadk.
 > [!NOTE]
 > **TTFT / TPS 的量级互核与口径陷阱（推导，非实测归因）**
 >
-> **① TTFT 与视觉 token 数高度一致（支持「TTFT 由 VIT 档位主导」）**。用 [架构篇 §7.3](genai-architecture.html) 的视觉 token 推导（小档 448×448 ≈ 196 token/帧、大档 1024×768 ≈ 768 token/帧）对各场景 TTFT 做「隐含吞吐 = 视觉 token ÷ TTFT」检查：
+> **① TTFT 与视觉 token 数高度一致（支持「TTFT 由 VIT 档位主导」）**。用 [架构篇 §5.3](genai-architecture.html) 的视觉 token 推导（小档 448×448 ≈ 196 token/帧、大档 1024×768 ≈ 768 token/帧）对各场景 TTFT 做「隐含吞吐 = 视觉 token ÷ TTFT」检查：
 >
 > | 场景/阶段 | VIT 档位 | 视觉 token（推导） | TTFT (ms) | 隐含吞吐 (token/s) |
 > | :--- | :--- | :--- | :--- | :--- |
@@ -277,16 +312,19 @@ grep -E "image path:|PERF: ModelRunner::inference|final result|final reply|aadk.
 
 > 本篇核心修订：**严格区分「已验证 / 出处存疑 / 待补 / 不作为优化收益」**。原篇把出处存疑、跨版本混杂的数字当作「已验证结论」，此处逐一纠正。
 
-### 3.1 优化收益总览
+### 3.1 优化手段总览（实现 × 收益 × 证据）
 
-| 优化手段                          | 量化收益                              | 证据状态             | 说明                                                                 |
-| :-------------------------------- | :------------------------------------ | :------------------- | :------------------------------------------------------------------- |
-| **多核（单核 → 3 核 NPU）** | 舱外端到端 6559 → 3806ms，约 **-42%** | **出处存疑 + 内部矛盾** | 3806/6559 出处「疑为 0425 实车摸底/单核内部对比」，逐阶段明细缺失；且 3806 疑为 0428 的 left_child 3810 被误标场景、与唯一有出处的 3 核早期数据（0428 舱外 5434~5965）对不上（见 3.2）→ **实际无可用数据，同属待补** |
-| **NPU 3 → 4 核（0915 起）** | 量化收益：**无数据** | **待补** | 0915 起模型占用调整为 4 核；**2.2 全部数据是 4 核之前的 3 核配置、非当前配置**，需补 4 核切换前后的同口径对照数据方可量化收益 |
-| **Prefix cache**            | **aiservice 形态已有端到端 A/B 实测**：Agent300 −7.9% / Agent200 −10.8% / Agent100 −0.1%（08-11 全开 vs 08-07）；**genai 形态 prefill 级收益仍无数据** | **部分实测 / 部分待补** | A/B 非严格控制变量（08-11 除 prefix 全开外还有路径修复等改动）；收益因场景而异的机理见 3.3 |
-| **多 VIT（两档：小 448×448 ~196 token / 大 1024×768 ~768 token，按业务路由，精确档位见 3.4）** | 省多少：**无数据**（但「档位→视觉 token→TTFT」机理链已与 2.2 互核） | **待补** | 无量化收益数据；档位路由勿简化为「舱内小/舱外大」（遗留物走大档、stage2 视模式而定） |
-| **INT4 量化（W4A16，VIT+LLM）** | 时延收益：**无数据**（机理上对 prefill/VIT 收益有限）；精度代价：**已有 0527 浮点 vs 量化对照**（多数 0~6pp、植物 caption −10pp、衣着 0527 塌至 ~0%） | **时延待补 / 精度已有对照** | VIT 压 INT4 较激进（业界 VIT 多为 INT8）；0527 对照坐实「有精度代价」方向，当前 build 待以 INT8 对照复测（见 3.5） |
-| **模型换代（旧 → 当前）**   | 3806 → 1942ms，约 -49%                | **不作为优化收益**   | 跨模型版本对比，混杂模型换代与工程优化，**不能算优化收益**（见 3.6）  |
+> 本表合并原「优化收益总览」与 GenAI 架构篇的「模型速度优化细节矩阵」（其内容已并入本表）——同一批优化项的**实现方法**与**量化收益/证据**合于一表，各项的详细论证见 §3.2–§3.6。
+
+| 优化项 | 实现方法 | 量化收益 | 证据状态 |
+| :--- | :--- | :--- | :--- |
+| **多核（单核→3核→4核）** | VIT/LLM 由单核改三核/四核（导出时配置，改 `default.json`；两档 VEG 的 context 配置硬编码 `/AI/VLM/models/qwen3-omni-4b/base/omni3/default.json`，`qnn_model.cpp::resume`） | 舱外端到端 6559→3806ms（约 **-42%**）；NPU 3→4 核（0915 起）**无数据** | **出处存疑+内部矛盾**：3806/6559 无法坐实、3806 疑为 0428 left_child 3810 误标（见 3.2）；且 2.2 全部数据是 4 核前的 3 核配置 → 实际待补 |
+| **前缀缓存（Prefix cache）** | 框架级 Prefix Caching，开关在设备侧 Genie `config.json: enable_prefix_caching=true`（`base_model.json` 同名字段属 Orin/Lape、不在本链路）；运行期 `SetCommonPrefix(prefix_name)` 按请求下发，**只在具名 LoRA（`lora_id!=-1`）分支生效**（见 3.3） | aiservice 端到端 A/B：Agent300 −7.9% / Agent200 −10.8% / Agent100 −0.1%（08-11 vs 08-07）；genai prefill 级**无数据** | **部分实测/部分待补**：A/B 非严格控变量（08-11 另有路径修复等改动）；收益因场景而异的机理见 3.3 |
+| **多 VIT 动态切换** | 进 VIT 前 Resize，按业务选 `1024×768`（大档）或 `448×448`（小档）两档 Context Binary（精确档位见 3.4，**舱内遗留物走大档、衣着走小档**） | 省多少：**无数据**（「档位→视觉 token→TTFT」机理链已与 2.2 互核） | **待补**：无量化收益数据；档位路由勿简化为「舱内小/舱外大」 |
+| **INT4 量化（W4A16，VIT+LLM）** | VIT + LLM 权重均 INT4（基模 + 7 条 LoRA / 5 adapter，制备见 [架构篇 §2.2](genai-architecture.html)）；decode memory-bound 压权重减每 token 读取，但对 compute-bound 的 prefill/VIT 基本无收益（matmul 仍走 FP16，见 [解码服务化 §5.3](../../general/infer-serving.html)） | 时延：**无数据**；精度：**已有 0527 浮点 vs 量化对照**（多数 0~6pp、植物 caption −10pp、衣着塌至 ~0%） | **时延待补/精度已有对照**：VIT 压 INT4 较激进（业界多 INT8）；0527 对照坐实「有精度代价」，当前 build 待以 INT8 复测（见 3.5） |
+| **模型 SSD（经核查未启用）** | 经核查为 greedy 单模型解码（`config.json` sampler `greedy:true/type:basic`，源码无 speculative/draft/forecast 字段），非推测性采样解码 | — | 原「开启 SSD」笔记存疑，既非 Single Shot Detector 也无存储 Swap 证据（见 [架构篇 §5.2](genai-architecture.html)） |
+| **开启 DeepStack** | VIT（`MultiVegModel::Predict`）输出多路 tensor：第 0 路作主视觉 embedding，第 1..N−1 路逐路 `Append` 进 `aios::llms::Deepstack` 拼入 prompt，由 Genie 注入 LLM Decoder 多层（注入层位由模型与 Genie 决定，aadkcore 只透传） | 提升多模态对齐（避免深层遗忘图像信息，Qwen3-Omni 专属） | 定性（无量化收益数据） |
+| **模型换代（旧→当前）** | — | 3806→1942ms（约 -49%） | **不作为优化收益**：跨模型版本，混杂换代与工程优化（见 3.6） |
 
 ### 3.2 多核优化（单核 → 3 核）
 
@@ -306,7 +344,7 @@ grep -E "image path:|PERF: ModelRunner::inference|final result|final reply|aadk.
 
 ### 3.3 Prefix cache（部分实测 + 部分待补）
 
-- 定性：复用系统提示词/前缀 KV，减少重复 prefill 计算。11 个 prefix 的 system_prompt 经 tokenizer 实测为 **318~959 tokens、均值 ~610**（详见 [架构篇 §7.3](genai-architecture.html)）。
+- 定性：复用系统提示词/前缀 KV，减少重复 prefill 计算。11 个 prefix 的 system_prompt 经 tokenizer 实测为 **318~959 tokens、均值 ~610**（详见 [架构篇 §5.3](genai-architecture.html)）。
 - **已有实测（aiservice 形态，端到端 A/B）**：[AIService 篇 §6.2](aiservice-integration.html) 给出 08-11 prefix 全开 vs 08-07 的端到端提速——**Agent300 −7.9% / Agent200 −10.8% / Agent100 −0.1%**（新增 prefix 的 step2 −2.2%）。这是目前唯一的 prefix cache 量化收益数据。
 - **收益为何因场景差一个数量级（机理，已对架构篇核实）**：前缀缓存**只省 system_prompt 那段文本 prefill，视觉 token 每帧都要重算、不被文本前缀覆盖**。故**视觉 token 占比越高、prefix 收益越低**：
   - Agent100（舱内遗留物）走**大档**（~768 视觉 token/帧）> 其 prefix（cnyb-left 486）→ 文本前缀覆盖不到一半 prefill，端到端仅 **−0.1%**；
@@ -327,14 +365,19 @@ grep -E "image path:|PERF: ModelRunner::inference|final result|final reply|aadk.
 
 ### 3.5 INT4 量化（精度代价已有实测对照；时延收益待补）
 
-- 定性：**W4A16**（权重 INT4、激活 FP16；VIT + LLM 均压权重，AIMET 制备）。注意「VIT 也压 INT4」的**激活位宽组合**（weight-only W4A16 还是 W4A8）架构篇未拿到模型团队明确口径，**以模型团队交付为准**（见 [架构篇 §5.2](genai-architecture.html)）。
-- **精度代价已有实测对照（0527 build，云端浮点 vs 端侧量化，来源 `z_summary_0527`，见 [架构篇 §7.1](genai-architecture.html)）**：
+- 定性：**W4A16**（权重 INT4、激活 FP16；VIT + LLM 均压权重，AIMET 制备）。注意「VIT 也压 INT4」的**激活位宽组合**（weight-only W4A16 还是 W4A8）架构篇未拿到模型团队明确口径，**以模型团队交付为准**。
+- **精度代价已有实测对照（0527 build，云端浮点 vs 端侧量化，来源 `z_summary_0527`，见 [架构篇 §5.1](genai-architecture.html)）**：
   - 多数场景通过率差 **0~6pp**（nlg / 儿童遗留 / 遗留物近乎无损）；
   - **植物 caption 约 −10pp**；交通标识 bbox 小幅下降；
   - **衣着描述在 0527 版异常塌至 ~0%（浮点 51.76%）**，疑为该量化 build 的阶段性回归（可能与 VIT INT4 相关）。
   - **口径限制**：这是 **0527 build** 的浮点 vs 量化对照，非当前 build；且「衣着塌至 ~0%」是阶段性回归、后续版本待核。故它**坐实了「VIT INT4 有精度代价」这一方向**，但具体到当前模型的代价仍需以**当前 build 的 INT8 对照**重测。原「精度代价存疑待归因」据此**升级为「已有 0527 实测对照、当前 build 待复测」**。
-- **时延收益待补（且机理上对 prefill/VIT 收益有限）**：INT4 相对 INT8/FP16 的时延与吞吐收益无测量数据。机理上 W4A16 主要**降内存占用 / 权重加载体积 / decode TPOT**（decode 是 memory-bound，压权重直接减每 token 读取字节）；但对 **compute-bound 的 prefill 与 VIT encode 基本无收益**（matmul 仍走 FP16 通路、峰值算力不变，dequant 反加开销，见 [架构篇 §5.2](genai-architecture.html) 与 [解码服务化 · TTFT 优化](../../general/infer-serving.html)）。故不应期待 INT4 改善 §2.2 的 TTFT，其收益应体现在 decode/TPS 与内存（§4.3）——**此为机理推导，实测仍待补**。
+- **时延收益待补（且机理上对 prefill/VIT 收益有限）**：INT4 相对 INT8/FP16 的时延与吞吐收益无测量数据。机理上 W4A16 主要**降内存占用 / 权重加载体积 / decode TPOT**（decode 是 memory-bound，压权重直接减每 token 读取字节）；但对 **compute-bound 的 prefill 与 VIT encode 基本无收益**（matmul 仍走 FP16 通路、峰值算力不变，dequant 反加开销，见 §3.1 与 [解码服务化 · TTFT 优化](../../general/infer-serving.html)）。故不应期待 INT4 改善 §2.2 的 TTFT，其收益应体现在 decode/TPS 与内存（§4.3）——**此为机理推导，实测仍待补**。
 - **校准集披露（待补）**：AIMET INT4 的校准集构成（来源、规模、场景分布）与**是否与 banma 评测集重叠**，现有材料均未说明；若重叠，量化参数会对评测分布过拟合、分数虚高（校准集选择判据与重叠风险见 [端侧调试与排障 §2.1](../../general/troubleshooting.html)）。
+
+> [!NOTE]
+> **VIT INT4 的误差放大与恢复策略**
+>
+> 视觉特征的量化误差会沿 DeepStack 注入放大到 LLM 解码（DeepStack 实现见 §3.1 表），对**细粒度识别**（植物种类、衣着属性）尤其敏感——这与 0527 对照中植物 caption −10pp、衣着塌至 ~0% 的掉点分布吻合。恢复策略（按代价从低到高）：① VIT 回退 INT8 或对首尾敏感层做混合精度；② 扩充/对齐校准集到实际业务分布；③ AdaRound / QAT 微调；④ 对掉点敏感场景（植物/衣着）单独评估 VIT 精度档位。具体采用哪种以模型团队交付为准（通用量化恢复手段见 [端侧模型量化与压缩](../../general/quantization.html)）。
 
 ### 3.6 模型换代不作为优化收益（撤回 49%）
 
@@ -379,6 +422,13 @@ grep -E "image path:|PERF: ModelRunner::inference|final result|final reply|aadk.
 | CPU 平均占用率     | `< 5% (被动监听)`  | 推理进程 **~1~2%**；系统总 **~58~61%**（含车机其他进程） | 推理进程符合被动监听低占用；系统值含其他应用。**归一化口径待补**：是「单核 100%×N 核」还是「全部核合计 100%」、共几核，原文未注明，两种口径下 ~58~61% 的含义差数倍 |
 | 功耗瓦数（Active/Idle） | 正常工作态 / 任务打断后 | —（材料未覆盖）                                 | 现有材料无功耗瓦数，仅 CPU 占用%，**待补**功率计数据 |
 
+> [!TIP]
+> **CPU 占用优化（降功耗）：poll 改被动监听**
+>
+> - **手段**：模型配置文件 `poll` 参数改 `false`，由主动轮询转为被动事件监听。
+> - **收益**：SDK 推理进程 CPU 占用由 **40% 降至 ~5%**。
+> - **口径（务必标注）**：此处为 **SDK 推理进程的单进程占用**（非整机、非系统），是被动监听稳态下的进程级占用（与上表 <5% 被动监听判据一致）；上表「推理进程 ~1~2%、系统总 ~58~61%」是另一测量点/负载态（系统总值含车机其他进程）。两处口径**勿直接混用**。
+
 ### 4.3 内存占用分析
 
 > **术语更正**：本节分析的是**内存（RAM）**，不是**存储（flash）**。原篇标题「存储占用分析」名不副实，已更正为「内存占用分析」。真正的存储占用（模型文件大小、`/AI` 分区、包体 378/222MB）是另一维度，见 [AIService 后端集成与重构](aiservice-integration.html)，本篇**待补**。
@@ -421,6 +471,11 @@ grep -E "image path:|PERF: ModelRunner::inference|final result|final reply|aadk.
 > - **进程范围待澄清**：aiservice 的 VmRSS 4613MB 测的是**哪个进程**（VoyahAIService 服务进程 / 客户端 / 二者合计）在本篇原材料中未注明（[GenAI vs AIService 篇 §1](genai-vs-aiservice.html) 的口径说明称 aiservice 侧为持模型的 `VoyahAIService` 服务进程、genai 侧为 `android_test` 进程，可作参照），需补充测量范围说明，否则 aiservice vs genai 的 ~2.5GB VmRSS 差异无法解读。
 > - **差异归因（已部分坐实，见上方 RssAnon 分解 NOTE）**：aiservice 比 genai 高约 2.9GB，已定位到**几乎全在 CPU 堆 RssAnon**（aiservice 多留一份 ~3GB），RssFile 与 dma-buf 两侧基本相同；**剩余待确认**的是「aiservice 为何在 CPU 堆多留这一份」（疑为服务端把模型/上下文在堆里再复制一份）及有无压缩空间。
 
+> [!NOTE]
+> **内存泄漏排查（保稳定）**
+>
+> 通用排查命令与口径（CPU 侧 `pmap` / `VmRSS`、DSP/HTP 侧 `dmabuf_dump` 与 `/proc/<pid>/fdinfo`、「VmRSS + dma-buf 合计」标准口径、**PSS ≠ VmRSS + dma-buf** 两套口径不可互比）见 [端侧调试与排障 · 内存监控与预警（§3.3）](../../general/troubleshooting.html)。**本项目的结论**：场景切换时的内存波动属正常内存池分配/回收；**排除泄漏要两套口径都不单调递增**——CPU 侧 PSS/VmRSS 峰值（实测未单调递增）与 DSP 侧 dma-buf 持有量需分别观察。若当时排查只覆盖了 `pmap` PSS、未用 `dmabuf_dump` 采样 dma-buf，则 NPU 侧口径**待补**，不能仅凭 PSS 就宣布「排除内存泄漏」。
+
 ### 4.4 稳定性测试
 
 > 数据来源：`performance_test_result.xlsx` 的 `稳定性报告`（2026-09-02 约 6h 连跑）。
@@ -437,6 +492,13 @@ grep -E "image path:|PERF: ModelRunner::inference|final result|final reply|aadk.
 > - **「6h 无单调增长」不足以排除慢泄漏**：§4.3① 的 PSS 1.85~2.14GB「6h 无单调增长」是**目视/区间判断**。慢泄漏（如每次数百 KB）在 6h 内可能淹没在 0.29GB 的正常波动里。判据应改为 **24~72h soak + 对 PSS/VmRSS 做线性回归、看斜率（MB/h）及其置信区间是否显著 >0**，而非看首末值或区间是否「单调」。
 > - **三个「率」不可混读**：本节稳定性判据（ANR/Crash/OOM = 0）是**故障率**、§2.2 的「识别成功率 100%」是**推理未失败率**、§1.4 的「通过率 86~98%」是**效果准确率**——三者口径完全不同，不可互相替代或混读。
 > - **未覆盖的量产最坏情况**：6h 台架连跑未覆盖长时间驻留、前后台切换、多客户端并发、OTA 期间、低温/高温环境等量产工况；稳定性「通过」应限定为「**台架 6h 连跑工况下**通过」。
+
+> [!IMPORTANT]
+> **系统稳定性防线（防崩溃，设计层）**
+>
+> 上表的「6h 连跑 ANR/Crash/OOM = 0」是实测结果，其背后的设计防线是：多处兜底逻辑避免直接 Crash、超时重试 + 进程死亡自动重启（Watchdog）、规范异常处理（避免 `std::runtime_error`、日志统一 `LOG_I()`）、降级策略（异常时传空 JSON 兜底而非抛 Error 阻断主线程）。
+>
+> ⚠️ 但「异常传空 JSON 兜底」对**安全相关功能**是 fail-dangerous（空 JSON 被上层当成「无目标」），详见 [运维、安全与功能安全篇 §4.4](ops-security.html)。
 
 ### 4.5 消融实验设计（阶梯形设置 stress）
 

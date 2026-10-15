@@ -108,8 +108,8 @@ graph LR
 AIMET（高通开源量化工具）把浮点权重压到 **INT4**，本项目 LLM 主体走 **W4A16**（权重 INT4、激活 FP16）。量化算法（TF-Enhanced / MSE / percentile / AdaRound）、量化粒度（per-tensor / per-channel / 分组）、精度恢复（AdaRound / QAT / 混合精度）等**通用机制见 [端侧模型量化与压缩](../../general/quantization.html)**（W4A16 §3、AIMET §2、校准集 §1.4、分组打包 §3.2）。本篇只记项目强相关的取舍：
 
 - **校准集须覆盖实际业务分布**：舱内（遗留物 / 儿童 / 衣着）+ 舱外（车辆 / 动物 / 植物 / 交通标识 / 通识）各类场景图像，且**与评测集隔离**（否则量化参数对评测分布过拟合、线上必掉点）；具体构成以模型团队交付为准。
-- **VIT 同样压 INT4 是激进选择**：其激活位宽组合（weight-only W4A16 还是 W4A8）本篇未拿到模型团队明确口径；精度/时延权衡与恢复策略见 §5.2。
-- **0527 build 的量化代价**：衣着描述塌至 ~0%、植物 caption −10pp（见 §7.1），疑与激进量化（尤其 VIT INT4）相关，是精度恢复策略需重点覆盖的对象。
+- **VIT 同样压 INT4 是激进选择**：其激活位宽组合（weight-only W4A16 还是 W4A8）本篇未拿到模型团队明确口径；精度/时延权衡与恢复策略见 [效果·性能·稳定性篇](effect-perf-stability.html) §3.5。
+- **0527 build 的量化代价**：衣着描述塌至 ~0%、植物 caption −10pp（见 §5.1），疑与激进量化（尤其 VIT INT4）相关，是精度恢复策略需重点覆盖的对象。
 - per-channel / group size 的具体取值以模型团队交付为准。
 ### 2.3 QNN 转换与 Context Binary 生成
 
@@ -123,9 +123,9 @@ QNN 转换链路（converter 消费 AIMET 已产出的量化编码 `.encodings`�
 
 关键配置（`config.json`，已核实）：
 
-- sampler `greedy:true / type:basic`（greedy 单模型解码，**未启用**推测性采样，见 7.2）
+- sampler `greedy:true / type:basic`（greedy 单模型解码，**未启用**推测性采样，见 §5.2）
 - 上下文 `cl2560`、`max_tokens 512`
-- `enable_prefix_caching=true`（前缀缓存，见 5.2 / 7.3）
+- `enable_prefix_caching=true`（前缀缓存，见 [效果·性能·稳定性篇](effect-perf-stability.html) §3.1 / §5.3）
 - LoRA / scene 配置在 `multi_lora_runtime_config.json`（**7 条** LoRA 配置，映射关系见 3.1）
 
 **两个模型根目录的关系**（已核实，全站统一口径）：
@@ -155,8 +155,8 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 | :--- | :--- | :--- |
 | **多 LoRA / scene 映射** | 7 条 LoRA 配置覆盖 4 个 scene、5 个 adapter；用 `LoRA ID`(scene) + `LoRA Name` 唯一定位并动态加载（见 3.1） | `model_runner.cpp` `getModelDetailsByScene(scene_id, lora_name)` |
 | **多 VIT 两档路由** | 小档 448×448 / 大档 1024×768 两档 Context Binary，按业务设定的分辨率精确等值路由（见 3.2） | `qnn_model.cpp` `veg_model_small_` / `veg_model_large_` |
-| **DeepStack 适配** | VIT 输出多路 tensor：第 0 路作主视觉 embedding，第 1..N-1 路作 DeepStack 特征一并注入 LLM，缓解深层网络遗忘图像信息（机制见 5.2） | `qnn_model.cpp` `buildLlmsPrompt` 里 `aios::llms::Deepstack` |
-| **低功耗被动监听** | CPU 轮询改事件驱动（`poll=false`），降 SDK 进程 CPU 占用（见 5.3） | 配置 `poll=false` |
+| **DeepStack 适配** | VIT 输出多路 tensor：第 0 路作主视觉 embedding，第 1..N-1 路作 DeepStack 特征一并注入 LLM，缓解深层网络遗忘图像信息（机制见 [效果·性能·稳定性篇](effect-perf-stability.html) §3.1） | `qnn_model.cpp` `buildLlmsPrompt` 里 `aios::llms::Deepstack` |
+| **低功耗被动监听** | CPU 轮询改事件驱动（`poll=false`），降 SDK 进程 CPU 占用（见 [效果·性能·稳定性篇](effect-perf-stability.html) §4.2） | 配置 `poll=false` |
 | **稳定性兜底** | 各业务节点异常捕获 + 空 JSON 降级，避免进程直接 Crash | 各 dispatcher |
 
 ### 3.1 多 LoRA / scene / prefix 映射关系
@@ -211,7 +211,7 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 > | 舱外问答 stage1（outcar_qa） | `1024×768` | 大档 |
 > | 舱外问答 stage2 | 按 `Stage2ImageMode`：`USE_FULL_1024`→`1024×768`（大档）；`USE_CROP_448`/`USE_FULL_448`→`448×448`（小档） | 视模式而定 |
 >
-> 即**舱内遗留物走的是大档（1024×768），不是小档**——这一点是 5.2 / 7.3 前缀缓存收益因场景而异的根因之一（遗留物帧的视觉 token 多，见 7.3 的预算核算 NOTE）。
+> 即**舱内遗留物走的是大档（1024×768），不是小档**——这一点是 [效果·性能·稳定性篇](effect-perf-stability.html) §3.1 / 本篇 §5.3 前缀缓存收益因场景而异的根因之一（遗留物帧的视觉 token 多，见 §5.3 的预算核算 NOTE）。
 
 ### 3.3 Genie 推理选项链（LoRA / 前缀 / 解码格式如何实际下发）
 
@@ -221,8 +221,8 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 | :--- | :--- | :--- | :--- |
 | `SetLora(name)` | `prompt.Option().SetLora(lora_names_[lora_id])` | `lora_id != -1` | 选定 LoRA adapter（cnyb/dwsr/dwbs/znzs/default_adapter） |
 | `SetLoraStrength(2.0)` | 硬编码 | `lora_id != -1` | LoRA 融合强度（即 Genie 的 lora_alpha），**genai 路径写死 2.0、非配置项**（配置里的 `lora_alpha` 字段不被解析器读取） |
-| `SetTemperature/TopP/TopK` = `0.0/1.0/1.0` | 硬编码 | 两分支都设 | 等价 greedy，与 2.4 的 `config.json sampler greedy:true` 一致（见 7.2） |
-| `SetCommonPrefix(prefix)` | `if(!prefix_name.empty()) SetCommonPrefix(...)` | **`lora_id != -1` 且 prefix_name 非空** | 命中前缀缓存（见 5.2 / 7.3） |
+| `SetTemperature/TopP/TopK` = `0.0/1.0/1.0` | 硬编码 | 两分支都设 | 等价 greedy，与 2.4 的 `config.json sampler greedy:true` 一致（见 §5.2） |
+| `SetCommonPrefix(prefix)` | `if(!prefix_name.empty()) SetCommonPrefix(...)` | **`lora_id != -1` 且 prefix_name 非空** | 命中前缀缓存（见 [效果·性能·稳定性篇](effect-perf-stability.html) §3.1 / §5.3） |
 | `SetDecodeFormat(name)` | `if(cur_lora!="znzs" && cur_lora!="default_adapter") SetDecodeFormat(cur_lora)` | 仅 cnyb / dwsr / dwbs | 解码格式约束（见 4.2） |
 
 > [!IMPORTANT]
@@ -309,118 +309,28 @@ sequenceDiagram
 - 二阶段决策：`decide_stage2_by_label(label, bbox)`（逐 label 见 4.2.2）；二阶段走 `data_message_lora5`，模型名取 `decision.stage2_model_name`（visual_assistant / general_base），prefix 按 label 映射 `znzs-*`
 - 三阶段 NLG：`schedule_run_sync(..., "visual_assistant", ..., "znzs-nlg")`，纯文本、无解码格式约束
 
-## 5. 性能优化体系
-
-### 5.1 端到端时延拆解图
-
-```mermaid
-graph LR
-    A[输入请求] --> B(预处理)
-    B --> C{模型推理}
-    C --> D(后处理)
-    D --> E[输出响应]
-
-    subgraph 预处理耗时
-    B1[图像 Resize/翻转]
-    B2[消息组织与分发]
-    end
-
-    subgraph 推理耗时
-    C1[VIT Encode]
-    C2[LLM Prefill]
-    C3[LLM Decode]
-    end
-
-    subgraph 后处理耗时
-    D1[输出映射]
-    D2[字段转换]
-    D3[置信度计算]
-    end
-
-    B --- 预处理耗时
-    C --- 推理耗时
-    D --- 后处理耗时
-
-    style B fill:#ffccbc,stroke:#bf360c
-    style C fill:#c8e6c9,stroke:#1b5e20
-    style D fill:#bbdefb,stroke:#0d47a1
-```
-
-### 5.2 模型速度优化细节矩阵
-
-| 优化项 | 目的及原理 | 实现方法 / 方案 | 预期效果 / 备注 |
-| :--- | :--- | :--- | :--- |
-| **模型量化（W4A16）** | **降内存占用、首次加载时间与 decode TPOT**（decode memory-bound，压权重直接减每 token 读取字节）。注意：**对 compute-bound 的 prefill / TTFT 基本无收益**——W4A16 的 matmul 仍走 FP16 通路、峰值算力不变，dequant 反加开销（推导见 [解码服务化 · TTFT 优化（§5.3）](../../general/infer-serving.html)） | VIT + LLM 权重均 INT4（W4A16；基模 + **7 条 LoRA 配置 / 5 个 adapter**，见 3.1；制备方法见 2.2） | 0527 浮点 vs 端侧：多数场景差 0~6pp（nlg/儿童遗留/遗留物近乎无损），植物 caption 约 −10pp；衣着描述 0527 版异常塌至 ~0%（见 7.1）。**VIT INT4 是激进选择，权衡见下方专门讨论** |
-| **模型 SSD（经核查未启用）** | 经核查为 greedy 单模型解码，非推测性采样解码 | `config.json` sampler `greedy:true/type:basic`；源码无 speculative/draft/forecast 字段 | 原"开启 SSD"笔记存疑，既非 Single Shot Detector 也无存储 Swap 证据（见 7.2） |
-| **多 VIT 动态切换** | 按场景/阶段用不同大小 VIT 缩短时延 | 进 VIT 前 Resize，按业务选 `1024×768`（大档）或 `448×448`（小档）两档 Context Binary（各业务实际档位见 3.2，**舱内遗留物走大档、衣着走小档**） | 减少冗余计算 |
-| **单核改多核** | 利用 SA8397 多核算力 | VIT/LLM 由单核改三核/四核（导出时配置，改 `default.json`）。代码侧可证：两档 VEG 的 context 配置文件**硬编码**为 `/AI/VLM/models/qwen3-omni-4b/base/omni3/default.json`（`qnn_model.cpp::resume`），HTP 核数/backend 扩展即在此与 Context Binary 生成期定下 | 吞吐量大幅提升 |
-| **前缀缓存** | 提前算 System Prompt，加速 Prefill | 框架级 Prefix Caching，开关在**设备侧 Genie `config.json: enable_prefix_caching=true`**（见 2.4；`base_model.json` 里的同名字段是 Orin/Lape 配置，不在本链路）；运行期由 `SetCommonPrefix(prefix_name)` 按请求下发，**且只在具名 LoRA（`lora_id!=-1`）分支生效**（见 3.3） | 11 个 prefix 的 System Prompt 约 318~959 tokens、均值 ~610，每次省去这段 prefill；上下文 cl2560、max_tokens 512（见 7.3） |
-| **开启 DeepStack** | 避免深层模型遗忘图像信息（Qwen3-Omni 专属） | VIT（`MultiVegModel::Predict`）输出**多路** tensor：`buildLlmsPrompt` 取第 0 路作主视觉 embedding（`Image`），第 1..N-1 路逐路 `Append` 进 `aios::llms::Deepstack` 再拼入 prompt，由 Genie 注入 LLM Decoder 的**多个层**（注入层位/层数由模型与 Genie 决定，aadkcore 只透传 VIT 多路输出；非仅"前几层"） | 提升多模态对齐 |
-
-> [!IMPORTANT]
-> **VIT INT4 是激进选择，需配套精度恢复（不要只当既定优化项罗列）**
->
-> 视觉编码器（VIT）通常量化到 INT8 即止，本项目把 VIT 也压到 **INT4**，是较激进的选择，代价已在评测中显现：0527 build 植物 caption 约 **−10pp**、衣着描述异常塌至 **~0%**（见 7.1），疑与 VIT INT4 掉点相关。
->
-> - **精度 / 时延权衡**：VIT INT4 主要**降显存 / 权重加载体积**；对 ViT 编码这类偏 compute-bound 的前向，W4A16 的时延收益有限（matmul 仍走 FP16 通路，见 [解码服务化 · TTFT 优化（§5.3）](../../general/infer-serving.html)）。但视觉特征的量化误差会沿 DeepStack 注入放大到 LLM 解码，对**细粒度识别**（植物种类、衣着属性）尤其敏感；收益与精度损失需按场景分别评估，不能一概而论。
-> - **恢复策略**（建议覆盖，而非把 INT4 当定论）：① VIT 回退 INT8 或对首尾敏感层做混合精度；② 扩充 / 对齐校准集到实际业务分布（见 2.2）；③ AdaRound / QAT 微调；④ 分场景验证——对掉点敏感的场景（植物 / 衣着）单独评估 VIT 精度档位。具体采用哪种以模型团队交付为准。
-
-### 5.3 系统级优化亮点
-
-> [!TIP]
-> **CPU 占用优化（降功耗）**
->
-> - **手段**：模型配置文件 `poll` 参数改 `false`，由主动轮询转为被动事件监听
-> - **收益**：SDK 推理进程 CPU 占用由 **40% 降至 ~5%**
-> - **口径（务必标注）**：此处为 **SDK 推理进程的单进程占用**（非整机、非系统）。与 [5. 效果、性能与稳定性](effect-perf-stability.html) 的「推理进程 **~1~2%**、系统总 **~58~61%**」为**不同测量点 / 负载态**——前者是被动监听稳态下的进程级占用（与 <5% 被动监听判据一致），系统总值含车机其他进程。两篇数字口径以此为准，**勿直接混用**。
-
-> [!NOTE]
-> **内存泄漏排查（保稳定）**
->
-> 通用排查命令与口径（CPU 侧 `pmap` / `VmRSS`、DSP/HTP 侧 `dmabuf_dump` 与 `/proc/<pid>/fdinfo`、「VmRSS + dma-buf 合计」标准口径、**PSS ≠ VmRSS + dma-buf** 两套口径不可互比）见 [端侧调试与排障 · 内存监控与预警（§3.3）](../../general/troubleshooting.html)，与 §1.2 架构图 `MEM[内存池 VmRSS + dma-buf]` 对齐。**本项目的结论**：场景切换时的内存波动属正常内存池分配/回收；**排除泄漏要两套口径都不单调递增**——CPU 侧 PSS/VmRSS 峰值（实测未单调递增）与 DSP 侧 dma-buf 持有量需分别观察。若当时排查只覆盖了 `pmap` PSS、未用 `dmabuf_dump` 采样 dma-buf，则 NPU 侧口径**待补**，不能仅凭 PSS 就宣布「排除内存泄漏」。
-
-> [!IMPORTANT]
-> **系统稳定性防线（防崩溃）**
->
-> - 多处兜底逻辑，避免直接 Crash
-> - 超时重试 + 进程死亡自动重启（Watchdog）
-> - 规范异常处理：避免 `std::runtime_error`，日志统一 `LOG_I()`
-> - 降级策略：异常时传空 JSON 兜底，而非抛 Error 阻断主线程
-
-## 6. 车机部署测试与评测链路
-
-### 6.1 打包部署方案
-
-| 部署方式 | 实现路径 | 适用场景 |
-| :--- | :--- | :--- |
-| **SDK 打包** | 编译生成可执行文件，构建推理对象，读本地 JSON 批量推理 | 算法快速验证、离线跑测 |
-| **APK 打包** | Android APK 集成 AADK 框架，JNI 调用底层 C++ 推理服务 | 实车部署、对接"元启"平台 |
-
-> [!NOTE]
-> APK 形态的宿主容器、JNI 桥接、HTTP 服务化与前台服务自愈，见 [3. APK 集成与端侧服务化](apk-integration.html)；详细评测方法与指标定义见 [5. 效果、性能与稳定性](effect-perf-stability.html)。
-
-## 7. 关键数据核查记录
+## 5. 关键数据核查记录
 
 以下为关键数据的核查 / 核算结论（2026-09-17 更新）。
 
-### 7.1 量化精度与损失评估
+### 5.1 量化精度与损失评估
 
-- **量化方案**：**W4A16**（权重 INT4、激活 FP16；VIT + LLM，基模 + **7 条 LoRA 配置 / 5 个 adapter**，见 3.1；VIT INT4 的激进性与恢复策略见 5.2，W4A16 位宽组合的机制见 [量化 · W4A16（§3）](../../general/quantization.html)）
+- **量化方案**：**W4A16**（权重 INT4、激活 FP16；VIT + LLM，基模 + **7 条 LoRA 配置 / 5 个 adapter**，见 3.1；VIT INT4 的激进性与恢复策略见 [效果·性能·稳定性篇](effect-perf-stability.html) §3.5，W4A16 位宽组合的机制见 [量化 · W4A16（§3）](../../general/quantization.html)）
 - **0527 浮点 vs 端侧量化对比**：
   - 多数场景通过率差 **0~6pp**（nlg / 儿童遗留 / 遗留物近乎无损）
   - 植物 caption 约 **−10pp**
   - 交通标识 bbox 小幅下降
-  - **衣着描述在 0527 版异常塌至 ~0%（浮点 51.76%），疑为该量化 build 的阶段性回归（可能与 VIT INT4 相关，见 5.2），后续版本待核**
+  - **衣着描述在 0527 版异常塌至 ~0%（浮点 51.76%），疑为该量化 build 的阶段性回归（可能与 VIT INT4 相关，见 [效果·性能·稳定性篇](effect-perf-stability.html) §3.5），后续版本待核**
 - 明细见 `云端浮点与端侧量化模型对比测试/z_summary_0527`
 
-### 7.2 模型 SSD 释义（澄清）
+### 5.2 模型 SSD 释义（澄清）
 
 - **当前为 greedy 单模型解码**：`config.json` sampler `greedy:true / type:basic`
 - **未启用推测性采样解码**：配置与 aadkcore / agent_group 源码均无 speculative / draft / forecast 字段
 - 既非 Single Shot Detector，也无存储 Swap 证据
 - 原"开启 SSD"笔记存疑，建议删除或向模型团队确认所指
 
-### 7.3 前缀缓存 Token 数
+### 5.3 前缀缓存 Token 数
 
 用 `tokenizer_qwen3.json` 对 11 个 prefix 的 system_prompt（含 `<|fim_prefix|>system…<|fim_suffix|>` sys_tags）逐条统计：**318~959 tokens、均值 ~610**（11 项之和 6709 ÷ 11 ≈ 610）。即每次推理可省去这段 prefill（上下文预算 cl2560、max_tokens 512）。11 个 prefix 与 5 个 adapter 的对应关系见 3.1。
 
