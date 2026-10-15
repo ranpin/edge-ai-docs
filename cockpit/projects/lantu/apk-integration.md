@@ -747,4 +747,4 @@ flowchart LR
 > [!NOTE]
 > **与本篇相关的其他文档**
 >
-> SDK 构建、adb push、设备目录树（含两个模型根目录谁读谁）、部署成功判据与 SELinux 域差异见 [设备部署与上车流程](device-deployment.html)；QNN 框架与 ISP 数据流见 [设备部署](../agent-framework/deploy.html)；aadkcore / agent\_group 内部实现见 [aadkcore 核心框架](../agent-framework/agent-core.html) / [场景 Agent 应用](../agent-framework/agent-group.html)；排障工具链（mini-dm、Snapdragon Profiler、tombstone 分析）见 [调试与工具链](../agent-framework/debug.html)；硬件底层（SA8397P、Hexagon、FastRPC、Hypervisor）见 [硬件与系统底层](../../general/hardware.html)；想从零理解本篇涉及的 Android 四大组件与 JNI 原理，见 [Android 开发 & JNI 基础](../../general/android-jni.html)。
+> SDK 构建、adb push、设备目录树（含两个模型根目录谁读谁）、部署成功判据与 SELinux 域差异见 [设备部署与上车流程](device-deployment.html)；QNN 框架与 ISP 数据流见 [设备部署](../agent-framework/deploy.html)；aadkcore / agent\_group 内部实现见 [aadkcore 核心框架](../agent-framework/agent-core.html) / [场景 Agent 应用](../agent-framework/agent-group.html)；排障工具链（mini-dm、Snapdragon Profiler、tombstone 分析）见 [端侧调试与排障](../../general/troubleshooting.html)；硬件底层（SA8397P、Hexagon、FastRPC、Hypervisor）见 [硬件与系统底层](../../general/hardware.html)；想从零理解本篇涉及的 Android 四大组件与 JNI 原理，见 [Android 开发 & JNI 基础](../../general/android-jni.html)。

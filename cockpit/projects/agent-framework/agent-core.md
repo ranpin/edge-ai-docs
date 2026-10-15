@@ -582,7 +582,7 @@ CPROBE_END_SPAN(model_infer_span);
 > `CompletionCallback = function<void(const string& content, void* user_data)>` — 非流式回调，生成完成后一次性返回。
 > `CompletionCallbackResponse = function<void(const string& content, void* user_data, const ModelResponse& response)>` — 非流式回调的**三参变体**，额外回传 `ModelResponse`（含 ttft / token 统计等），需要性能指标时用它。
 >
-> **关于 `tools` 参数**：`streamGenerate` / `generate` 末尾的 `tools` 只负责把工具**声明**下发给后端（Lape 会以 `<tools>` XML 注入 system prompt，让模型"看到"函数签名）。但"解析模型输出的 `FunctionCall` → 执行工具 → 回灌再推理"这条闭环**不是自动的**，受 `USE_TOOL` 门控且默认未启用，详见 [协议与运行时执行 · §2.1](agent-protocols.html#sec-7)。
+> **关于 `tools` 参数**：`streamGenerate` / `generate` 末尾的 `tools` 只负责把工具**声明**下发给后端（Lape 会以 `<tools>` XML 注入 system prompt，让模型"看到"函数签名）。但"解析模型输出的 `FunctionCall` → 执行工具 → 回灌再推理"这条闭环**不是自动的**，受 `USE_TOOL` 门控且默认未启用，详见 [协议与运行时执行 · §2.1](agent-protocols.html#sec-8)。
 
 ### 5.2 多模态消息类型系统
 

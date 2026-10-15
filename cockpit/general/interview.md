@@ -56,6 +56,8 @@ flowchart LR
 | [端侧模型量化与压缩](quantization.html) | PTQ/QAT、AIMET、W4A16 机制、量化方案对比 |
 | [LLM 推理原理与性能模型](infer-principles.html) | Prefill/Decode、Roofline、KV Cache、FlashAttention、Genie/QAIRT、Tokenizer |
 | [端侧解码与服务化优化](infer-serving.html) | 前缀缓存、投机采样、约束解码、Continuous Batching、TTFT/端到端延迟 |
+| [端侧部署与运维](deployment-ops.html) | OTA 模型更新（策略分级、签名 / A-B 分区 / 回滚）、性能基准测试方法论与关键指标 |
+| [端侧调试与排障](troubleshooting.html) | 调试工具链、排障决策树、FastRPC 六步法、LLM 精度 / 内存 OOM / Crash 排障方法论 |
 | [Android 开发 & JNI 基础](android-jni.html) | Android 工程结构、JNI 桥接、SELinux、RegisterNatives、端侧服务化与安全 |
 
 **第二层 · 框架研发（aadkcore / agent_group）**
@@ -67,7 +69,7 @@ flowchart LR
 | [aadkcore 核心框架](../projects/agent-framework/agent-core.html) | 架构总览、统一模型接口、模型调度、多音区对话管理、RAG |
 | [协议与运行时执行](../projects/agent-framework/agent-protocols.html) | MCP/A2A 协议、运行时与插件机制、LLM Flow 与 Tool Use、端云协同与安全沙箱 |
 | [场景 Agent 应用](../projects/agent-framework/agent-group.html) | 场景 Agent 插件机制（车控/主动视觉/闲聊/GUI 等） |
-| [调试与工具链](../projects/agent-framework/debug.html) | 精度/内存/Crash 排障、日志与监控 |
+| [调试与工具链（aadkcore 专项）](../projects/agent-framework/debug.html) | aadkcore 日志系统、aadk\_monitor、Profiling、典型故障案例 |
 
 **第三层 · 岚图 8397 量产项目**
 

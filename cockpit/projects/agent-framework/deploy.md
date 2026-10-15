@@ -356,7 +356,7 @@ flowchart LR
 
 ## 6. 性能基准测试
 
-> 基准测试方法论、标准测试 Checklist、关键性能指标（TTFT / TPOT / E2E / 模型加载 / 内存峰值）属通用方法论，见 [**端侧部署与运维 · 性能基准测试（§2）**](../../general/deployment-ops.html)。aadkcore 侧实测口径：推理进程名为 `system_agent`，内存按 **VmRSS + per-process dma-buf** 合计（仅看 VmRSS 会低估 3 倍以上）；框架自带的性能数据来源（`ModelResponse.ttft/tokens_per_second`、随响应回传的 `debug_info`、`model_runner.cpp` 的 PERF 日志）见 [**调试与工具链 · §5.3 性能数据采集**](debug.html)。
+> 基准测试方法论、标准测试 Checklist、关键性能指标（TTFT / TPOT / E2E / 模型加载 / 内存峰值）属通用方法论，见 [**端侧部署与运维 · 性能基准测试（§2）**](../../general/deployment-ops.html)。aadkcore 侧实测口径：推理进程名为 `system_agent`，内存按 **VmRSS + per-process dma-buf** 合计（仅看 VmRSS 会低估 3 倍以上）；框架自带的性能数据来源（`ModelResponse.ttft/tokens_per_second`、随响应回传的 `debug_info`、`model_runner.cpp` 的 PERF 日志）见 [**调试与工具链 · §2.3 性能数据采集**](debug.html)。
 
 ## 7. ONNX → QNN 转换陷阱
 
