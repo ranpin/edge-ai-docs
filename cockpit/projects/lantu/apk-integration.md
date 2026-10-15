@@ -35,7 +35,7 @@
 >
 > 对比：aiservice 形态的 `VoyahAIService` 绑定 `127.0.0.1:8090`，两形态的网络安全姿态**不一致**，迁移时应以回环绑定为基线。详见 [运维、安全与功能安全](ops-security.html) 的 5.3 节。
 
-它承载的模型是 **Qwen3-Omni-4B**（内部定制型号 `qwen3-omni-4b`，INT4 量化 + 场景 LoRA）。模型文件不打包进 APK，而是放在车机固定路径下，且**分两个根目录**：运行时配置/模板根 `/AI/vllm_sdk/models`（`init()` 的入参）与模型权重/Context Binary 根 `/AI/VLM/models/qwen3-omni-4b`。genai 形态经 `multi_lora_runtime_config.json` → `model_config` → `qwen3-omni-4b_8397.json` 的 `model_path`（**绝对路径**）定位权重，**不是** `model_root` 相对跟随（那是 aiservice 形态机制）；`veg_params` 还引用第三个根 `/AI/VLM/models/raw_src/`。谁读谁、权威目录树见 3.3 节与 [设备部署与上车流程](device-deployment.html) 的 2.2 节。
+它承载的模型是 **Qwen3-Omni-4B**（内部定制型号 `qwen3-omni-4b`，INT4 量化 + 场景 LoRA）。模型文件**不打包进 APK**，而是放在车机固定路径下、分配置根（`/AI/vllm_sdk/models`，`init()` 入参）与权重根（`/AI/VLM/models/qwen3-omni-4b`）两个目录；genai 形态经 `model_path` **绝对路径**定位权重（非 `model_root` 相对跟随，那是 aiservice 形态机制）。**完整「谁读谁」目录树（含第三个根 `raw_src`）以 [设备部署与上车流程 §2.2](device-deployment.html) 为权威**，本篇 §3.3 只记 APK 侧的读取入口。
 
 ### 1.2 端到端调用链
 
@@ -446,7 +446,11 @@ public void writeChunk(String text) { queue.put(text.getBytes(UTF_8)); }
 
 ### 6.1 句柄模型
 
-`nativeCreate()` 在堆上 `new (std::nothrow) banma::ModelInference()`，把指针 `reinterpret_cast<jlong>` 返回给 Java 作为 `nativeHandle`；分配失败返回 **0** 作为哨兵（Java 侧构造函数检测到 0 即抛 `RuntimeException`）。后续所有调用把该 long 转回指针，且每个入口先 `ThrowIfNull` + `ExceptionCheck` 兜底空 handle。`nativeDestroy()` 负责 `delete`。Java 侧 `BanmaModelInference` 实现 `AutoCloseable`，`close()` 与 `finalize()` 双保险释放（`close()` 后把 `nativeHandle` 置 0，避免重复 `delete`）。
+`nativeCreate()` / `nativeDestroy()` 的句柄生命周期：
+
+- **创建**：`nativeCreate()` 在堆上 `new (std::nothrow) banma::ModelInference()`，把指针 `reinterpret_cast<jlong>` 返回给 Java 作为 `nativeHandle`；分配失败返回 **0** 作哨兵（Java 侧构造函数检测到 0 即抛 `RuntimeException`）。
+- **使用**：后续所有调用把该 long 转回指针，且每个入口先 `ThrowIfNull` + `ExceptionCheck` 兜底空 handle。
+- **销毁**：`nativeDestroy()` 负责 `delete`；Java 侧 `BanmaModelInference` 实现 `AutoCloseable`，`close()` 与 `finalize()` 双保险释放（`close()` 后把 `nativeHandle` 置 0，避免重复 `delete`）。
 
 ### 6.2 SDK 接口面（ModelInference API）
 
@@ -580,13 +584,13 @@ p->inference_msg(msg, stream, cb);
 ```
 
 > [!WARNING]
-> **六个 JNI 易错点（含真实代码里踩过的）**
+> **modelinfer.cpp 实际踩到/存在的 JNI 坑**
 >
-> ① **全局引用**：局部引用跨线程即失效，必须 `NewGlobalRef`，且记得在末帧 `DeleteGlobalRef` 防泄漏。② **AttachCurrentThread 要配 `needDetach` 守卫**：若回调恰好发生在**已 attach 的 Java 线程**上（`GetEnv` 返回 `JNI_OK`），对它无条件 `DetachCurrentThread()` 是经典错误（会解掉别人的 attach）。真实代码用 `needDetach` 标志，只 detach 本线程自己 attach 的情况。③ **`DeleteGlobalRef` 只在 `finished` 时做 → 超时请求会泄漏全局引用**：若一次推理被第 8 节的 35s 超时掐掉、SDK 始终没回 `finished=true`，`gHandler` 这个全局引用就永远不会被释放（每超时一次泄一个）；`inference_msg` 直接返回 false 时倒是会立即 `DeleteGlobalRef`，泄漏只发生在「调用成功但末帧不来」这一种情形。④ **GetStringUTFChars 配对 Release**：`JStringToStdString` 内取完即释放，避免内存泄漏。
+> JNI 通用易错点——全局引用 `NewGlobalRef`/`DeleteGlobalRef`（上方代码第 1/5 步）、`AttachCurrentThread` 配 `needDetach` 守卫（第 3 步）、`GetStringUTFChars` 配对 `Release`——原理见 [**Android 开发 & JNI 基础 §5.2/§5.3**](../../general/android-jni.html)。本篇只记真实代码里的三处问题：
 >
-> ⑤ **`NewStringUTF` 回传模型文本踩 Modified UTF-8 陷阱**：回调里 `envCb->NewStringUTF(result.c_str())` 把 SDK 产出的**标准 UTF-8** 文本直接喂给 `NewStringUTF`，而后者期望的是 JNI 的 **Modified UTF-8**（≈CESU-8 + NUL 编成 `0xC0 0x80`）。模型生成的对话文本几乎必然含 emoji / 增补平面字符（码点 > U+FFFF，标准 UTF-8 是 4 字节、Modified 要拆成代理对各 3 字节），开 CheckJNI 会当场 abort（`input is not valid Modified UTF-8`），未开 CheckJNI 则**静默产出错乱字符串**——不崩但结果错，比崩更难查。反方向 `JStringToStdString` 用 `GetStringUTFChars` 取到的也是 Modified UTF-8，直接塞进 `msg.content` 交给按标准 UTF-8 处理的 tokenizer 同样有风险。正解是绕开 `*StringUTF`、用 `GetStringChars`/`NewString` 自行做 UTF-16↔标准 UTF-8 转换，详见 [Android 开发 & JNI 基础 §5.2](../../general/android-jni.html)。
->
-> ⑥ **回调后缺 `ExceptionCheck`**：`CallVoidMethod(gHandler, onReplyMid, ...)` 之后没有 `envCb->ExceptionCheck()`。若 Java 侧 `onReply` 抛异常，异常会**挂起在该 native 线程上**，后续 JNI 调用（包括同线程下一次回调）行为未定义；正确做法是回调后检查并 `ExceptionClear()`（或记录后清除），避免 pending exception 污染线程状态。
+> - **③ 超时请求泄漏全局引用**：`DeleteGlobalRef` 只在 `finished` 时做（第 5 步）——若一次推理被 §8 的 35s 超时掐掉、SDK 始终没回 `finished=true`，`gHandler` 全局引用就永不释放（每超时一次泄一个）；`inference_msg` 直接返回 false 时会立即 `DeleteGlobalRef`，泄漏只发生在「调用成功但末帧不来」这一种情形。
+> - **⑤ `NewStringUTF` 回传模型文本踩 Modified UTF-8 陷阱**：第 4 步 `envCb->NewStringUTF(result.c_str())` 把 SDK 产出的标准 UTF-8 文本直接喂给期望 Modified UTF-8 的 `NewStringUTF`；模型对话文本几乎必然含 emoji / 增补平面字符，开 CheckJNI 当场 abort、未开则静默产出错乱字符串（比崩更难查）。正解是绕开 `*StringUTF`、用 `GetStringChars`/`NewString` 自行做 UTF-16↔标准 UTF-8 转换（见 android-jni §5.2）。
+> - **⑥ 回调后缺 `ExceptionCheck`**：第 4 步 `CallVoidMethod(gHandler, onReplyMid, ...)` 之后没有 `envCb->ExceptionCheck()`；若 Java 侧 `onReply` 抛异常会挂起在该 native 线程上，污染后续 JNI 调用。应在回调后检查并 `ExceptionClear()`。
 
 ## 7. 场景与三阶段流式协议
 
