@@ -106,6 +106,18 @@
           ]
         },
         {
+          "title": "端侧调试与排障",
+          "file": "cockpit/general/troubleshooting.html",
+          "badge": "Part 8",
+          "status": "done",
+          "desc": "调试工具链与排障方法论：工具总览、排障决策树、FastRPC 六步法、LLM 精度调试、内存与 OOM 排障、Crash 分析",
+          "tags": [
+            "调试",
+            "排障",
+            "工具链"
+          ]
+        },
+        {
           "title": "Android 开发 & JNI 基础",
           "file": "cockpit/general/android-jni.html",
           "badge": "基础",

@@ -387,7 +387,7 @@ graph LR
 > - **DSP/HTP 侧内存（必须一并看，PSS 不体现）**：Context Binary、graph 缓冲等 HTP 侧内存以 **dma-buf** 形式存在，**不计入 CPU 侧 PSS/VmRSS**——只看 `pmap` PSS 会漏掉 NPU 侧的泄漏：
 >   - `dmabuf_dump <pid>` 看该进程持有的 dma-buf 缓冲
 >   - 或遍历 `/proc/<pid>/fdinfo/` 里 dma-buf 类型的 fd 做统计
-> - **标准口径（与 1.2 架构图 `MEM[内存池 VmRSS + dma-buf]` 对齐）**：全站「推理进程占了多少内存」= **VmRSS + dma-buf 合计**；注意 **PSS ≠ VmRSS + dma-buf**，两套口径不可直接互比（见 [调试与工具链 · 内存监控与预警（§3.3）](../agent-framework/debug.html)）。
+> - **标准口径（与 1.2 架构图 `MEM[内存池 VmRSS + dma-buf]` 对齐）**：全站「推理进程占了多少内存」= **VmRSS + dma-buf 合计**；注意 **PSS ≠ VmRSS + dma-buf**，两套口径不可直接互比（见 [端侧调试与排障 · 内存监控与预警（§3.3）](../../general/troubleshooting.html)）。
 > - **结论**：场景切换时的内存波动属正常内存池分配/回收。**排除泄漏要两套口径都不单调递增**——CPU 侧 PSS/VmRSS 峰值（实测未单调递增）与 DSP 侧 dma-buf 持有量需分别观察；若当时排查只覆盖了 `pmap` PSS、未用 `dmabuf_dump` 采样 dma-buf，则 NPU 侧口径**待补**，不能仅凭 PSS 就宣布「排除内存泄漏」。
 
 > [!IMPORTANT]
