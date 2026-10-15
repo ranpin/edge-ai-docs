@@ -21,6 +21,30 @@
 
 ## 3. 方法总览
 
+下图是 Qwen3-Omni-4B 在岚图 8397（SA8397P · Hexagon NPU）端侧量产落地的**全景架构**——从离线模型制备，到车机运行时的两条推理形态与场景业务，再到宿主 APK 服务化与部署运维。下面 §3.1–§3.6 按这条链路逐段展开，每节链接到对应的工程详解文档。
+
+```mermaid
+graph TD
+    subgraph PREP["① 模型制备（离线）"]
+        Q["Qwen3-Omni-4B 浮点"] --> AIMET["AIMET INT4 量化<br/>W4A16 · 7 LoRA · 11 prefix"]
+        AIMET --> QNN["QNN 转换<br/>消费 .encodings"]
+        QNN --> CB["Context Binary<br/>基模 / LoRA / 两档 VIT"]
+        CB --> GENIE["Genie 配置 config.json"]
+    end
+    subgraph RUN["② 车机运行时（SA8397P · Hexagon NPU）"]
+        GENIE --> FORM{"推理形态"}
+        FORM -->|GenAI| GAI["QNN/QAIRT 进程内<br/>Genie 自研链路"]
+        FORM -->|AIService| AIS["HTTP/SSE 服务化<br/>VoyahAIService :8090"]
+        GAI --> BIZ["场景业务<br/>舱内 遗留物/儿童/衣着 · 舱外 三阶段问答<br/>多 VIT 两档路由 · 前缀缓存"]
+        AIS --> BIZ
+        BIZ --> APK["宿主 APK 服务化<br/>JNI + NanoHTTPD + 前台服务自愈"]
+    end
+    subgraph OPSG["③ 部署与运维"]
+        APK --> DEP["SDK 构建 → adb push → 设备目录<br/>两个模型根目录"]
+        DEP --> SEC["SELinux · 功能安全 · 隐私<br/>OTA 双槽 · 模型加密"]
+    end
+```
+
 ### 3.1 GenAI 方案架构
 
 Qwen3-Omni-4B 端侧部署整体架构：模型制备链路（AIMET INT4 → Context Binary → Genie）、多 VIT 动态切换、7 条 LoRA / 11 prefix 映射、前缀缓存、DeepStack、三阶段推理链路。详见 [**GenAI 方案架构总览**](genai-architecture.html)。
