@@ -1,45 +1,32 @@
 # 设备部署
 
-*基于 Qualcomm SA8397P 平台  |  QNN 框架 · ISP 数据流 · 多模型调度 · Context Binary*
+*基于 Qualcomm SA8397P 平台  |  aadkcore 框架的量产部署*
 
 > [!TIP]
 > **本篇讲什么**
 >
-> Qwen3-Omni-4B 在 SA8397P 上的**设备部署**全链路：
+> 只记 aadkcore 框架在 SA8397P 上**设备部署**的框架/项目强相关部分：
 >
-> - QNN 推理框架：架构分层、完整部署流水线、与其他推理框架对比
-> - ISP 与端到端数据流：ISP 处理流水线、延迟分解、Zero-Copy 数据通路
-> - 多模型调度与优化：单帧多模型调度时序、调度策略、Context Binary 与车规要求
-> - 集成部署方式：Service / 可执行文件 / APK 集成 SO / 模型配置与多 LoRA
-> - OTA 模型更新、性能基准测试、ONNX→QNN 转换陷阱
+> - 锚点模型的部署形态（W4A16 / FP16 序列化 Context Binary、Genie/QAIRT 路径）
+> - VLM 链路的数据流特点（并非纯 Zero-Copy）
+> - 请求级调度：ModelScheduler（优先级 / 抢占 / worker）
+> - 集成部署方式：Service / 多平台交叉编译 / 模型配置与多 LoRA
+>
+> **通用知识不在本篇**：QNN 架构与推理框架对比、ISP 流水线、多模型调度时序、Context Binary 冷启动、OTA 更新、性能基准方法论、ONNX→QNN 转换，见通识篇 [LLM 推理原理与性能模型](../../general/infer-principles.html)、[硬件架构](../../general/hardware.html)、[端侧部署与运维](../../general/deployment-ops.html)、[端侧模型量化与压缩](../../general/quantization.html)。
 >
 > **代码基线**：aadkcore 仓库，构建脚本 `build_8397_android.sh` / `build_8397_linux.sh` / `build_8295_android.sh` / `build_9075_linux.sh`。
 
-## 1. QNN 推理框架
+## 1. 锚点模型的部署形态
 
-> QNN 架构分层、QNN/SNPE/TFLite 推理框架对比、CNN 经典部署流水线、Context Binary 冷启动收益与版本绑定，属通用推理引擎知识，见 [**LLM 推理原理与性能模型**](../../general/infer-principles.html)：QNN 架构分层 §6.3、推理框架对比 §6.4、CNN 部署流水线 §7.1、Context Binary 冷启动/版本绑定 §7.2、Genie/QAIRT LLM 部署流程 §7。
+本篇锚点模型（Qwen3-Omni-4B）当前产物以 **W4A16**（LLM 权重，见 [量化](../../general/quantization.html)）与 **FP16**（视觉/音频编码器 Context Binary）为主；LLM/VLM 走 Genie/QAIRT 路径编译为**序列化 Context Binary**（即 §4.3 模型配置里的 `*.serialized.bin`），运行时由 Genie/QAIRT runtime 负责 KV Cache 管理与 LoRA 热插拔。ONNX→QNN 的通用转换陷阱见 [端侧模型量化与压缩 · §6](../../general/quantization.html)；aadkcore 锚点模型走 Genie/QAIRT 的 W4A16 导出路径，与 CNN 转换路径不同（见 [LLM 推理原理与性能模型 · §7](../../general/infer-principles.html)）。**FP8** 等更低位宽是 2025+ 新一代 HTP 的方向，但 SA8397P（HTP arch v81）是否支持 FP8 推理**需核实**，勿想当然写进部署方案。
 
-> [!NOTE]
-> **aadkcore 锚点模型的部署口径**
->
-> 本篇锚点模型（Qwen3-Omni-4B）当前产物以 **W4A16**（LLM 权重，见 [量化](../../general/quantization.html)）与 **FP16**（视觉/音频编码器 Context Binary）为主；LLM/VLM 走 Genie/QAIRT 路径编译为**序列化 Context Binary**（即 §4.3 模型配置里的 `*.serialized.bin`），运行时由 Genie/QAIRT runtime 负责 KV Cache 管理与 LoRA 热插拔。**FP8** 等更低位宽是 2025+ 新一代 HTP 的方向，但 SA8397P（HTP arch v81）是否支持 FP8 推理**需核实**，勿想当然写进部署方案。
+## 2. VLM 链路的数据流特点
 
-## 2. ISP 与端到端数据流
+平台级 Zero-Copy（ISP→HTP dma-buf，见 [硬件架构 §8.3](../../general/hardware.html)）覆盖的是「摄像头→原始帧」这一段；而 aadkcore 收到的是经 Fusion IPC 传来的**图像字节**，先在 **CPU 做预处理**（resize / patchify / normalize 成 float 张量），再 `memcpy` 进 AISA 张量喂给 HTP 上的视觉编码器。也就是说 VLM Agent 的端到端链路**并非纯 Zero-Copy**——预处理这一段存在 CPU 拷贝。真正端到端 Zero-Copy（ISP 输出直灌视觉编码器）属于定长管线的 DMS/感知范式，与通用 VLM-Agent 的「任意分辨率 + 预处理」模式不同，做延迟预算时要分开算。
 
-> ISP 处理流水线、端到端延迟分解、Zero-Copy 数据通路（含定长 POD / 对齐 / heap 约束、ION→dma-buf 演进）属通用硬件知识，见 [**硬件架构 · ISP 与摄像头数据通路（§8）**](../../general/hardware.html)；零拷贝的 cache 一致性规则见 hardware §4.3。本节只记 aadkcore VLM 链路的特定情况。
+## 3. 请求级调度：ModelScheduler（优先级 / 抢占 / worker）
 
-> [!NOTE]
-> **aadkcore 的 VLM 链路并非纯 Zero-Copy**
->
-> 平台级 Zero-Copy（ISP→HTP dma-buf，见 [硬件架构 §8.3](../../general/hardware.html)）覆盖的是「摄像头→原始帧」这一段；而 aadkcore 收到的是经 Fusion IPC 传来的**图像字节**，先在 **CPU 做预处理**（resize / patchify / normalize 成 float 张量），再 `memcpy` 进 AISA 张量喂给 HTP 上的视觉编码器。也就是说 VLM Agent 的端到端链路**并非纯 Zero-Copy**——预处理这一段存在 CPU 拷贝。真正端到端 Zero-Copy（ISP 输出直灌视觉编码器）属于定长管线的 DMS/感知范式，与通用 VLM-Agent 的「任意分辨率 + 预处理」模式不同，做延迟预算时要分开算。
-
-## 3. 多模型调度与优化
-
-> 单 cDSP 多 graph 时分复用、多模型调度策略对比、单帧多模型调度时序示例，属通用调度知识，见 [**LLM 推理原理与性能模型 · §5 执行与调度**](../../general/infer-principles.html)（§5.6 调度策略对比、§5.7 单帧多模型调度时序）。本节只记 aadkcore 的请求级调度（§3.1 ModelScheduler）。
-
-### 3.1 aadkcore 请求级调度：ModelScheduler（优先级 / 抢占 / worker）
-
-上面 [LLM 推理原理与性能模型](../../general/infer-principles.html) §5.6–§5.7 讲的是「一帧内多个模型如何共享 HTP」的通用时序；而 aadkcore 框架自身的调度发生在**请求级**——`ModelScheduler`（`src/runtime/model_scheduler.cpp`，单例）把各场景 Agent 提交的推理请求排成一个**优先级队列**，再交给模型实例执行。它直接消费 §4.3 `runtime_config.json` 的 `worker_count` / `capacity` / `timeout_s` 三个字段。
+通用「一帧内多个模型如何共享 HTP」的调度时序见 [LLM 推理原理与性能模型 · §5.6–§5.7](../../general/infer-principles.html)；aadkcore 框架自身的调度发生在**请求级**——`ModelScheduler`（`src/runtime/model_scheduler.cpp`，单例）把各场景 Agent 提交的推理请求排成一个**优先级队列**，再交给模型实例执行。它直接消费 §4.3 `runtime_config.json` 的 `worker_count` / `capacity` / `timeout_s` 三个字段。
 
 **优先级与出队顺序**：任务优先级取自 `PriorityBase` 枚举（`LOW=10 / NORMAL=20 / HIGH=30 / CRITICAL=40`）。出队不是单纯按优先级，而是一个加权分数（`CompareTask`）：
 
@@ -53,12 +40,12 @@ score = priority × 2.0 + wait_ms × 0.1 × 0.001
 
 **超时提权**：`SubmitTask` 等待结果超过一个 `timeout_s` 后调用 `BoostPriority(+10)`（封顶 30）把任务往前挪，再等一个 `timeout_s`；二次超时则 `StopTask` 取消。
 
-**worker ≠ 并行推理**：`Start()` 按 `worker_count` 起若干 worker 线程从队列取任务，但真正的推理（`onProcessing`）被一把 `generate_mutex_` **串行化**——同一时刻只有一个任务在模型实例上执行。因此调大 `worker_count` 提升的是「取任务 + 前后处理」的并发度，**不是** HTP 上的并行推理度；这与 §3.1「单 cDSP 时分复用」一致：多 worker 抢的是同一把推理锁、同一个 HTP。
+**worker ≠ 并行推理**：`Start()` 按 `worker_count` 起若干 worker 线程从队列取任务，但真正的推理（`onProcessing`）被一把 `generate_mutex_` **串行化**——同一时刻只有一个任务在模型实例上执行。因此调大 `worker_count` 提升的是「取任务 + 前后处理」的并发度，**不是** HTP 上的并行推理度；这与单 cDSP 时分复用的事实一致（见 [LLM 推理原理与性能模型 · §5.6](../../general/infer-principles.html)）：多 worker 抢的是同一把推理锁、同一个 HTP。
 
 > [!WARNING]
 > **分支口径：本节描述的是岚图 `lantu_sdk_dev` 分支的调度行为**
 >
-> 本篇属框架研发层，但 §3.1/§4.3 的调度器细节是对**岚图 `lantu_sdk_dev` 分支**（当前部署形态）核实的——该分支上 `generate_mutex_` 恒串行化、`generate_concurrent`/`enable_timeslice`/`batch_count` 无读取点、`worker_count` 被钳到硬件并发数。**主线 `origin/agent_core_dev` 与此分叉**：`generate_concurrent`（默认 true）为 true 时 `SchedulerLoop` 不取 `generate_mutex_`（可并发跑 `onProcessing`）、上述字段均被读取、`worker_count` 不钳制（对应 assert 已注释）。两者是真实代码分叉而非笔误，调优前务必确认自己所在分支，分支差异对照见 [aadkcore 核心框架](agent-core.html) §4.4。
+> 本篇属框架研发层，但 §3/§4.3 的调度器细节是对**岚图 `lantu_sdk_dev` 分支**（当前部署形态）核实的——该分支上 `generate_mutex_` 恒串行化、`generate_concurrent`/`enable_timeslice`/`batch_count` 无读取点、`worker_count` 被钳到硬件并发数。**主线 `origin/agent_core_dev` 与此分叉**：`generate_concurrent`（默认 true）为 true 时 `SchedulerLoop` 不取 `generate_mutex_`（可并发跑 `onProcessing`）、上述字段均被读取、`worker_count` 不钳制（对应 assert 已注释）。两者是真实代码分叉而非笔误，调优前务必确认自己所在分支，分支差异对照见 [aadkcore 核心框架](agent-core.html) §4.4。
 
 > [!NOTE]
 > **端侧权衡**：请求级优先级 + 抢占保住了高优场景的 TTFT，代价是被抢占任务已生成的 token 作废、需重新排队；`generate_mutex_` 串行化避免了多请求同时压 HTP 造成 KV Cache 抖动，但也意味着**加 worker 对吞吐几乎无益**（瓶颈在单实例串行推理）。尤其要注意：`ModelScheduler` 是**单例**、`generate_mutex_` 全局只有一把——即便开 §4.3 `--dual` 建了第二个 ModelInstance，两个实例的推理仍被**同一把锁串行化**、仍时分复用同一 HTP。`--dual` 换来的是「主对话与主动视觉各持独立权重 / KV Cache、省去角色间 LoRA 切换与缓存抖动」的**隔离性**，而**不是并行度**。要在单 cDSP 上真正提吞吐，只能寄望模型引擎侧的批处理 / 时分复用（即 §4.3 那几个当前未接线的字段）；框架层加 worker 或加实例都改变不了「同一时刻只有一个任务在 HTP 上跑」这一事实。
@@ -248,7 +235,7 @@ aadkcore 的运行时配置**按平台目录组织**：`runtime/data/config/` �
 > [!WARNING]
 > **并非所有字段都被框架消费（核对代码后的口径）**
 >
-> `ModelScheduler` 构造函数实际只读取 **`worker_count` / `capacity` / `timeout_s`** 三个字段（见 §3.1）。`generate_concurrent`、`enable_timeslice` / `timeslice_ms`、`batch_count` 在当前 aadkcore 框架源码中**没有任何读取点**——它们随配置文件保留，但调度行为并不受其影响。这几项要么是为闭源推理引擎（`libllms.so`）侧的并发/时分复用预留、要么是历史遗留字段（**具体由谁消费需核实**）。调参时不要指望改这几个字段能改变框架的并发/批处理行为；真正生效的并发杠杆是 `--dual` 双实例（§4.3）与 `worker_count`（仅影响取任务并发，不影响 HTP 并行度，见 §3.1）。
+> `ModelScheduler` 构造函数实际只读取 **`worker_count` / `capacity` / `timeout_s`** 三个字段（见 §3）。`generate_concurrent`、`enable_timeslice` / `timeslice_ms`、`batch_count` 在当前 aadkcore 框架源码中**没有任何读取点**——它们随配置文件保留，但调度行为并不受其影响。这几项要么是为闭源推理引擎（`libllms.so`）侧的并发/时分复用预留、要么是历史遗留字段（**具体由谁消费需核实**）。调参时不要指望改这几个字段能改变框架的并发/批处理行为；真正生效的并发杠杆是 `--dual` 双实例（§4.3）与 `worker_count`（仅影响取任务并发，不影响 HTP 并行度，见 §3）。
 
 > [!NOTE]
 > **runtime\_config.json 只承载调度参数，模型本体加载走 multi\_lora\_runtime\_config.json**
@@ -345,20 +332,7 @@ flowchart LR
 >
 > 多 LoRA 架构通过 `scene_id` 自动路由到对应的 LoRA 适配器。基础模型权重常驻**系统内存（DDR）**（执行时按 tiling 分块调入 HTP VTCM，见 [LLM 推理原理与性能模型](../../general/infer-principles.html) §7.2），LoRA 增量权重按需加载。切换 LoRA 仅需替换增量权重（量级示意：通常 < 100MB，与 [端侧部署与运维](../../general/deployment-ops.html) §1.1 OTA 表的「200KB–50MB」同为量级口径），无需重新加载基础模型（量级示意：~2.5GB），切换延迟在毫秒级。这使得同一个 4B 参数基础模型能同时服务多个业务场景（不同 `scene_id` 各自路由到自己的 LoRA，多个场景也可复用同一 LoRA），无需为每个场景单独部署一份完整模型。上例 `scene_id` 与 `name`/`lora_path` 取自主线 8397 配置，不同产品形态的取值与含义可能不同（见上方 NOTE）。
 
-## 5. OTA 模型更新
-
-> OTA 更新策略分级、安全更新流程（签名 / A-B 分区 / 回滚 / 原子切换 / 双槽）属通用部署运维方法论，见 [**端侧部署与运维 · OTA 模型更新（§1）**](../../general/deployment-ops.html)。本节只记 aadkcore 特定的版本兼容口径。
-
 > [!NOTE]
 > **aadkcore 的版本兼容性由「模型包 + 配置」配对保证**
 >
-> 新 LoRA 与基座的兼容性由 `model_path` + `multi_lora_runtime_config.json` 的 `lora[]` 列表 + 模型 json 的 `lora_params[].adapter_alpha` 配对保证，而**不是** `runtime_config.json` 里的某个版本号字段（该文件只承载 §3.1 的调度参数，无版本字段）。Context Binary 还受 QNN 工具链 / HTP 架构版本绑定（[LLM 推理原理与性能模型](../../general/infer-principles.html) §7.2 WARNING、§4.3 NOTE），OTA 升级 QNN runtime 时必须连同 `*.serialized.bin` 一起重刷。换版/回滚瞬间的在途请求应借 §3.1 的 `StopTask` / 抢占机制优雅排空，而非硬切。
-
-## 6. 性能基准测试
-
-> 基准测试方法论、标准测试 Checklist、关键性能指标（TTFT / TPOT / E2E / 模型加载 / 内存峰值）属通用方法论，见 [**端侧部署与运维 · 性能基准测试（§2）**](../../general/deployment-ops.html)。aadkcore 侧实测口径：推理进程名为 `system_agent`，内存按 **VmRSS + per-process dma-buf** 合计（仅看 VmRSS 会低估 3 倍以上）；框架自带的性能数据来源（`ModelResponse.ttft/tokens_per_second`、随响应回传的 `debug_info`、`model_runner.cpp` 的 PERF 日志）见 [**调试与工具链 · §2.3 性能数据采集**](debug.html)。
-
-## 7. ONNX → QNN 转换陷阱
-
-> ONNX 导出 / QNN 转换 / LLM 特有转换陷阱与转换验证 Checklist，属通用模型转换知识，见 [**端侧模型量化与压缩 · §6 ONNX → QNN 转换陷阱**](../../general/quantization.html)。aadkcore 锚点模型（Qwen3-Omni-4B）走 Genie/QAIRT 的 W4A16 导出路径（序列化 Context Binary，见 §4.3 模型配置），CNN 与 LLM 转换路径不同，见 [LLM 推理原理与性能模型 · §7](../../general/infer-principles.html)。
-
+> 新 LoRA 与基座的兼容性由 `model_path` + `multi_lora_runtime_config.json` 的 `lora[]` 列表 + 模型 json 的 `lora_params[].adapter_alpha` 配对保证，而**不是** `runtime_config.json` 里的某个版本号字段（该文件只承载 §3 的调度参数，无版本字段）。Context Binary 还受 QNN 工具链 / HTP 架构版本绑定（[LLM 推理原理与性能模型](../../general/infer-principles.html) §7.2 WARNING，及本节上方 `config_path` NOTE），OTA 升级 QNN runtime 时必须连同 `*.serialized.bin` 一起重刷。换版/回滚瞬间的在途请求应借 §3 的 `StopTask` / 抢占机制优雅排空，而非硬切。

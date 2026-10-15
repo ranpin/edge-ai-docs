@@ -65,7 +65,7 @@ flowchart LR
 | 文档 | 讲什么 |
 | :--- | :--- |
 | [项目简介 · 大模型 Agent 框架](../projects/agent-framework/overview.html) | 框架整体架构与模块划分（项目主页式简介） |
-| [设备部署](../projects/agent-framework/deploy.html) | QNN 推理框架、多平台构建矩阵、Service 量产部署 |
+| [设备部署](../projects/agent-framework/deploy.html) | 锚点模型部署形态、ModelScheduler 请求级调度、多平台构建矩阵、Service 量产部署、模型配置与多 LoRA |
 | [aadkcore 核心框架](../projects/agent-framework/agent-core.html) | 架构总览、统一模型接口、模型调度、多音区对话管理、RAG |
 | [协议与运行时执行](../projects/agent-framework/agent-protocols.html) | MCP/A2A 协议、运行时与插件机制、LLM Flow 与 Tool Use、端云协同与安全沙箱 |
 | [场景 Agent 应用](../projects/agent-framework/agent-group.html) | 场景 Agent 插件机制（车控/主动视觉/闲聊/GUI 等） |

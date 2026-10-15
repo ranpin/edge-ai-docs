@@ -139,7 +139,9 @@ aadkcore 的性能数据来自三个层次（早期厂商侧 `registerProfilingC
 
 ## 3. 内存排障的 aadkcore 口径
 
-内存构成、KV Cache OOM、VmRSS + dma-buf 监控口径等**通用方法**见 [端侧调试与排障 · §3 内存与 OOM 排障](../../general/troubleshooting.html)。本节只记 aadkcore 框架特有的两点。
+内存构成、KV Cache OOM、VmRSS + dma-buf 监控口径等**通用方法**见 [端侧调试与排障 · §3 内存与 OOM 排障](../../general/troubleshooting.html)。本节只记 aadkcore 框架特有的口径与现状。
+
+aadkcore 推理进程名为 `system_agent`，内存按 **VmRSS + per-process dma-buf** 合计——仅看 VmRSS 会**低估 3 倍以上**（DSP/NPU 内存走设备侧 dma-buf，不计入 VmRSS），排查「内存去哪了」先 `dmabuf_dump` 看设备侧。
 
 > [!NOTE]
 > **框架自带测试程序用的就是这套口径**
