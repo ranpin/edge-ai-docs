@@ -153,7 +153,7 @@
   }
   nav.innerHTML = '<a class="logo" href="' + base + 'index.html"><span class="en-logo-txt">Edge AI Docs</span></a>' +
     '<div class="en-cats"></div>' +
-    '<div class="right">' + editHtml + '<button type="button" class="theme-btn" id="langBtn">EN</button><button type="button" class="theme-btn" id="themeBtn">&#9790; / &#9788;</button></div>';
+    '<div class="right">' + editHtml + '<button type="button" class="theme-btn notranslate" id="langBtn" translate="no">EN</button><button type="button" class="theme-btn" id="themeBtn">&#9790; / &#9788;</button></div>';
 
   // 中英文切换：走 Google Translate 代理（translate.goog），点开即整站机翻。
   // 原文页 -> 英文代理页；已在代理页（host 以 .translate.goog 结尾）-> 回中文原文。
