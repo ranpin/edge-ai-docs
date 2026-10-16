@@ -168,9 +168,9 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 | 1100 | incar_item_detect | `cnyb` | `cnyb-left`（遗留物）、`cnyb-child`（儿童 person_desc） |
 | 1200 | cloth_detect | `cnyb` | `cnyb-cloth`（dress_detect） |
 | 1300 | grounding_sr | `dwsr` | `dwsr`（一阶段粗分类，约束解码） |
-| 1300 | grounding_base | `dwbs` | `dwbs`（无特定目标时的兜底 grounding；**仍是 dwbs adapter，非基模**，按 camera_id 选用，见 4.2 代码落点） |
+| 1300 | grounding_base | `dwbs` | `dwbs`（无特定目标时的兜底 grounding；**仍是 dwbs adapter，非基模**，按 camera_id 选用，见 4.3 代码落点） |
 | 1300 | visual_assistant | `znzs` | `znzs-car/sign/animal/plant/general`（二阶段精细化）、`znzs-nlg`（三阶段 NLG） |
-| 1300 | general_base | `default_adapter` | 通识兜底（二阶段 label=通识 时挂 `znzs-general` 前缀——prefix 名与 adapter 解耦，见 4.2.2） |
+| 1300 | general_base | `default_adapter` | 通识兜底（二阶段 label=通识 时挂 `znzs-general` 前缀——prefix 名与 adapter 解耦，见 4.3.2） |
 
 **数量关系（务必分清四个层级，不要混为一谈）**：
 
@@ -222,13 +222,13 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 | `SetLoraStrength(2.0)` | 硬编码 | `lora_id != -1` | LoRA 融合强度（即 Genie 的 lora_alpha），**genai 路径写死 2.0、非配置项**（配置里的 `lora_alpha` 字段不被解析器读取） |
 | `SetTemperature/TopP/TopK` = `0.0/1.0/1.0` | 硬编码 | 两分支都设 | 等价 greedy，与 2.4 的 `config.json sampler greedy:true` 一致 |
 | `SetCommonPrefix(prefix)` | `if(!prefix_name.empty()) SetCommonPrefix(...)` | **`lora_id != -1` 且 prefix_name 非空** | 命中前缀缓存（见 [效果·性能·稳定性篇](effect-perf-stability.html) §3.1 / §3.3） |
-| `SetDecodeFormat(name)` | `if(cur_lora!="znzs" && cur_lora!="default_adapter") SetDecodeFormat(cur_lora)` | 仅 cnyb / dwsr / dwbs | 解码格式约束（见 4.2） |
+| `SetDecodeFormat(name)` | `if(cur_lora!="znzs" && cur_lora!="default_adapter") SetDecodeFormat(cur_lora)` | 仅 cnyb / dwsr / dwbs | 解码格式约束（见 4.3） |
 
 > [!IMPORTANT]
 > **三条容易踩的结构耦合（均已对 `qnn_model.cpp` 逐行核实）**
 >
 > 1. **前缀缓存与「具名 LoRA」绑定**：`SetCommonPrefix` 写在 `if (lora_id != -1)` 分支内。走基模（`lora_id == -1`，即 scene 1003 或 `__base__`/`base`/`base_model` 强制基模）时，**即使 dispatcher 传了 prefix_name 也不会下发前缀**——基模分支只设 temperature/top_p/top_k。所以「基模 + 前缀缓存」在 genai 形态**不是合法组合**。
-> 2. **解码格式约束只覆盖 3 个 adapter**：`SetDecodeFormat` 对 `znzs` 与 `default_adapter` **显式跳过**（源码注释 "does not need to set"）。即舱外二阶段（visual_assistant=znzs）、三阶段 NLG（znzs）、通识兜底（general_base=default_adapter）**都不走 Genie 解码格式约束**，只有舱内 cnyb 与一阶段 grounding（dwsr/dwbs）走。这直接修正了 4.2 旧版「二阶段约束解码」的说法（见 4.2.1）。
+> 2. **解码格式约束只覆盖 3 个 adapter**：`SetDecodeFormat` 对 `znzs` 与 `default_adapter` **显式跳过**（源码注释 "does not need to set"）。即舱外二阶段（visual_assistant=znzs）、三阶段 NLG（znzs）、通识兜底（general_base=default_adapter）**都不走 Genie 解码格式约束**，只有舱内 cnyb 与一阶段 grounding（dwsr/dwbs）走。这直接修正了 4.3 旧版「二阶段约束解码」的说法（见 4.3.1）。
 > 3. **`SetDecodeFormat` 传的是 LoRA 名**，由 Genie 侧据此选择已注册的解码格式；**改名 / 缺对应格式会静默失效**（不报错、只是不再约束），与 [AIService 后端集成](aiservice-integration.html) 记录的 grammar 改名坑同源。genai 形态的 `multi_lora_runtime_config.json` 已**不含** `ebnf_path`/`enable_constrained_decoding` 字段（`model_runner` 里那道 `enable_constrained_decoding && ebnf_path` 门禁在本形态恒不触发），约束解码只经 `SetDecodeFormat` 这一条路。
 
 > [!IMPORTANT]
@@ -240,7 +240,7 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 > 2. **该请求走具名 LoRA（`lora_id != -1`）**——`SetCommonPrefix` 只在具名 LoRA 分支调用；基模推理（scene 1003 / `__base__`）即使传了 prefix_name 也不下发（即上方结构耦合①）；
 > 3. **dispatcher 在 `schedule_run_sync(..., prefix_name)` 末参显式传入**，且模型包内存在该 prefix 的预计算 KV（`SetCommonPrefix` 只传名字，KV 由 Genie 按名解析；缺文件 / 改名会静默不命中）。
 >
-> 各链路实际下发的 prefix（舱外逐 label 见 §4.2.2，舱内见 §3.1）：
+> 各链路实际下发的 prefix（舱外逐 label 见 §4.3.2，舱内见 §3.1）：
 >
 > - 舱内遗留物 → `cnyb-left`；舱内儿童（整图 child detect）→ `cnyb-child`；舱内衣着 → `cnyb-cloth`
 > - 舱外一阶段 → `dwsr`（grounding_sr）/ `dwbs`（grounding_base）
@@ -251,19 +251,15 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 
 ## 4. AgentGroup 业务流程
 
-### 4.1 舱内业务处理逻辑
+### 4.1 舱内遗留物检测（`incar_item_detect_dispatcher.cpp`）
 
-| 业务场景 | 预处理策略 | 推理逻辑 | 后处理策略 |
-| :--- | :--- | :--- | :--- |
-| **舱内遗留** | 左右翻转图像（解决 OMS 相机物理镜像） | 两次串行推理（① `person_desc` 全景图识别乘员、过滤儿童 ② 遗留物 LoRA 检测） | 输出结果映射 |
-| **舱内衣着** | 左右翻转图像 | 单次推理 | 边界值处理（避免输出为空/"未知"）、置信度映射 |
+| 阶段 | 策略 |
+| :--- | :--- |
+| 预处理 | 左右翻转图像（`cv::flip(full_img, flipped, 1)`，`flipCode=1` 水平翻转，解决 OMS 相机物理镜像；解码后以 BGR raw 写回 letterboxed_msg） |
+| 推理 | 两次串行：① `person_desc` 全景图识别乘员、过滤儿童 ② 遗留物 LoRA 检测 |
+| 后处理 | 输出结果映射（`map_item_to_english` 物品中英映射 + `region_key_to_position` 区域→位置映射） |
 
-代码落点（均在 `incar_item_detect_dispatcher.cpp`）：
-
-- 翻转：`cv::flip(full_img, flipped, 1)`（`flipCode=1` 水平翻转，解码后以 BGR raw 写回 letterboxed_msg）
-- 遗留物中英映射：`map_item_to_english`（**粗粒度归并，是需求刻意设计，不要"修"**）；区域→位置映射：`region_key_to_position`
-
-**① 遗留物中英映射**（`map_item_to_english`：物品中文名**包含关键字即映射**，未命中返回空、该物品被过滤丢弃）：
+**① 遗留物中英映射**（`map_item_to_english`：物品中文名**包含关键字即映射**，未命中返回空、该物品被过滤丢弃；**粗粒度归并是需求刻意设计，不要"修"**）：
 
 | 接口英文 key | 归并的中文名（含颜色/品牌前缀也按关键字命中） |
 | :--- | :--- |
@@ -291,7 +287,50 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 > - **left↔right 是反的**：因图像已水平翻转（`cv::flip`），LoRA 输出的 `left`/`right` 与车辆实际左右互换，故 region key 与 position 的 left/right 故意对调（`left`→`first_row_right`、`right`→`first_row_left`），不是 bug。
 > - **儿童检测（`person_desc`）当前走全景图、非按座位裁图**：`run_person_desc_inference` 用预处理后的整张 letterboxed 图识别所有乘员、过滤出儿童写入 `output.children`。源码里「按 `seat_pressure` 逐座位裁图 + `SEAT_REGION_MAP` 固定区域」的旧逻辑**已注释停用**（注释原文：*原有的按 seat_pressure 裁图逻辑已注释，后续算法输出解析待与算法团队核对后调整*），故座位→裁图区域映射当前不生效、不要照搬。
 
-### 4.2 舱外问答业务 Pipeline（车辆/动物/植物/交通标识/其它）
+### 4.2 舱内衣着识别（`dress_detect_dispatcher.cpp`）
+
+| 阶段 | 策略 |
+| :--- | :--- |
+| 预处理 | 左右翻转图像 + 按 `voice_zone` 裁图（`crop_by_voice_zone`，无效 zone 用全图兜底）；裁图后缩放到 448×448，走 small VIT |
+| 推理 | 单次推理（衣着识别，每次都触发） |
+| 后处理 | 边界值处理（避免输出为空 / "未知"）+ 置信度映射（`rand_int_in` 区间随机） |
+
+**① voice_zone → 裁图区域映射**（`crop_by_voice_zone` 的 `kVoiceZoneMap`；`voice_zone==0` 或未知 → 返回空 Mat、用全图兜底）：
+
+| voice_zone | 裁图区域 [x1,y1,x2,y2] | 位置 |
+| :--- | :--- | :--- |
+| 1 | [1286, 253, 2591, 1941] | front_left（主驾） |
+| 2 | [1, 251, 1369, 1941] | front_right（副驾） |
+| 4 | [1326, 8, 2032, 812] | middle_left |
+| 8 | [626, 8, 1323, 812] | middle_right |
+| 16 | [1326, 8, 2032, 812] | back_left |
+| 32 | [626, 8, 1323, 812] | back_right |
+
+**② 衣着属性兜底 + 置信度映射**（`fallback_arm/neck/thickness/cloth`：字段为空则从候选随机挑、置信度 0.01；neck 特殊值"未知"→"中领"、置信度 0.2~0.3；非空保持原值、置信度 `rand_int_in(80,95)` 即 0.8~0.95）：
+
+| 属性 | 空值兜底候选（置信度 0.01） | "未知"特殊处理 | 正常置信度 |
+| :--- | :--- | :--- | :--- |
+| 袖子 arm | 无袖 / 短袖 / 长袖 | — | 0.8~0.95 |
+| 领子 neck | 低领 / 中领 / 高领 | "未知"→"中领"，置信度 0.2~0.3 | 0.8~0.95 |
+| 厚度 dressed | 厚 / 中 / 薄 | — | 0.8~0.95 |
+| 衣服类型 cloth | 卫衣 / 衬衫 / T恤 | — | 0.8~0.95 |
+
+**③ 皮肤覆盖率兜底**（`arm_occlusion` / `neck_occlusion`：字段为空时按兜底后的 cover 类型映射到随机区间，输出 `"<整数>%"` 字符串；未知类型退化为"中等覆盖"避免输出 0% 误导下游）：
+
+| cover 类型 | 手臂皮肤覆盖 | 脖子皮肤覆盖 |
+| :--- | :--- | :--- |
+| 吊带 | [0, 5]% | — |
+| 无袖 | [5, 10]% | — |
+| 短袖 | [30, 40]% | — |
+| 长袖 | [85, 90]% | — |
+| 低领 | — | [1, 5]% |
+| 中领 | — | [10, 20]% |
+| 高领 | — | [85, 95]% |
+
+> [!WARNING]
+> **衣着置信度同样是「区间随机」的伪置信度**：与舱外 `compute_confidence_by_mapping` 一样，衣着置信度由 `rand_int_in` 在区间内随机产生（正常 0.8~0.95、neck"未知"0.2~0.3、空值兜底 0.01），**不是模型真实置信度**，同一目标多次推理会抖动，不能当精确概率用。
+
+### 4.3 舱外问答业务 Pipeline（车辆/动物/植物/交通标识/其它）
 
 三阶段流转（代码在 `outcar_qa_dispatcher.cpp`）：
 
@@ -319,7 +358,7 @@ sequenceDiagram
     S3-->>TTS: 输出：NLG流式文本，用于语音播报
 ```
 
-#### 4.2.1 各阶段详细策略拆解表
+#### 4.3.1 各阶段详细策略拆解表
 
 | 推理阶段 | 图像与 Bbox 处理 | 推理策略与 Prompt 组织 | 输出与后处理 |
 | :--- | :--- | :--- | :--- |
@@ -327,7 +366,7 @@ sequenceDiagram
 | **第二阶段** | ① 图像/Bbox 翻转回去（车辆/动物/交通标识反转，植物/通识不反转）② **车辆/动物/交通标识**按 Bbox 扩框 10% 后裁剪到 448×448，bbox 过小/为空则跳过；**植物/通识**忽略 bbox、整图 1024×768（当前 `USE_20260423_RULE` 正式版，逐 label 见下表）③ 类别差异化预处理 | ① 组织图像+Prompt ② **不走 Genie 解码格式约束**（znzs/default_adapter 被 `SetDecodeFormat` 显式跳过，见 3.3）；结构化输出靠 prompt 约定 + 后处理 `parseModelOutputToUnifiedByLabel` 解析 | ① 置信度映射（基于 Bbox 大小）② 标准图像库映射 ③ 细分类标签（name/type/caption），流式解析 |
 | **第三阶段** | 无图像处理 | ① 拼接用户 Query + 二阶段结构化输出作为 User Prompt ② 纯文本推理，**不使用**约束解码（znzs 同样被 `SetDecodeFormat` 跳过） | NLG 流式输出，用于 TTS 播报 |
 
-#### 4.2.2 三阶段逐 label 决策表（`decide_stage2_by_label`，已对 `outcar_process.hpp` / `outcar_qa_dispatcher.cpp` 核实）
+#### 4.3.2 三阶段逐 label 决策表（`decide_stage2_by_label`，已对 `outcar_process.hpp` / `outcar_qa_dispatcher.cpp` 核实）
 
 三阶段「用哪个 LoRA、裁不裁图、走哪档 VIT、挂哪个 prefix、置信度怎么给」全部由**一阶段 label** 决定。当前源码 `USE_20260423_RULE = true`（正式版）下的实际行为：
 
