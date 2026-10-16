@@ -397,20 +397,27 @@
             "VLA",
             "开源教程"
           ]
-        },
+        }
+      ],
+      "projects": [
         {
-          "title": "视觉扩散策略压缩部署实战 · HomeBot-WM",
-          "file": "https://ranpin.github.io/homebot-wm/",
-          "kind": "实战",
-          "badge": "项目报告",
-          "status": "done",
-          "desc": "Diffusion Policy (image Push-T, 262M) 在 8GB RTX 3070 从头训练 → ONNX 导出 → INT8 量化 → DDIM 步数压缩的完整链路实验报告（n=50 可靠数据）。结论：INT8 精度无损、步数压缩须用 DDIM（DDPM 抽稀即崩）、推荐 DDIM-50+INT8（2× 加速不掉分）。外部链接，点击直达展示页。",
-          "tags": [
-            "Diffusion Policy",
-            "INT8 量化",
-            "DDIM",
-            "TensorRT",
-            "Jetson Orin"
+          "name": "HomeBot-WM · 视觉扩散策略压缩部署",
+          "period": "2026.10",
+          "docs": [
+            {
+              "title": "压缩部署实验报告",
+              "file": "https://ranpin.github.io/homebot-wm/",
+              "badge": "项目报告",
+              "status": "done",
+              "desc": "Diffusion Policy (image Push-T, 262M) 在 8GB RTX 3070 从头训练 → ONNX 导出 → INT8 量化 → DDIM 步数压缩的完整链路实验报告（n=50 可靠数据）。结论：INT8 精度无损、步数压缩须用 DDIM（DDPM 抽稀即崩）、推荐 DDIM-50+INT8（2× 加速不掉分）。外部链接，点击直达展示页。",
+              "tags": [
+                "Diffusion Policy",
+                "INT8 量化",
+                "DDIM",
+                "TensorRT",
+                "Jetson Orin"
+              ]
+            }
           ]
         }
       ]
