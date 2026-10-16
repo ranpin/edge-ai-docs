@@ -215,6 +215,16 @@ def main():
             html_with_md.add(html_rel)
     built = [build_page(m, titles) for m in sorted(md_files)]
     # copy static: .html without sibling .md (echarts/index), nav.js, docs.json, other assets
+    # index.html 特殊处理：把 docs.json 内联进去（'<' 转义为 \u003c 防 </script> 提前闭合），
+    # 让首页目录同步构建、在谷歌翻译运行前就进 DOM，translate.goog 才能翻到 JS 建的卡片。
+    # 源码 index.html 保留 __DOCS_JSON_INLINE__ 占位符（未构建时解析失败会回退异步 fetch）。
+    docs_inline = ''
+    try:
+        with open(os.path.join(ROOT, 'docs.json'), encoding='utf-8') as f:
+            docs_obj = json.load(f)
+        docs_inline = json.dumps(docs_obj, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c')
+    except Exception as e:
+        print('warn: docs.json inline unavailable:', e)
     copied = []
     for dirpath, dirnames, filenames in os.walk(ROOT):
         dirnames[:] = [d for d in dirnames if d not in EXCLUDE_DIRS]
@@ -228,7 +238,13 @@ def main():
                 continue  # generated from md
             dst = os.path.join(DIST, rel)
             os.makedirs(os.path.dirname(dst), exist_ok=True)
-            shutil.copy2(os.path.join(ROOT, rel), dst)
+            if rel == 'index.html':
+                idx = open(os.path.join(ROOT, rel), encoding='utf-8').read()
+                idx = idx.replace('__DOCS_JSON_INLINE__', docs_inline)
+                with open(dst, 'w', encoding='utf-8') as f:
+                    f.write(idx)
+            else:
+                shutil.copy2(os.path.join(ROOT, rel), dst)
             copied.append(rel)
     print(f'built {len(built)} html from md; copied {len(copied)} static files')
     for c in sorted(copied):
