@@ -316,6 +316,26 @@
               ]
             }
           ]
+        },
+        {
+          "name": "inforExtra · 座舱人员信息提取",
+          "period": "2026.09",
+          "docs": [
+            {
+              "title": "项目展示页 · 含可交互 Demo",
+              "file": "https://ranpin.github.io/inforExtra/",
+              "badge": "Demo",
+              "status": "done",
+              "desc": "从车载对话中抽取「人物 / 身份 / 座位位置」结构化信息。用类型化决策模型（laya-multilingual，mmBERT 322M）替代 2000-token 巨型 prompt：510 条人工标注集上人名 F1 0.793 → 0.916，比旧管线快 17 倍、零 token 成本、纯本地推理。展示页含座舱俯视图可交互 demo（真实推理结果预录回放）与可复算的评测表。外部链接，点击直达展示页。",
+              "tags": [
+                "laya",
+                "类型化决策",
+                "信息抽取",
+                "座舱",
+                "本地推理"
+              ]
+            }
+          ]
         }
       ]
     },
