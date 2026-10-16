@@ -256,7 +256,7 @@ AgentCore（aadkcore）的**通用机制**——分层架构、统一模型接�
 | 阶段 | 策略 |
 | :--- | :--- |
 | 预处理 | 左右翻转图像（`cv::flip(full_img, flipped, 1)`，`flipCode=1` 水平翻转，解决 OMS 相机物理镜像；解码后以 BGR raw 写回 letterboxed_msg） |
-| 推理 | 两次串行：① `person_desc` 全景图识别乘员、过滤儿童 ② 遗留物 LoRA 检测 |
+| 推理 | 两次串行：<br>① `person_desc` 全景图识别乘员、过滤儿童<br>② 遗留物 LoRA 检测 |
 | 后处理 | 输出结果映射（`map_item_to_english` 物品中英映射 + `region_key_to_position` 区域→位置映射） |
 
 **① 遗留物中英映射**（`map_item_to_english`：物品中文名**包含关键字即映射**，未命中返回空、该物品被过滤丢弃；**粗粒度归并是需求刻意设计，不要"修"**）：
@@ -362,9 +362,9 @@ sequenceDiagram
 
 | 推理阶段 | 图像与 Bbox 处理 | 推理策略与 Prompt 组织 | 输出与后处理 |
 | :--- | :--- | :--- | :--- |
-| **第一阶段** | ① 后视摄像头所有场景先翻转一次 ② 按 `camera_id` 选 `grounding_sr`/`grounding_base`（均为 LoRA adapter，非基模；一阶段无输入 bbox，选择依据是相机位）③ 输出 Bbox 为 **0~1000 归一化坐标**，经 `bbox1000ToOriginal` 映射回原图像素坐标 | 约束解码（`SetDecodeFormat(dwsr/dwbs)`，见 3.3） | ① 粗分类标签 ② 流式结果累积 |
-| **第二阶段** | ① 图像/Bbox 翻转回去（车辆/动物/交通标识反转，植物/通识不反转）② **车辆/动物/交通标识**按 Bbox 扩框 10% 后裁剪到 448×448，bbox 过小/为空则跳过；**植物/通识**忽略 bbox、整图 1024×768（当前 `USE_20260423_RULE` 正式版，逐 label 见下表）③ 类别差异化预处理 | ① 组织图像+Prompt ② **不走 Genie 解码格式约束**（znzs/default_adapter 被 `SetDecodeFormat` 显式跳过，见 3.3）；结构化输出靠 prompt 约定 + 后处理 `parseModelOutputToUnifiedByLabel` 解析 | ① 置信度映射（基于 Bbox 大小）② 标准图像库映射 ③ 细分类标签（name/type/caption），流式解析 |
-| **第三阶段** | 无图像处理 | ① 拼接用户 Query + 二阶段结构化输出作为 User Prompt ② 纯文本推理，**不使用**约束解码（znzs 同样被 `SetDecodeFormat` 跳过） | NLG 流式输出，用于 TTS 播报 |
+| **第一阶段** | ① 后视摄像头所有场景先翻转一次<br>② 按 `camera_id` 选 `grounding_sr`/`grounding_base`（均为 LoRA adapter，非基模；一阶段无输入 bbox，选择依据是相机位）<br>③ 输出 Bbox 为 **0~1000 归一化坐标**，经 `bbox1000ToOriginal` 映射回原图像素坐标 | 约束解码（`SetDecodeFormat(dwsr/dwbs)`，见 3.3） | ① 粗分类标签<br>② 流式结果累积 |
+| **第二阶段** | ① 图像/Bbox 翻转回去（车辆/动物/交通标识反转，植物/通识不反转）<br>② **车辆/动物/交通标识**按 Bbox 扩框 10% 后裁剪到 448×448，bbox 过小/为空则跳过；**植物/通识**忽略 bbox、整图 1024×768（当前 `USE_20260423_RULE` 正式版，逐 label 见下表）<br>③ 类别差异化预处理 | ① 组织图像+Prompt<br>② **不走 Genie 解码格式约束**（znzs/default_adapter 被 `SetDecodeFormat` 显式跳过，见 3.3）；结构化输出靠 prompt 约定 + 后处理 `parseModelOutputToUnifiedByLabel` 解析 | ① 置信度映射（基于 Bbox 大小）<br>② 标准图像库映射<br>③ 细分类标签（name/type/caption），流式解析 |
+| **第三阶段** | 无图像处理 | ① 拼接用户 Query + 二阶段结构化输出作为 User Prompt<br>② 纯文本推理，**不使用**约束解码（znzs 同样被 `SetDecodeFormat` 跳过） | NLG 流式输出，用于 TTS 播报 |
 
 #### 4.3.2 三阶段逐 label 决策表（`decide_stage2_by_label`，已对 `outcar_process.hpp` / `outcar_qa_dispatcher.cpp` 核实）
 
