@@ -153,7 +153,41 @@
   }
   nav.innerHTML = '<a class="logo" href="' + base + 'index.html"><span class="en-logo-txt">Edge AI Docs</span></a>' +
     '<div class="en-cats"></div>' +
-    '<div class="right">' + editHtml + '<button type="button" class="theme-btn" id="themeBtn">&#9790; / &#9788;</button></div>';
+    '<div class="right">' + editHtml + '<button type="button" class="theme-btn" id="langBtn">EN</button><button type="button" class="theme-btn" id="themeBtn">&#9790; / &#9788;</button></div>';
+
+  // 中英文切换：走 Google Translate 代理（translate.goog），点开即整站机翻。
+  // 原文页 -> 英文代理页；已在代理页（host 以 .translate.goog 结尾）-> 回中文原文。
+  (function () {
+    var btn = nav.querySelector('#langBtn');
+    if (!btn) return;
+    var host = location.host;
+    var onProxy = /\.translate\.goog$/.test(host);
+    var isLocal = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?$/.test(host);
+    function stripTr(search) {
+      if (!search) return '';
+      var parts = search.replace(/^\?/, '').split('&').filter(function (kv) {
+        return kv && kv.indexOf('_x_tr_') !== 0;
+      });
+      return parts.length ? '?' + parts.join('&') : '';
+    }
+    if (onProxy) {
+      btn.textContent = '中文';
+      btn.title = '显示中文原文';
+      btn.addEventListener('click', function () {
+        var orig = host.replace(/\.translate\.goog$/, '').replace(/-/g, '.');
+        location.href = 'https://' + orig + location.pathname + stripTr(location.search);
+      });
+    } else {
+      btn.textContent = 'EN';
+      btn.title = 'Translate to English (Google)';
+      btn.addEventListener('click', function () {
+        if (isLocal) { alert('翻译仅在已部署的线上站点可用（Google 无法代理 localhost）。'); return; }
+        var proxy = host.replace(/\./g, '-') + '.translate.goog';
+        var sep = location.search ? '&' : '?';
+        location.href = 'https://' + proxy + location.pathname + location.search + sep + '_x_tr_sl=zh-CN&_x_tr_tl=en&_x_tr_hl=en&_x_tr_pto=wv';
+      });
+    }
+  })();
 
   var mount = nav.querySelector('.en-cats');
   fetch(base + 'docs.json', { cache: 'no-cache' })

@@ -13,7 +13,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans S
 header{text-align:center;margin-bottom:32px}
 h1{font-size:32px;font-weight:800;margin-bottom:8px}
 header p{color:var(--muted);font-size:15px;max-width:640px;margin:0 auto}
-.theme-btn{position:fixed;top:16px;right:16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;font-size:16px;color:var(--text);z-index:100}
+.top-actions{position:fixed;top:16px;right:16px;z-index:100;display:flex;gap:8px}
+.top-actions button{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;color:var(--text);transition:color .18s,border-color .18s,background .18s}
+.top-actions button:hover{border-color:var(--accent);color:var(--accent);background:var(--accentL)}
+.theme-btn{font-size:16px}
+.lang-btn{font-size:14px}
 /* 嵌入模式（被主站 iframe 内嵌，?embed=1）：隐藏页头大标题，只留标签+内容 */
 html.embed header{display:none}
 html.embed .wrap{padding-top:20px}
@@ -86,7 +90,10 @@ footer{text-align:center;margin-top:56px;padding:20px;color:var(--muted);font-si
 </style>
 </head>
 <body>
-<button class="theme-btn" id="themeBtn">Light / Dark</button>
+<div class="top-actions">
+  <button class="lang-btn" id="langBtn">EN</button>
+  <button class="theme-btn" id="themeBtn">Light / Dark</button>
+</div>
 <div class="wrap">
   <header>
     <h1 id="title">Edge AI Docs</h1>
@@ -103,6 +110,29 @@ if(/[?&]embed=1\b/.test(location.search))document.documentElement.classList.add(
 var b=document.getElementById('themeBtn');
 b.onclick=function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('theme',h.dataset.theme)}catch(e){}};
 try{var s=localStorage.getItem('theme');if(s)document.documentElement.dataset.theme=s}catch(e){}
+
+// 中英文切换：走 Google Translate 代理（translate.goog），点开即整站机翻。
+// 原文页 -> 英文代理页；已在代理页（host 以 .translate.goog 结尾）-> 回中文原文。
+(function(){
+  var lb=document.getElementById('langBtn');
+  if(!lb)return;
+  var host=location.host;
+  var onProxy=/\.translate\.goog$/.test(host);
+  var isLocal=/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?$/.test(host);
+  function stripTr(sr){if(!sr)return'';var p=sr.replace(/^\?/,'').split('&').filter(function(kv){return kv&&kv.indexOf('_x_tr_')!==0;});return p.length?'?'+p.join('&'):'';}
+  if(onProxy){
+    lb.textContent='中文';lb.title='显示中文原文';
+    lb.onclick=function(){var o=host.replace(/\.translate\.goog$/,'').replace(/-/g,'.');location.href='https://'+o+location.pathname+stripTr(location.search);};
+  }else{
+    lb.textContent='EN';lb.title='Translate to English (Google)';
+    lb.onclick=function(){
+      if(isLocal){alert('翻译仅在已部署的线上站点可用（Google 无法代理 localhost）。');return;}
+      var px=host.replace(/\./g,'-')+'.translate.goog';
+      var sep=location.search?'&':'?';
+      location.href='https://'+px+location.pathname+location.search+sep+'_x_tr_sl=zh-CN&_x_tr_tl=en&_x_tr_hl=en&_x_tr_pto=wv';
+    };
+  }
+})();
 
 // 目录由 docs.json 驱动（单一数据源，与主站共享）
 function el(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;}
