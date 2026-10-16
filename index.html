@@ -103,6 +103,7 @@ footer{text-align:center;margin-top:56px;padding:20px;color:var(--muted);font-si
   <main id="catalog"></main>
   <footer>Edge AI Docs -- 算法训练/微调 | 部署与优化 | Agent 框架 <button class="reset-btn" id="resetOrder" style="display:none">恢复默认排序</button></footer>
 </div>
+<script id="docs-data" type="application/json">__DOCS_JSON_INLINE__</script>
 <script>
 // 嵌入模式（?embed=1，被主站 iframe 内嵌时隐藏页头大标题）
 if(/[?&]embed=1\b/.test(location.search))document.documentElement.classList.add('embed');
@@ -425,7 +426,7 @@ function updateResetBtn(){
   if(rb)rb.style.display=hasAnyOrder()?'':'none';
 }
 
-fetch('docs.json',{cache:'no-cache'}).then(function(r){return r.json();}).then(function(data){
+function boot(data){
   if(data.title)document.getElementById('title').textContent=data.title;
   document.getElementById('subtitle').textContent=data.subtitle||'';
   var cats=normalize(data);
@@ -464,9 +465,19 @@ fetch('docs.json',{cache:'no-cache'}).then(function(r){return r.json();}).then(f
     var h=(location.hash||'').replace('#','');
     cats.forEach(function(cat,i){if(catId(cat,i)===h&&!btns[i].classList.contains('active'))activate(i);});
   });
-}).catch(function(){
-  document.getElementById('catalog').innerHTML='<p style="text-align:center;color:var(--muted)">目录加载失败，请刷新重试。</p>';
-});
+}
+// 优先用构建期内联的 docs.json 同步构建：卡片在谷歌翻译运行前就进 DOM，translate.goog 才能翻首页。
+// 源码态（占位符未替换）解析失败则回退到异步 fetch，本地开发不受影响。
+var __inlineEl=document.getElementById('docs-data');
+var __inlineData=null;
+if(__inlineEl){try{__inlineData=JSON.parse(__inlineEl.textContent);}catch(e){__inlineData=null;}}
+if(__inlineData){
+  boot(__inlineData);
+}else{
+  fetch('docs.json',{cache:'no-cache'}).then(function(r){return r.json();}).then(boot).catch(function(){
+    document.getElementById('catalog').innerHTML='<p style="text-align:center;color:var(--muted)">目录加载失败，请刷新重试。</p>';
+  });
+}
 </script>
 </body>
 </html>
