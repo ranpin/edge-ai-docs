@@ -439,6 +439,27 @@
               ]
             }
           ]
+        },
+        {
+          "name": "春晚舞蹈机器人 · video2robot 复刻",
+          "period": "2026.09",
+          "docs": [
+            {
+              "title": "项目展示页 · 含双视频 Demo",
+              "file": "https://ranpin.github.io/spring-festival-dance-robot/",
+              "badge": "Demo",
+              "status": "done",
+              "desc": "复刻 Datawhale every-embodied 的「春晚舞蹈机器人」：单段群舞视频 → PromptHMR（SMPL-X 人体姿态）→ GMR 动作重定向 → 9 台 Unitree G1（29 DoF）同步起舞。重推理在 Kaggle GPU（P100，全流程约 90–100 分钟），3D 演示在 Mac CPU（viser 实时渲染）。展示页含「人类原舞 vs 机器人重定向」双视频对照与五阶段管线说明。外部链接，点击直达展示页。",
+              "tags": [
+                "video2robot",
+                "PromptHMR",
+                "GMR",
+                "Unitree G1",
+                "动作重定向",
+                "viser"
+              ]
+            }
+          ]
         }
       ]
     },
