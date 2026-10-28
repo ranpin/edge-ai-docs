@@ -349,11 +349,16 @@ sequenceDiagram
     S1->>S1: 约束解码推理(SetDecodeFormat dwsr/dwbs)
     S1-->>S2: 输出：1024x768 Bbox(映射回原图)、粗分类标签、流式累积结果
 
-    Note over S2: 预处理：图像/Bbox翻转回去<br/>(车辆/动物/交通标识反转，植物/通识不反转)<br/>车辆/动物/交通标识按Bbox扩框10%后裁448(过小/空则跳过)<br/>植物/通识整图1024不裁剪(忽略Bbox)
-    S2->>S2: 组织图像+Prompt推理<br/>(结构化输出靠prompt约定+后处理解析，非Genie解码格式约束)
-    S2-->>S3: 输出：细分类标签(name/type/caption)<br/>置信度映射(基于Bbox大小)<br/>标准图像库映射、流式解析
+    alt 车辆/动物/交通标识 且 bbox 过小或为空
+        Note over S2: 二阶段整体跳过：不扩框、不裁剪、不编码图像、不推理<br/>model_output 置为空 JSON，payload = UnknownResult(stage2_skipped)<br/>clear_bbox 清空 meta.bbox（详见 4.3.3）
+        S2-->>S3: 结构化信息 = 空 JSON
+    else 正常路径（含植物/通识整图）
+        Note over S2: 预处理：图像/Bbox翻转回去<br/>(车辆/动物/交通标识反转，植物/通识不反转)<br/>车辆/动物/交通标识按Bbox扩框10%后裁448<br/>植物/通识整图1024不裁剪(忽略Bbox)
+        S2->>S2: 组织图像+Prompt推理<br/>(结构化输出靠prompt约定+后处理解析，非Genie解码格式约束)
+        S2-->>S3: 输出：细分类标签(name/type/caption)<br/>置信度映射(基于Bbox大小)<br/>标准图像库映射、流式解析
+    end
 
-    Note over S3: 无图像处理，纯文本推理<br/>不使用约束解码
+    Note over S3: 无图像处理，纯文本推理<br/>不使用约束解码<br/>结构化信息为空 → 输出兜底话术(见 4.3.3)
     S3->>S3: 拼接User Query + S2结构化输出作为Prompt
     S3-->>TTS: 输出：NLG流式文本，用于语音播报
 ```
@@ -422,3 +427,61 @@ sequenceDiagram
 - 二阶段决策：`decide_stage2_by_label(label, bbox)`（逐 label 见上表）；二阶段走 `data_message_lora5`，模型名取 `decision.stage2_model_name`（visual_assistant / general_base），prefix 按 label 映射 `znzs-*`
 - 置信度：`compute_confidence_by_mapping(label, bbox)`（按面积映射区间 + 随机取值）
 - 三阶段 NLG：`schedule_run_sync(..., "visual_assistant", ..., "znzs-nlg")`，纯文本、无解码格式约束
+
+#### 4.3.3 bbox 被门限卡住后的降级链路（车辆/动物/交通标识）
+
+4.3.2 表中「过小/空 → 跳过」只交代了跳过二阶段，实际下游还有一整条降级链路。起点是 `decide_stage2_by_label` 给出 `skip_stage2 = true` + `clear_bbox = true`，消费点在 `outcar_qa_dispatcher.cpp:391`。
+
+**仍会执行的操作**（按发生顺序）：
+
+| # | 操作 | 关键取值 |
+| :--- | :--- | :--- |
+| 1 | 发一阶段结果帧（`stage="1"`） | `detected_item` 置空数组；`clear_bbox` 触发 `meta.bbox.clear()`；`streaming_output = "bbox: [],label: <label>"`（`:338`） |
+| 2 | 发 `<STAGE_1_END>` 哨兵帧 | `stage="skipped"` |
+| 3 | 发二阶段跳过帧 | `model_output = "{}"`；`payload = UnknownResult{"stage2_skipped"}` |
+| 4 | 发 `<STAGE_2_END>` 哨兵帧 | 携带 `confidence`（取值见下方 WARNING） |
+| 5 | **三阶段 NLG 照常推理** | user prompt = `结构化信息: {},用户指令: <query>`；`image_info` 与 `extra_images` 清空、`msg_type = TEXT`（不带图） |
+| 6 | 发 `stage="3"` 流式帧 + final 帧 | `extract_nlg` 取 `nlg` 字段（`:615`）；`fill_detected_item_by_label` 对 `UnknownResult` 把各字段填空串、`position.bbox` 填空数组 |
+
+**被跳过的操作**：二阶段的全部图像侧处理与推理——
+
+- 不 `expand_bbox_safe` 扩框
+- 不 crop 到 448×448
+- 不 `fillImageInfoWithJpeg` 编码图像
+- 不做二阶段推理（无 LoRA / prefix 下发）
+
+**三阶段拿空 JSON 实际生成什么**：`outcar_qa.assistant.system_prompt`（`data/template/outcar_qa.yaml`）对空结构化信息有明文规则与示例——
+
+> 结构化信息为空（`{}`）→ `当前暂未识别到{方位+的（有则放）}{目标主体}，请稍后再试试。`
+>
+> 示例：输入 `结构化信息: {},用户指令: 前边的皮卡是什么车` → 输出 `{"nlg":"当前暂未识别到前边的皮卡，请稍后再试试。"}`
+
+方位词与目标主体由模型从**用户 query** 中抽取填入，故播报文案随 query 变化。`extract_nlg` 找第一个 `{` 解析 JSON 并取 `nlg`；**解析失败则原样返回模型输出**——三阶段无解码格式约束（见 4.3.1），格式跑偏时上屏的就是那段原始文本。
+
+> [!WARNING]
+> **被门限拒掉的目标，confidence 不是 0 而是随机 30~60%**
+>
+> `<STAGE_2_END>` 帧的 `confidence` 由 `compute_confidence_by_mapping(label, model_data->meta.bbox)` 计算（`outcar_process.hpp:607`），但**此时 bbox 已在上表步骤 1 被 `clear()`** → 面积恒为 0 → 落到最低档：车辆 / 动物 / 交通标识均返回 `rand_range(30, 60)`。
+>
+> 即「因为框太小、我们主动没去看」这件事，在协议上表现为一个 30~60% 的随机置信度，而非 0 或空。叠加 4.3.2 已说明的「面积 → 区间 → 随机」伪置信度性质，该值在此路径下不携带任何信息量。
+
+> [!IMPORTANT]
+> **空 JSON 是「二阶段没产出」的共用出口，两种语义被合并**
+>
+> 二阶段各 caption prompt 自身也规定了输出 `{}` 的情形——`car_caption`「完全无法判断 → 输出 `{}`」、`animal_caption` / `plant_caption`「图片中完全不存在用户所指目标 → 输出 `{}`」。因此下面两种情况：
+>
+> - **bbox 过小被主动跳过**（根本没有去看）
+> - **看了、图里确实没有**（二阶段返回 `{}`）
+>
+> 都汇聚到 `结构化信息: {}`，由三阶段生成**同一句**「当前暂未识别到…，请稍后再试试。」用户与日志排查者都无法区分二者。
+
+**这条链路上共有三种兜底话术**，来源层不同、极易混淆，排查时先分清：
+
+| 触发条件 | 话术 | 来源 | 三阶段是否推理 |
+| :--- | :--- | :--- | :--- |
+| label == 其它 | 抱歉，您的问题我没听懂，请尝试询问车外实景的问题吧。 | C++ 硬编码（`:757`，`direct_return_fallback` 提前 return） | 否 |
+| bbox 被门限卡 / 二阶段返回 `{}` | 当前暂未识别到…，请稍后再试试。 | 三阶段 LLM 生成 | 是 |
+| 取车外图像失败 | 获取车外图像失败了，请稍后再试试 | Java 层 VRService（不进 C++） | — |
+
+> [!NOTE]
+> **证据口径**：本节链路对 `lantu_sdk_dev`（agent_group `d07d4b1`）源码与 prompt 模板逐条核实；但**尚无该路径的实测输出样本**——2026-10-24 车机 logcat 中 `暂未识别` 0 命中、`stage":"3"` 帧 0 命中。该日志里 31 条「请稍后再试试」全部是 Java 层的「获取车外图像失败了，请稍后再试试」，与本节三阶段兜底无关；两句话术高度相似，按关键字搜日志时极易误判为同一路径。三阶段实际文案以模型输出为准。
