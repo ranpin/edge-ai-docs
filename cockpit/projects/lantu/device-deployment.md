@@ -333,7 +333,61 @@ avc: denied { search } for comm="model-init-thre" name="/" dev="vdy" ino=2
 > - **`run-as` 不能当判据**：`run-as` 的域是 `runas_app`，不是 app 真实的 `untrusted_app_XX`；确认现场域要读 `/proc/<pid>/attr/current` 再按 pid 找 avc 记录。
 > - **demo 解法是 `setenforce 0`**（整机 permissive，**重启后失效**，是大锤不是方案）；量产岚图 App 是 system/vendor 应用，但仍需正确的 file context + 对应域的 allow 规则，并非自动免疫。策略细节与量产方向（自定义策略 / 独立域）见 [运维、安全与功能安全](ops-security.html) 第 3 节与 [AIService 后端集成与重构](aiservice-integration.html) 的 5.7 节。
 
-> [!NOTE]
-> **调试数据录制**
+## 3. 调试数据 dump（DataDump 机制）
+
+调试时可在设备上抓取每次推理的输入图像 / 音频 / 输出文本，用于效果复现与 badcase 分析。机制是「一个系统属性开关 → 传播到各 dispatcher → 各自落盘到 `/log/dump`」。
+
+> 本节基于 scm `lantu_sdk_dev`（`lantu_aiservice_dev` 接线相同）源码核实；**设备侧落盘未验证**。
+
+### 3.1 开关链路
+
+```
+adb shell setprop persist.aadk.data_dump 1
+   → ModelInference::init() 用 __system_property_get 读一次（model_inference.cpp:176）
+   → MsgDeliverImpl::set_data_dump_flag(dump, false)
+   → 遍历 dispatchers_ 逐个 plugin->set_data_dump_flag()
+   → 三个 dispatcher 各自 data_dump_flag_ = true
+```
+
+- 时序正确：dispatcher 在构造期先建好，传播发生在 `load()` 之后，能覆盖全部 dispatcher。
+- **属性只在 init 读一次**——`setprop` 后必须重启进程才生效，不是实时开关。
+
+### 3.2 dump 清单：各 agent 落什么、图片在哪个阶段
+
+三个 dispatcher 都 `new DataDump("/log/dump")`（**路径硬编码**）。`DataDump::dump()` 按内容分三路：图像（JPEG 魔数 `0xFFD8` 命中→原样写字节；否则当裸 BGR 走 `cv::imwrite`）、音频（16k/16bit/mono WAV）、文本（`.txt`）；文件名 `<id>_<MMDD_HHMMSSmmm>.<ext>`。
+
+| Agent | 文件 | 内容 | 图片所处阶段 / 预处理 |
+| :--- | :--- | :--- | :--- |
+| **incar(100)** | `incar_<rid>_image.jpg` | 输入图 | **车机原图，零预处理**（letterbox 只改副本、不碰原 message） |
+| | `incar_<rid>_result.txt` | 推理结果文本 | — |
+| **dress(200)** | `dress_<rid>_image.jpg` | 输入图 | 原图，零预处理 |
+| | `dress_<rid>_crop_<zone>.jpg` | 二阶段裁图 | 水平翻转后按 voice\_zone 裁剪；letterbox 已被注释（`cropped_lb = cropped`）、裸 BGR 直写 ⇒ **= 二阶段模型实际输入像素** |
+| | `dress_<rid>_result.txt` | 推理结果文本 | — |
+| **outcar(300)** | `outcarqa_<rid>_image.jpg` | 一阶段输入图 | decode →（camera\_id==5 翻转）→ resize+pad 1024×768 → **JPEG 重编码（有损）** = 一阶段模型输入，**非原始相机帧** |
+| | `outcarqa_<rid>_crop.jpg` | 二阶段输入图 | 扩框 10% + 裁 448 后 `imencode` 成 JPEG；无框时回退整图 src（车辆/动物/交通标识已翻回正向，植物/通识仍是镜像） |
+| | `outcarqa_<rid>_result.txt` | `query \| 最终响应JSON` | 两处：label=其它兜底路径 + 正常三阶段 complete\_callback |
+
+各 dispatcher 的完整预处理链路见 [GenAI 方案架构](genai-architecture.html) 第 4 节。
+
+> [!IMPORTANT]
+> **三个 agent 的 `_image` 含义不一致**
 >
-> 调试时可通过 Android 系统属性控制数据录制：`adb shell setprop persist.aadk.data_dump 1` 开启，设为 0 关闭。
+> incar/dress 的 `_image` 是原图，outcar 的 `_image` 是已预处理的一阶段输入（且被 JPEG 重压过一次）。outcar 的 `_crop` 在 bbox 被门限卡住时退化成整图 src（见 [GenAI 方案架构](genai-architecture.html#sec-16) 的 4.3.3），此时并非真正的 crop。音频只有 outcar 的 `_image` 埋点会顺带带上。
+
+### 3.3 能否奏效：三个风险
+
+开关→传播→埋点这条链是通的（三个埋点都在活代码路径上），但有三个真实风险：
+
+1. **属性只在 init 读一次**——`setprop` 之后必须重启进程，不是实时开关。
+2. **`/log/dump` 可写性无代码层保证**：构造函数只 `mkdir("/log/dump/")`、不建父目录、返回值不检查。若 `/log` 不存在或 SELinux 拦截，JPEG 路径会打 `Failed to save`；更隐蔽的是裸 BGR 路径——`cv::imwrite` 失败也照样 `return true`，会打 "Image saved" 但文件其实没写（**静默假成功**，只能上盘核对）。
+3. **头文件注释是错的**：三个 `.h` 都写"由 `AADK_DATA_DUMP=1` 环境变量开启"，但全代码库 grep 不到这个环境变量——真实开关是上面的 `persist.aadk.data_dump` 属性，注释会误导人。
+
+> [!WARNING]
+> **别与框架层 dump 混淆——那套在 APK 形态是死代码**
+>
+> `MsgDeliverImpl::dump_data()` 在 APK 形态里 dumper 没初始化（构造被注释）、唯一调用点也被注释，所以**框架层的"原始请求 dump"不会发生**，只有上述 dispatcher 内埋点生效。这与 [运维、安全与功能安全](ops-security.html) 第 5.4 节「APK 通道是死开关」的结论一致——但那里说的是框架层 `dump_data`/`upload_request`/`libaadk_monitor` 通道；**dispatcher 层的三个 dump 是另一套、是活的**。system\_agent 可执行形态的框架层 dump 才是活的，但与本形态无关。
+
+> [!NOTE]
+> **验证方法**
+>
+> `setprop` + 重启进程 + 跑一次 + `ls /log/dump/`。263 车机 logcat 无法佐证（窗口仅 64 秒，唯一一次 outcar 请求在窗口前开始、崩溃前没跑到落盘点），设备侧落盘尚未验证。
