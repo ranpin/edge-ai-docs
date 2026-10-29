@@ -363,8 +363,8 @@ adb shell setprop persist.aadk.data_dump 1
 | **dress(200)** | `dress_<rid>_image.jpg` | 输入图 | 原图，零预处理 |
 | | `dress_<rid>_crop_<zone>.jpg` | 二阶段裁图 | 水平翻转后按 voice\_zone 裁剪；letterbox 已被注释（`cropped_lb = cropped`）、裸 BGR 直写 ⇒ **= 二阶段模型实际输入像素** |
 | | `dress_<rid>_result.txt` | 推理结果文本 | — |
-| **outcar(300)** | `outcarqa_<rid>_image.jpg` | 一阶段输入图 | decode →（camera\_id==5 翻转）→ resize+pad 1024×768 → **JPEG 重编码（有损）** = 一阶段模型输入，**非原始相机帧** |
-| | `outcarqa_<rid>_crop.jpg` | 二阶段输入图 | 扩框 10% + 裁 448 后 `imencode` 成 JPEG；无框时回退整图 src（车辆/动物/交通标识已翻回正向，植物/通识仍是镜像） |
+| **outcar(300)** | `outcarqa_<rid>_image.jpg` | 一阶段输入图 | decode →（camera\_id==5 翻转）→ **裸 BGR 原样、原生分辨率**。⚠️ `fillImageInfoWithJpeg` 名不副实：**不编码也不 resize**，只把 1024×768 写进 `resized_width/height` 元数据交给下游后端；dump 时 `DataDump` 见非 JPEG 走 `cv::imwrite(".jpg")` ⇒ 落盘才是有损 JPEG |
+| | `outcarqa_<rid>_crop.jpg` | 二阶段输入图 | 扩框 10% + 裁剪后的**原生尺寸** crop（448×448 同样只是给后端的 resize 提示，dump 里看不到），`cv::imencode(".jpg")` 有损；无框时回退整图 src（车辆/动物/交通标识已翻回正向，植物/通识仍是镜像） |
 | | `outcarqa_<rid>_result.txt` | `query \| 最终响应JSON` | 两处：label=其它兜底路径 + 正常三阶段 complete\_callback |
 
 各 dispatcher 的完整预处理链路见 [GenAI 方案架构](genai-architecture.html) 第 4 节。
@@ -372,15 +372,18 @@ adb shell setprop persist.aadk.data_dump 1
 > [!IMPORTANT]
 > **三个 agent 的 `_image` 含义不一致**
 >
-> incar/dress 的 `_image` 是原图，outcar 的 `_image` 是已预处理的一阶段输入（且被 JPEG 重压过一次）。outcar 的 `_crop` 在 bbox 被门限卡住时退化成整图 src（见 [GenAI 方案架构](genai-architecture.html#sec-16) 的 4.3.3），此时并非真正的 crop。音频只有 outcar 的 `_image` 埋点会顺带带上。
+> incar/dress 的 `_image` 是原图，outcar 的 `_image` 是已 decode+翻转的一阶段输入（**未 resize**，落盘时才被 `imwrite` 压成 JPEG）。outcar 的 `_crop` 在 bbox 被门限卡住时退化成整图 src（见 [GenAI 方案架构](genai-architecture.html#sec-16) 的 4.3.3），此时并非真正的 crop。音频只有 outcar 的 `_image` 埋点会顺带带上。
+>
+> **与纯模型测试对拍的保真度缺口**：模型实际收到的是裸 BGR + `resized_width/height` 提示（resize 由下游后端做），而 dump 落盘是有损 JPEG、且是 resize **之前**的原生分辨率，resize 目标也没记进文件名或伴随元数据。因此 dump 出来的图**不能直接当模型输入做逐像素复现**，只能作视觉参考；要严格对拍得另存裸 BGR + 记录目标尺寸。
 
-### 3.3 能否奏效：三个风险
+### 3.3 能否奏效：四个风险
 
-开关→传播→埋点这条链是通的（三个埋点都在活代码路径上），但有三个真实风险：
+开关→传播→埋点这条链是通的（三个埋点都在活代码路径上），但有四个真实风险：
 
 1. **属性只在 init 读一次**——`setprop` 之后必须重启进程，不是实时开关。
 2. **`/log/dump` 可写性无代码层保证**：构造函数只 `mkdir("/log/dump/")`、不建父目录、返回值不检查。若 `/log` 不存在或 SELinux 拦截，JPEG 路径会打 `Failed to save`；更隐蔽的是裸 BGR 路径——`cv::imwrite` 失败也照样 `return true`，会打 "Image saved" 但文件其实没写（**静默假成功**，只能上盘核对）。
 3. **头文件注释是错的**：三个 `.h` 都写"由 `AADK_DATA_DUMP=1` 环境变量开启"，但全代码库 grep 不到这个环境变量——真实开关是上面的 `persist.aadk.data_dump` 属性，注释会误导人。
+4. **outcar 二阶段的 crop dump 落在推理之后**——`outcar_qa_dispatcher.cpp:537` 的 dump 在二阶段推理 `handle_caption_request`（`:524`）**之后**才执行。二阶段一旦崩溃 / 超时 / 抛异常，crop 永远写不出来，**最需要现场的那一刻恰好没有现场**。对照：一阶段 `_image` dump 在推理之前（`:222`），dress 的 crop dump 也在推理之前（`:294`，先于 `:300` 组装 `infer_msg`）——三个 agent 里只有 outcar 二阶段是反的。
 
 > [!WARNING]
 > **别与框架层 dump 混淆——那套在 APK 形态是死代码**
