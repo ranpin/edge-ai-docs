@@ -460,6 +460,27 @@
               ]
             }
           ]
+        },
+        {
+          "name": "supermimic-dance · 春晚舞蹈物理版",
+          "period": "2026.11",
+          "docs": [
+            {
+              "title": "项目展示页 · 含双视频 Demo",
+              "file": "https://ranpin.github.io/supermimic-dance/",
+              "badge": "Demo",
+              "status": "done",
+              "desc": "春晚舞蹈机器人复刻的物理版续作：同一支群舞视频的 GMR 重定向动作交给 SuperMimic 复现策略（98k checkpoint，LAFAN1 训练）在 MuJoCo 物理仿真中零样本跟踪——9/9 舞者全片 39.3s 完片零失败（return 0.639–0.760、关节 MAE 6.5–8.2°，落在该策略 OOD 发布带）。展示页含「输入视频 vs 物理跟踪」对照与九机同场景齐舞视频；评测/渲染全链 macOS 纯 CPU 可复现。外部链接，点击直达展示页。",
+              "tags": [
+                "SuperMimic",
+                "MuJoCo",
+                "Unitree G1",
+                "动作跟踪",
+                "零样本",
+                "世界模型"
+              ]
+            }
+          ]
         }
       ]
     },
